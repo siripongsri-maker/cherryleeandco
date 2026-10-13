@@ -11,6 +11,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { content } from "@/content/site";
+import { BUSINESS_JSON_LD } from "@/content/business";
+import { HERO_SIZES } from "@/components/sections/Hero";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -78,22 +81,50 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: content.th.meta.title },
+      { name: "description", content: content.th.meta.description },
+      { name: "theme-color", content: "#FBF3EA" },
+      { name: "color-scheme", content: "light" },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "CherryLee & Co." },
+      { property: "og:locale", content: "th_TH" },
+      { property: "og:locale:alternate", content: "en_US" },
+      {
+        property: "og:title",
+        content: "CherryLee & Co. | Witty English Weekends สำหรับเด็ก 6–12 ปี",
+      },
+      {
+        property: "og:description",
+        content:
+          "ภาษาอังกฤษที่เริ่มจากความกล้า ไม่ใช่ความกลัว ผ่านละครนิทาน ทำอาหาร และบอร์ดเกมการเงิน ทุกเสาร์และอาทิตย์ ซอยนวมินทร์ 117",
+      },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+      { rel: "icon", href: "/images/favicon-64.png", type: "image/png", sizes: "64x64" },
+      { rel: "apple-touch-icon", href: "/images/apple-touch-icon.png" },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: appCss,
+        href: "https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=Fredoka:wght@500;600;700&family=Mitr:wght@500;600;700&family=Sriracha&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      // The hero art is above the fold only on desktop; on phones it sits below the text
+      {
+        rel: "preload",
+        as: "image",
+        type: "image/webp",
+        media: "(min-width: 1024px)",
+        href: "/images/hero-1100.webp",
+        imageSrcSet:
+          "/images/hero-720.webp 720w, /images/hero-1100.webp 1100w, /images/hero-1456.webp 1456w",
+        imageSizes: HERO_SIZES,
+        fetchPriority: "high",
+      },
     ],
+    scripts: [{ type: "application/ld+json", children: JSON.stringify(BUSINESS_JSON_LD) }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -103,7 +134,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="th">
       <head>
         <HeadContent />
       </head>
