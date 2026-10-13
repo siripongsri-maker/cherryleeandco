@@ -21,5 +21,8 @@
   are never used for text. Keep text contrast ≥ 4.5:1 (see `design-system/cherrylee-co/MASTER.md`).
 - **Scroll reveal:** elements with `data-reveal` must use keys that don't change with the language (use the index),
   otherwise they remount hidden after a language switch.
+- **Videos** live in `src/content/videos.ts` (click-to-load `YouTubeVideo`, posters in `public/images/videos/`).
+  A clip that shows children stays hidden until `consent` is recorded; never add one without the studio confirming
+  parents' permission for website use. Never put children's names in copy, alt text or file names.
 - **Accessibility:** touch targets ≥ 44px, visible focus rings, `role="list"` on styled lists, alt text in both languages,
   `prefers-reduced-motion` respected.

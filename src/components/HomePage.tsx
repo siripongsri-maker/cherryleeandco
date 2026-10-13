@@ -5,6 +5,7 @@ import { Hero } from "@/components/sections/Hero";
 import { Why } from "@/components/sections/Why";
 import { Approach } from "@/components/sections/Approach";
 import { Programs } from "@/components/sections/Programs";
+import { Videos } from "@/components/sections/Videos";
 import { Quote } from "@/components/sections/Quote";
 import { Pricing } from "@/components/sections/Pricing";
 import { Faq } from "@/components/sections/Faq";
@@ -32,6 +33,7 @@ export function HomePage() {
         <Why />
         <Approach />
         <Programs />
+        <Videos />
         <Quote />
         <Pricing />
         <Faq />

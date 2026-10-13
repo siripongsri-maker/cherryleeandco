@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { LINE_ID, PRICES, formatBaht } from "./business";
+import type { Spoken } from "./videos";
 
 /**
  * All website copy, Thai + English side by side.
@@ -64,6 +65,8 @@ export type SiteContent = {
     lead: ReactNode;
     cherry: Teacher;
     lee: Teacher;
+    /** Clips of the two teachers (which clips: src/content/videos.ts) */
+    voices: { title: ReactNode; series: { lead: string; link: string; note: string } };
     principles: [Principle, Principle, Principle];
   };
   programs: {
@@ -73,6 +76,17 @@ export type SiteContent = {
     items: Program[];
     skillsTitle: string;
     skills: [Skill, Skill, Skill, Skill];
+  };
+  /** Class clips from YouTube (which clips: src/content/videos.ts) */
+  videos: {
+    eyebrow: string;
+    title: ReactNode;
+    lead: ReactNode;
+    play: string;
+    posted: string;
+    spoken: Record<Spoken, string>;
+    more: string;
+    note: string;
   };
   quote: { label: string; text: ReactNode; source: string; caption: ReactNode };
   pricing: {
@@ -284,6 +298,18 @@ const th: SiteContent = {
         "ไม่จับผิดสำเนียง ไม่ตัดสิน",
       ],
     },
+    voices: {
+      title: (
+        <>
+          ฟังเสียง<Nobr>ครูเชอร์รี่</Nobr>และ<Nobr>อังเคิลลี</Nobr>
+        </>
+      ),
+      series: {
+        lead: "อยากรู้จักละครสร้างสรรค์มากขึ้น ดูซีรีส์",
+        link: "เปิดโลกละครสร้างสรรค์",
+        note: "ที่ครู\u2060เชอร์\u2060รี่เล่าเป็นภาษาไทยบน YouTube ได้เลยค่ะ",
+      },
+    },
     principles: [
       {
         title: "รู้สึกปลอดภัยก่อน แล้วค่อยกล้าพูด",
@@ -371,6 +397,25 @@ const th: SiteContent = {
       { en: "Communication", th: "การสื่อสาร" },
       { en: "Collaboration", th: "การทำงานร่วมกัน" },
     ],
+  },
+  videos: {
+    eyebrow: "จากช่อง YouTube ของเรา",
+    title: (
+      <>
+        แอบดู<Hl>ห้องเรียน</Hl>ของเรา
+      </>
+    ),
+    lead: (
+      <>
+        คลิปสั้นจากคลาสจริง ทั้ง<Nobr>เล่านิทาน</Nobr> <Nobr>ทำอาหาร</Nobr> และ
+        <Nobr>ฝึกใช้เงิน</Nobr>ตอนช้อปปิ้ง กดเล่นดูได้เลยค่ะ
+      </>
+    ),
+    play: "เล่นวิดีโอ",
+    posted: "โพสต์",
+    spoken: { th: "ภาษาไทย", en: "ภาษาอังกฤษ", "th-en": "ไทยและอังกฤษ" },
+    more: "ดูคลิปทั้งหมดบน YouTube",
+    note: "คลิปที่มีเด็กๆ เผยแพร่โดยได้รับอนุญาตจากผู้ปกครองแล้ว วิดีโอจะโหลดจาก YouTube เมื่อกดเล่นเท่านั้น",
   },
   quote: {
     label: "แนวคิดเรื่องสำเนียง",
@@ -637,6 +682,14 @@ const en: SiteContent = {
         "Never nitpicks accents, never judges",
       ],
     },
+    voices: {
+      title: "Hear from Kru Cherry and Uncle Lee",
+      series: {
+        lead: "Curious about creative drama? Watch",
+        link: "Kru Cherry’s series on YouTube",
+        note: "(in Thai).",
+      },
+    },
     principles: [
       { title: "Psychological Safety", body: "A space where kids know nobody laughs at mistakes." },
       {
@@ -693,6 +746,20 @@ const en: SiteContent = {
       { en: "Communication" },
       { en: "Collaboration" },
     ],
+  },
+  videos: {
+    eyebrow: "From our YouTube channel",
+    title: (
+      <>
+        Take a peek <Hl>inside our classes</Hl>
+      </>
+    ),
+    lead: "Short clips from real classes: story time, cooking, and practising with money at the shops. Press play to watch.",
+    play: "Play video",
+    posted: "Posted",
+    spoken: { th: "In Thai", en: "In English", "th-en": "Thai & English" },
+    more: "Watch more on YouTube",
+    note: "Clips with children are shared with their parents’ permission. Videos load from YouTube only when you press play.",
   },
   quote: {
     label: "Our view on accents",

@@ -1,15 +1,25 @@
 import { Mail } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { EMAIL, FACEBOOK_URL, LINE_URL } from "@/content/business";
-import { FacebookIcon, LineIcon } from "./icons";
+import {
+  EMAIL,
+  FACEBOOK_URL,
+  INSTAGRAM_URL,
+  LINE_URL,
+  TIKTOK_URL,
+  YOUTUBE_URL,
+} from "@/content/business";
+import { FacebookIcon, InstagramIcon, LineIcon, TikTokIcon, YouTubeIcon } from "./icons";
 
 export function Footer() {
   const { t } = useLanguage();
   const f = t.footer;
   const links = t.nav.items.filter((i) => i.href !== "#faq");
   const social = [
-    { href: FACEBOOK_URL, label: "Facebook", Icon: FacebookIcon, external: true },
     { href: LINE_URL, label: "LINE", Icon: LineIcon, external: true },
+    { href: FACEBOOK_URL, label: "Facebook", Icon: FacebookIcon, external: true },
+    { href: YOUTUBE_URL, label: "YouTube", Icon: YouTubeIcon, external: true },
+    { href: INSTAGRAM_URL, label: "Instagram", Icon: InstagramIcon, external: true },
+    { href: TIKTOK_URL, label: "TikTok", Icon: TikTokIcon, external: true },
     { href: `mailto:${EMAIL}`, label: f.email, Icon: Mail, external: false },
   ];
 
@@ -45,7 +55,7 @@ export function Footer() {
         </nav>
         <div>
           <p className="mb-2 font-display font-semibold text-white">{f.follow}</p>
-          <ul role="list" className="flex list-none gap-2">
+          <ul role="list" className="flex max-w-[168px] list-none flex-wrap gap-2">
             {social.map(({ href, label, Icon, external }) => (
               <li key={label}>
                 <a

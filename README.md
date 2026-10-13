@@ -21,7 +21,8 @@ npm run test
 
 ```
 src/content/site.tsx           ← ALL copy, Thai + English side by side (edit text here)
-src/content/business.ts        ← LINE / Messenger / email links, prices, map pin, schema.org data
+src/content/business.ts        ← LINE / Messenger / email / social links, prices, map pin, schema.org data
+src/content/videos.ts          ← YouTube clips shown on the site (+ parents' consent record)
 src/components/HomePage.tsx    ← section order
 src/components/sections/*.tsx  ← one file per page section
 src/components/Header.tsx      ← logo, nav, TH/EN switch, mobile menu
@@ -30,6 +31,7 @@ src/routes/__root.tsx          ← <head>: title, description, Open Graph, fonts
 src/routes/index.tsx           ← the home route
 src/styles.css                 ← brand colours (oklch), fonts, paper-cut shadows, buttons
 public/images/                 ← logo, teacher photos, Canva illustrations, icons, og-image
+public/images/videos/          ← video posters (from each clip's YouTube thumbnail)
 design-system/cherrylee-co/MASTER.md  ← design rules and contrast notes
 ```
 
@@ -59,6 +61,28 @@ The hero, header, sticky mobile bar and LINE buttons open LINE OA `@cherryleeand
 with a message already typed for that package (`lineMessageUrl` in `business.ts`). The final CTA also links to
 Messenger (`m.me/cherryleeandco`).
 
+## Videos
+
+Clips from the studio's YouTube channel (https://www.youtube.com/@cherryleeandco.) appear in two places:
+
+- **"แอบดูห้องเรียนของเรา / Take a peek inside our classes"** (after the activities): four class clips.
+- **"ฟังเสียงครูเชอร์รี่และอังเคิลลี"** (in Team teaching): the founders' conversation, Uncle Lee's Three Jars short and a
+  link to Kru Cherry's เปิดโลกละครสร้างสรรค์ playlist.
+
+Each clip shows a poster and loads the player from `youtube-nocookie.com` only when someone presses play, so the page
+stays fast and YouTube sets nothing before that. Only one clip plays at a time.
+
+To add or swap a clip, edit `src/content/videos.ts` and add a poster to `public/images/videos/` (360 + 540 px wide
+WebP and a 540 px JPG for vertical clips; 640 + 960 WebP and a 960 JPG for 16:9). Watch the whole clip first.
+**A clip that shows children is hidden until `consent` is filled in**: only add it once the studio has its parents'
+or guardians' permission to show it on the website. Never put children's names in titles, alt text or file names.
+The four class clips were confirmed with parents' permission on 13 October 2026.
+
+Language labels: the founders' talk and Uncle Lee's clips are in English; the Story Playlit and shopping-trip clips are
+in Thai; the cooking clip is labelled "Thai & English" from the studio's description of that class (worth a listen).
+Dates show when a clip was *posted*. Some older clips mention earlier class times (e.g. Saturday 10:00–12:00), so
+the site's own schedule is the one to trust.
+
 ## Publishing and social previews
 
 Publish from Lovable (a custom domain can be added there). The home route ships no `og:image`, so Lovable's hosting
@@ -85,7 +109,7 @@ and update the alt text in `site.tsx`. Only publish photos of children with thei
 ## Third-party requests
 
 No analytics or tracking scripts. The page loads Google Fonts and an embedded Google Maps iframe, both of which
-contact Google.
+contact Google. YouTube videos load only after a visitor presses play.
 
 ## Content sources
 

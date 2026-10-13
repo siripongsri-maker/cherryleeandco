@@ -10,6 +10,15 @@ export const MESSENGER_URL = "https://m.me/cherryleeandco";
 export const FACEBOOK_URL = "https://www.facebook.com/cherryleeandco";
 export const EMAIL = "cherryleeandco@gmail.com";
 
+// Channels listed in the studio's YouTube video descriptions (checked 13 October 2026).
+// The YouTube handle is "@cherryleeandco." with a full stop, so link by channel id instead.
+export const YOUTUBE_URL = "https://www.youtube.com/channel/UC0uGoq-JR18GX-ari735WuA";
+export const INSTAGRAM_URL = "https://www.instagram.com/cherryleeandco";
+export const TIKTOK_URL = "https://www.tiktok.com/@cherryleeandco";
+/** Kru Cherry's Thai series on creative drama ("เปิดโลกละครสร้างสรรค์") */
+export const CREATIVE_DRAMA_PLAYLIST_URL =
+  "https://www.youtube.com/playlist?list=PLDN5_6XhvsKfwJp__3VUtNJIdb9LfTGI0";
+
 export const MAP = {
   lat: 13.8134544,
   lng: 100.6506617,
@@ -71,7 +80,7 @@ export const BUSINESS_JSON_LD = {
       image: "/images/uncle-lee-800.jpg",
     },
   ],
-  sameAs: [FACEBOOK_URL, "https://mez.ink/cherryleeandco"],
+  sameAs: [FACEBOOK_URL, YOUTUBE_URL, INSTAGRAM_URL, TIKTOK_URL, "https://mez.ink/cherryleeandco"],
   makesOffer: [
     {
       "@type": "Offer",

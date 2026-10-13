@@ -2,9 +2,13 @@ import type { ComponentType } from "react";
 import { Check, ChefHat, Hand, MessageCircle, ShieldCheck } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import type { SiteContent } from "@/content/site";
+import { CREATIVE_DRAMA_PLAYLIST_URL } from "@/content/business";
+import { VIDEOS, formatPosted, type Video } from "@/content/videos";
 import { DramaIcon } from "../icons";
 import { Flower } from "../Decor";
+import { ExternalLink } from "../ExternalLink";
 import { Picture } from "../Picture";
+import { YouTubeVideo } from "../YouTubeVideo";
 
 type TeacherKey = "cherry" | "lee";
 
@@ -90,6 +94,56 @@ function TeacherCard({
   );
 }
 
+function VideoCaption({ video }: { video: Video }) {
+  const { lang, t } = useLanguage();
+  return (
+    <figcaption className="mt-4">
+      <p className="mb-1 font-display font-semibold leading-snug">{video.title[lang]}</p>
+      <p className="m-0 text-sm text-ink-soft">
+        {video.duration} · {t.videos.spoken[video.spoken]} · {t.videos.posted}{" "}
+        {formatPosted(video.posted, lang)}
+      </p>
+    </figcaption>
+  );
+}
+
+/** The founders' conversation (16:9) beside Uncle Lee's short (9:16), at the same height. */
+function TeacherVoices({ voices }: { voices: SiteContent["approach"]["voices"] }) {
+  return (
+    <div
+      data-reveal
+      className="mt-12 rounded-paper-alt border-2 border-dashed border-ink bg-paper p-6 sm:p-8"
+    >
+      <h3 className="mb-6 text-h3">{voices.title}</h3>
+      <div className="grid items-start gap-8 sm:grid-cols-[minmax(0,3.16fr)_minmax(0,1fr)] sm:gap-6">
+        <figure className="m-0">
+          <YouTubeVideo
+            video={VIDEOS.founders}
+            sizes="(min-width: 1244px) 780px, (min-width: 640px) 68vw, 88vw"
+            frameClassName="rounded-[18px] border-2 border-ink"
+          />
+          <VideoCaption video={VIDEOS.founders} />
+        </figure>
+        <figure className="m-0 mx-auto w-full max-w-[240px] sm:max-w-none">
+          <YouTubeVideo
+            video={VIDEOS.threeJars}
+            sizes="(min-width: 1244px) 250px, (min-width: 640px) 22vw, 240px"
+            frameClassName="rounded-[18px] border-2 border-ink"
+          />
+          <VideoCaption video={VIDEOS.threeJars} />
+        </figure>
+      </div>
+      <p className="mb-0 mt-6 border-t-2 border-dashed border-peach-deep pt-5">
+        {voices.series.lead}{" "}
+        <ExternalLink href={CREATIVE_DRAMA_PLAYLIST_URL} className="font-semibold">
+          {voices.series.link}
+        </ExternalLink>{" "}
+        {voices.series.note}
+      </p>
+    </div>
+  );
+}
+
 const PRINCIPLE_FALLBACK = { Icon: ShieldCheck, cls: "bg-dusty-soft text-dusty-ink" };
 const PRINCIPLE_STYLE = [
   { Icon: ShieldCheck, cls: "bg-dusty-soft text-dusty-ink" },
@@ -127,6 +181,8 @@ export function Approach() {
           </div>
           <TeacherCard id="lee" teacher={a.lee} />
         </div>
+
+        <TeacherVoices voices={a.voices} />
 
         <ul role="list" className="mt-12 grid list-none gap-6 lg:grid-cols-3">
           {a.principles.map((p, i) => {
