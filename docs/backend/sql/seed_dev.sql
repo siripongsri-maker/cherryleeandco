@@ -1502,7 +1502,7 @@ begin
   raise notice 'PASS DSR and breach deadlines';
 
   -- export returns this family only
-  v_export := public.export_family_data('f0000000-0000-4000-8000-000000000001');
+  v_export := public.export_family_data('f0000000-0000-4000-8000-000000000001', true);
   if jsonb_array_length(v_export -> 'guardians') <> 1 or jsonb_array_length(v_export -> 'children') <> 2 then
     raise exception 'FAIL export counts wrong';
   end if;
@@ -1513,6 +1513,19 @@ begin
     raise exception 'FAIL export contains token hashes';
   end if;
   raise notice 'PASS export_family_data returns one family only';
+
+  -- Round two (brief item 3, decision 3): includeHealth false = no health in the file; the choice is required
+  v_export := public.export_family_data('f0000000-0000-4000-8000-000000000001', false);
+  if jsonb_array_length(v_export -> 'child_health') <> 0 then
+    raise exception 'FAIL export with includeHealth false still carries health';
+  end if;
+  raise notice 'PASS export without includeHealth carries no health data';
+  begin
+    perform public.export_family_data('f0000000-0000-4000-8000-000000000001', null);
+    raise exception 'FAIL export_family_data accepted a missing includeHealth';
+  exception when sqlstate '22004' then
+    raise notice 'PASS export_family_data refuses a missing includeHealth';
+  end;
 
   -- erase
   v_counts := public.erase_family('f0000000-0000-4000-8000-000000000001');

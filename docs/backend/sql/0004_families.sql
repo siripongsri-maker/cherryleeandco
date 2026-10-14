@@ -20,7 +20,9 @@
 --             before (session start − cancel_notice_hours) keeps its credit (status 'cancelled'). 'absent' and
 --             'cancelled_late' use one credit. New: booking_status 'cancelled_late', enum notice_channel
 --             ('line', 'in_person'), bookings.cancel_notice_channel / cancel_notice_at; validate_booking decides
---             the cancellation status; seat and balance functions count 'cancelled_late'. Checks: seed_dev § 5, § 7d.
+--             the cancellation status and writes cancelled_at; a make-up (bookings.makeup_of_booking_id) is allowed only
+--             when its original is 'cancelled' with notice; seat and balance functions count 'cancelled_late'.
+--             Checks: seed_dev § 5, § 7d.
 -- Depends on: 0001, 0002, 0003
 -- Apply via Lovable chat:
 --   "Apply this SQL migration exactly as written. Do not change it."
@@ -62,8 +64,6 @@ begin
   if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
                  where n.nspname = 'public' and t.typname = 'booking_status') then
     -- Round two: 'cancelled_late' = cancelled with late or no notice (uses one credit, like 'absent').
-    -- Only if booking_status ALREADY exists without it (not the case before G4): run
-    -- alter type public.booking_status add value 'cancelled_late'; as its own step first.
     create type public.booking_status as enum ('held', 'confirmed', 'attended', 'absent', 'cancelled', 'cancelled_late');
   end if;
   if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
@@ -72,6 +72,10 @@ begin
   end if;
 end
 $$;
+
+-- Round two: a booking_status type created by an earlier run may lack 'cancelled_late'. This step adds it when missing,
+-- so re-runs are safe. It is its own statement, and no statement in this file uses the new value outside a function body.
+alter type public.booking_status add value if not exists 'cancelled_late';
 
 
 -- -----------------------------------------------------------------------------
@@ -306,10 +310,14 @@ create table if not exists public.bookings (
   picked_up_by_guardian_id   uuid references public.guardians (id) on delete set null,
   picked_up_by_contact_id    uuid references public.family_contacts (id) on delete set null,
   -- Round two (14 Oct 2026, brief item 1): the notice for a cancellation, recorded by staff on the booking screen.
-  -- channel 'line' = notice_at is the time the LINE message arrived (taken from the OA chat); 'in_person' = told at the studio.
+  -- channel 'line' = cancel_notice_at is the time the LINE message arrived (taken from the OA chat); 'in_person' = told at the studio.
   -- validate_booking() sets the status from this: on time -> 'cancelled'; late or missing -> 'cancelled_late'.
   cancel_notice_channel      public.notice_channel,
   cancel_notice_at           timestamptz,
+  -- Round two: when the booking was cancelled (first time). Set by validate_booking(), never written by the server.
+  cancelled_at               timestamptz,
+  -- Round two (decision 10): the cancelled booking this make-up replaces. Only a make-up sets it; validate_booking() checks it.
+  makeup_of_booking_id       uuid references public.bookings (id) on delete set null,
   staff_note                 text check (staff_note is null or char_length(staff_note) <= 500),
   created_by                 uuid references auth.users (id) on delete set null,
   created_at                 timestamptz not null default now(),
@@ -329,6 +337,9 @@ comment on table public.bookings is
 -- cancelled_late keeps its seat: it is a late cancellation, so the seat is not free for someone else.
 create unique index if not exists bookings_one_active_seat_per_child
   on public.bookings (session_id, child_id) where status <> 'cancelled';
+-- Round two (decision 10): one live make-up per cancelled booking. A second make-up gives 23505 (the server maps it to conflict).
+create unique index if not exists bookings_one_makeup_per_original
+  on public.bookings (makeup_of_booking_id) where makeup_of_booking_id is not null and status <> 'cancelled';
 create index if not exists bookings_session_idx on public.bookings (session_id);
 create index if not exists bookings_child_idx on public.bookings (child_id);
 create index if not exists bookings_family_idx on public.bookings (family_id);
@@ -479,6 +490,31 @@ begin
       new.status := 'cancelled'::public.booking_status;        -- notice on time: credit kept, nothing deducted
     else
       new.status := 'cancelled_late'::public.booking_status;   -- late or no notice: one credit used
+    end if;
+  end if;
+
+  -- Round two: cancelled_at is written here, so the server never sets it. Kept at the first cancellation.
+  if new.status in ('cancelled'::public.booking_status, 'cancelled_late'::public.booking_status) then
+    new.cancelled_at := coalesce(
+      case when tg_op = 'UPDATE' and old.status in ('cancelled'::public.booking_status, 'cancelled_late'::public.booking_status)
+           then old.cancelled_at end,
+      new.cancelled_at,
+      now());
+  else
+    new.cancelled_at := null;
+  end if;
+
+  -- Round two (decision 10, make-up): a make-up may only replace a booking that was cancelled WITH notice in time
+  -- (status 'cancelled' and a notice time; a studio cancellation has no notice, so it is not made up here).
+  -- The check lives in the database so the rule cannot be skipped by a caller.
+  if tg_op = 'INSERT' and new.makeup_of_booking_id is not null then
+    if not exists (select 1 from public.bookings ob
+                    where ob.id = new.makeup_of_booking_id
+                      and ob.child_id = new.child_id
+                      and ob.status = 'cancelled'::public.booking_status
+                      and ob.cancel_notice_at is not null) then
+      raise exception 'A make-up needs an original booking of this child, cancelled with notice in time'
+        using errcode = '23514';
     end if;
   end if;
 
@@ -1256,8 +1292,9 @@ grant update (cancel_notice_hours) on table public.studio_settings to authentica
 -- check_make_up_notice(original session, notice time) — the make-up booking function calls this BEFORE it inserts
 -- the make-up booking. It raises 23514 when the notice came too late. p_notice_at is the time the family gave
 -- notice (the server passes now() for a live request; staff pass the time a LINE message was received).
--- Round two: p_notice_at is the cancel_notice_at of the ORIGINAL booking, and a make-up is booked only when that
--- booking's status is 'cancelled' (notice on time). A 'cancelled_late' or 'absent' booking gets no make-up.
+-- Round two: p_notice_at is the cancel_notice_at of the ORIGINAL booking. A NULL notice is refused (a studio cancellation
+-- has none). This function checks only the time. The status rule (the original must be 'cancelled' with notice) is
+-- enforced by validate_booking() when a make-up row is inserted, so it cannot be skipped.
 create or replace function public.check_make_up_notice(
   p_original_session_id uuid,
   p_notice_at           timestamptz default now()
@@ -1282,7 +1319,7 @@ begin
     raise exception 'Session not found' using errcode = '23503';
   end if;
 
-  if p_notice_at > v_start - make_interval(hours => coalesce(v_hours, 3)) then
+  if p_notice_at is null or p_notice_at > v_start - make_interval(hours => coalesce(v_hours, 3)) then
     raise exception 'Make-up needs notice at least % hours before the original session',
       coalesce(v_hours, 3) using errcode = '23514';
   end if;

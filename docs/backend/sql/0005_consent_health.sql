@@ -1076,11 +1076,14 @@ set search_path = ''
 as $$
 begin
   perform public.require_staff_or_server();
+  if p_include_health is null then
+    raise exception 'includeHealth must be true or false' using errcode = '22004';
+  end if;
   if not exists (select 1 from public.families f where f.id = p_family_id) then
     raise exception 'Family not found' using errcode = 'P0002';
   end if;
   perform public.log_audit_event('print_record', 'families', p_family_id::text,
-                                 jsonb_build_object('include_health', coalesce(p_include_health, false)));
+                                 jsonb_build_object('include_health', p_include_health));
 end;
 $$;
 

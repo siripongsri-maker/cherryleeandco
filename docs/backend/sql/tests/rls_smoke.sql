@@ -53,7 +53,7 @@ declare
     'select * from public.list_session_health_flags(gen_random_uuid())',
     'select public.upsert_child_health(gen_random_uuid(), array[]::text[], null, null, null)',
     'select public.consent_status(gen_random_uuid(), ''media_website'')',
-    'select public.export_family_data(gen_random_uuid())',
+    'select public.export_family_data(gen_random_uuid(), true)',
     'select public.erase_family(gen_random_uuid())',
     'select public.mark_inactive_families()',
     'select public.generate_weekend_sessions(current_date, 1, null)',
@@ -146,7 +146,7 @@ declare
     'select public.upsert_child_health(gen_random_uuid(), array[]::text[], null, null, null)',
     'select public.can_publish_media(gen_random_uuid(), ''media_website'')',
     'select public.consent_status(gen_random_uuid(), ''media_website'')',
-    'select public.export_family_data(gen_random_uuid())',
+    'select public.export_family_data(gen_random_uuid(), true)',
     'select public.erase_family(gen_random_uuid())',
     'select public.mark_inactive_families()',
     'select public.generate_weekend_sessions(current_date, 1, null)',
@@ -435,9 +435,9 @@ part_a(line) as (
   union all
   -- A14 the export never reads child_health with a plain join; health only through get_child_health (brief item 2)
   select case
-           when to_regprocedure('public.export_family_data(uuid)') is null
+           when to_regprocedure('public.export_family_data(uuid, boolean)') is null
              then 'skip export_family_data: not created yet'
-           when pg_get_functiondef('public.export_family_data(uuid)'::regprocedure) ~ 'public\.child_health'
+           when pg_get_functiondef('public.export_family_data(uuid, boolean)'::regprocedure) ~ 'public\.child_health'
              then 'FAIL export_family_data reads public.child_health directly'
            else 'ok   export_family_data reads health only through get_child_health'
          end

@@ -481,15 +481,17 @@ grant execute on function public.mark_inactive_families() to authenticated, serv
 
 
 -- -----------------------------------------------------------------------------
--- 6. export_family_data(p_family_id) — owner only (PDPA s.30 access / s.31 portability).
+-- 6. export_family_data(p_family_id, p_include_health) — owner only (PDPA s.30 access / s.31 portability).
 --    Returns ONE family's data as jsonb (never another family's). Writes an audit row 'export'.
 --    family_links are exported without token_hash. Files (slips, evidence) are referenced by path.
 -- -----------------------------------------------------------------------------
 
--- Round two (14 Oct 2026, brief item 2, owner-chosen route): child_health is read ONLY through the audited function
--- get_child_health(child, includeHealth). The owner's access export is a full copy, so it passes includeHealth = true.
--- No second exception route; the plain join is removed.
-create or replace function public.export_family_data(p_family_id uuid)
+-- Round two (14 Oct 2026, brief item 3, decision 3): child_health is read ONLY through the audited function
+-- get_child_health(child, includeHealth), and only when the owner ticks includeHealth for this export. With false the
+-- file has NO health data (no read at all, no child_health key content). No second route; the plain join is removed.
+-- p_include_health has no default: the caller must choose (NULL is refused, 22004).
+drop function if exists public.export_family_data(uuid);
+create or replace function public.export_family_data(p_family_id uuid, p_include_health boolean)
 returns jsonb
 language plpgsql
 volatile
@@ -501,6 +503,9 @@ declare
   v_result         jsonb;
 begin
   perform public.require_owner_or_server();
+  if p_include_health is null then
+    raise exception 'includeHealth must be true or false' using errcode = '22004';
+  end if;
 
   select f.source_request_id into v_source_request from public.families f where f.id = p_family_id;
   if not found then
@@ -508,7 +513,7 @@ begin
   end if;
 
   perform public.log_audit_event('export', 'families', p_family_id::text,
-                                 jsonb_build_object('function', 'export_family_data', 'include_health', true));
+                                 jsonb_build_object('function', 'export_family_data', 'include_health', p_include_health));
 
   select jsonb_build_object(
     'export_format', 'cherrylee-family-export-v1',
@@ -518,10 +523,12 @@ begin
                              from public.guardians g where g.family_id = p_family_id), '[]'::jsonb),
     'children', coalesce((select jsonb_agg(to_jsonb(c) order by c.created_at)
                             from public.children c where c.family_id = p_family_id), '[]'::jsonb),
-    'child_health', coalesce((select jsonb_agg(to_jsonb(ch) order by c.created_at)
-                                from public.children c
-                               cross join lateral public.get_child_health(c.id, true) as ch
-                               where c.family_id = p_family_id), '[]'::jsonb),
+    'child_health', case when p_include_health then
+                      coalesce((select jsonb_agg(to_jsonb(ch) order by c.created_at)
+                                  from public.children c
+                                 cross join lateral public.get_child_health(c.id, p_include_health) as ch
+                                 where c.family_id = p_family_id), '[]'::jsonb)
+                    else '[]'::jsonb end,
     'family_contacts', coalesce((select jsonb_agg(to_jsonb(fc) order by fc.created_at)
                                    from public.family_contacts fc where fc.family_id = p_family_id), '[]'::jsonb),
     'consent_records', coalesce((select jsonb_agg(to_jsonb(cr) order by cr.created_at)
@@ -561,8 +568,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.export_family_data(uuid) from public, anon;
-grant execute on function public.export_family_data(uuid) to authenticated, service_role;
+revoke execute on function public.export_family_data(uuid, boolean) from public, anon;
+grant execute on function public.export_family_data(uuid, boolean) to authenticated, service_role;
 
 
 -- -----------------------------------------------------------------------------

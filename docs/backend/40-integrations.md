@@ -1,6 +1,6 @@
 # 40 · Integrations and setup runbooks
 
-Planning document, October 2026. Names (gates G0–G13 + G-MVP/G-HEALTH/G-PARK, decisions D1–D30, secrets, tables, functions, files) come from
+Planning document, October 2026. Names (gates G0–G13 + G-MVP/G-HEALTH/G-PARK, decisions D1–D39, secrets, tables, functions, files) come from
 [`00-overview.md`](00-overview.md) §§ 5, 9, 10, 11. If this file disagrees with `00-overview.md`, `10-data-model.md` or
 `20-server-api.md`, those files win; fix this one.
 
@@ -255,7 +255,7 @@ again). **Never** paste a value into chat (Lovable, LINE, Claude), a file, a com
 | `LINE_ALERT_CHANNEL_ID` | LINE Developers → provider "CherryLee & Co." → channel "CherryLee Staff Alerts" → **Basic settings → Channel ID** (§ 5) | digits only | P1 |
 | `LINE_ALERT_CHANNEL_SECRET` | same page → **Channel secret** | 32 hex characters | P1 |
 | `LINE_ALERT_TO` | owner's user ID (**Basic settings → Your user ID**) or a staff group ID (§ 5.6) | `U` or `C` + 32 hex characters | P1 |
-| `PUBLIC_SITE_URL` | the published site address, e.g. `https://<published-name>.lovable.app` (custom domain later, G13) | starts with `https://`, **no trailing slash** | P1 |
+| `PUBLIC_SITE_URL` | the live site address: `https://cherryleeandco.com` (D37; the domain is live and G13 is done) | starts with `https://`, **no trailing slash** | P1 |
 | `PROMPTPAY_ID` (optional) | the studio's business PromptPay ID (§ 8) | 10, 13 or 15 digits | P6 |
 | `RESEND_API_KEY` (optional) | Resend → API Keys → Create (permission "Sending access") (§ 9) | starts with `re_` | P6 |
 | `STAFF_NOTIFY_EMAIL` (optional) | the owner's own inbox used to sign up for Resend | an email address | P6 |
@@ -511,6 +511,20 @@ the alert OA to a paid plan (Basic ฿1,280/month + VAT, 15,000 messages; prices
 - `@cherryleeandco`: no Messaging API, no webhook, no provider link (D6). Parent chats stay on staff phones.
 - No LINE chat content is stored in our database. No LINE user IDs of parents are stored before P7.
 
+### 5.10 Parents' contact rule (D35, decision 4 of 14 Oct 2026)
+
+- **D26 stands.** A LINE Official Account cannot add a user by LINE ID or message someone who has not messaged it. Parents
+  message `@cherryleeandco` first, or add the OA themselves.
+- **Staff never add a parent** from a personal LINE account. No screen asks staff to copy a parent's LINE ID in order to
+  add them. Any button, field or copy that does is removed (checked at G10).
+- **The system never receives a parent's LINE user ID** (no webhook, no LINE Login before P7). The optional **LINE ID hint**
+  a parent may type on `/book` (D26) is used only to find the right chat. The owner has not asked to remove it, so it stays
+  optional. The owner confirms this reading in one line (open).
+- **Follow-up messages** (`marketing_line`, D31) are typed by hand in an existing chat. They are never sent in bulk or through
+  the Messaging API.
+- **Round two (14 Oct 2026, item 8): D26 is kept, no change.** The owner answered "คงไว้" (keep it). This confirms the reading of D35 that the owner was asked to confirm: parents message `@cherryleeandco` first or add the OA themselves, and staff never copy a parent's LINE ID.
+- **Exports and print do not leave the system (D33, D42).** The export and the signing sheet are made on request and go only to the staff member's browser. Nothing is sent to LINE, e-mail or any third party, and the signing sheet is not stored on the server. A PDF saved from the browser is a file on the staff member's own device, so the device rules in `50-security-privacy.md` § 23 item 7 apply.
+
 ---
 
 ## 6. Cloudflare Turnstile (G7, P1)
@@ -524,9 +538,9 @@ Docs: https://developers.cloudflare.com/turnstile/
 2. Dashboard → **Turnstile** → **Add widget**.
    - Widget name: `CherryLee booking form`
    - Hostnames (exact; each one also covers its subdomains; wildcards are not allowed):
-     - the published host, e.g. `<published-name>.lovable.app`
-     - `id-preview--fa9b86e9-5d99-468e-be51-3be106fa410c.lovable.app`
-     - later: the custom domain (G13)
+     - `cherryleeandco.com` (the live domain, D37; `www.cherryleeandco.com` is UNVERIFIED: check in the Cloudflare console and add it as its own hostname if it is not covered)
+     - `id-preview--fa9b86e9-5d99-468e-be51-3be106fa410c.lovable.app` (the Lovable preview host, for testing)
+     - the published `<published-name>.lovable.app` host, only while it is still used
      - **never** the apex `lovable.app` (that would authorise every Lovable site)
    - Widget mode: **Managed**
    - Pre-clearance: **No**
@@ -907,16 +921,19 @@ https://developers.line.biz/en/docs/line-login/managing-authorized-apps/ ; https
 
 ## 12. Custom domain follow-ups (G13)
 
-🧑 HUMAN when the studio connects its own domain (Lovable → Project settings → Domains):
+**G13 is done (14 Oct 2026).** The studio's domain is `https://cherryleeandco.com` (D37). The steps below are the checklist
+for the values the domain drives. 🧑 HUMAN steps (Lovable → Project settings → Domains, Cloudflare and Cloud → Secrets):
 
-1. Cloudflare Turnstile: add the domain to the widget's hostnames (keep the lovable.app hosts while they are used).
-2. Secret `PUBLIC_SITE_URL` → `https://<domain>` (no trailing slash). Publish.
+1. Cloudflare Turnstile: `cherryleeandco.com` is the hostname (§ 6.1). Keep the preview host for testing.
+2. Secret `PUBLIC_SITE_URL` = `https://cherryleeandco.com` (no trailing slash). Publish.
 3. Umami (if used): change the website domain and `data-domains`.
-4. `src/content/business.ts` `BUSINESS_JSON_LD`: make image URLs absolute (🤖 AGENT card).
+4. JSON-LD base `https://cherryleeandco.com` in `src/content/business.ts` (`BUSINESS_JSON_LD`): a **website task**, not a backend
+   card. Describe only; the website change is made outside this plan.
 5. Lovable Cloud Auth: Lovable adds the custom domain to redirect URLs automatically on publish; check
    **Cloud → Users → Auth settings** anyway.
 6. LINE alert webhook URL (only if § 5.6 is still in use).
-7. Privacy notice: update the website address and the version.
+7. Privacy notice: the website line `https://cherryleeandco.com` is in the draft (`50-security-privacy.md` § 11, section 2). Include
+   it in the first notice version that goes live.
 8. Email: § 9.4 if parent-facing email is wanted.
 
 ---

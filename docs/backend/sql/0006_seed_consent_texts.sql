@@ -5,10 +5,12 @@
 -- Gate:       G9b FIRST (owner + Thai PDPA lawyer review this wording and decision D11),
 --             THEN G4 — a HUMAN applies it through Lovable chat. Implementers never run it.
 -- Status:     *** DRAFT pending G9b legal review — DO NOT APPLY BEFORE G9b IS MARKED DONE ***
--- Purpose:    version 1 of the consent wording, Thai + English, for four purposes:
---             health_allergy (explicit, PDPA s.26), media_website, media_social, media_youtube.
+-- Purpose:    version 1 of the consent wording, Thai + English, for five purposes:
+--             health_allergy (explicit, PDPA s.26), media_website, media_social, media_youtube,
+--             media_print (added 14 Oct 2026, decision 3; LAWYER REVIEW, default NOT granted).
 --             media_parents_group moved to the OPTIONAL file 0006b_seed_media_parents_group.sql (review R-24:
 --             apply it only if the owner confirms the private parents' group exists, G0 Q9).
+--             The marketing_line text (guardian scope, decision 2) is NOT here: it is in 0006a_seed_marketing_text.sql.
 -- Owner approval (review R-24): sentences marked "-- OWNER-APPROVE" below describe what the studio will do;
 --             the owner confirms them at G9b together with the lawyer, or the builder edits them first.
 -- G-HEALTH (00-overview § 9, review R-29): if the owner chose the PAPER allergy form, the builder deletes the
@@ -181,6 +183,38 @@ By ticking this box, you give **explicit consent** for CherryLee & Co. to keep a
 - **This is optional.** Saying no makes no difference to your child's classes.
 - For children aged 10 and over, a teacher will also ask your child. We only use videos of your child when both you and your child agree.
 - **You can withdraw at any time** through your "My consents" link, on LINE, or by telling a teacher. We stop using it straight away and remove the clip from the studio's channel as soon as we can. Copies other people have already saved or shared may not all be removable; we want to be honest about that.
+- We keep a record of this consent while it is in use and for 3 years afterwards, as evidence.$txt$,
+ false, 10),
+
+-- -----------------------------------------------------------------------------
+-- media_print · TH   (decision 3, 14 Oct 2026 · LAWYER REVIEW · default not granted)
+-- OWNER-APPROVE: the kinds of printed material named here (โปสเตอร์ แผ่นพับ เอกสารประชาสัมพันธ์) are the
+--   studio's; the owner confirms the list at G9b. Remove any kind the owner does not use.
+-- -----------------------------------------------------------------------------
+('media_print', 1, 'th',
+ 'รูปและวิดีโอในสื่อสิ่งพิมพ์ของสตูดิโอ',
+ $txt$ข้อนี้ขออนุญาตใช้รูปที่มีน้องอยู่ ใน**สื่อสิ่งพิมพ์ของ CherryLee & Co.** เช่น โปสเตอร์ แผ่นพับ หรือเอกสารประชาสัมพันธ์ค่ะ สื่อที่พิมพ์ออกมาแล้วคนทั่วไปอาจเห็นได้
+
+- คุณพ่อคุณแม่เลือกได้ว่า **เห็นหน้าน้องได้** หรือ **ไม่ให้เห็นหน้าน้อง** ค่ะ
+- เราไม่ใส่ชื่อน้องในคำบรรยายหรือชื่อของสื่อค่ะ
+- **ไม่บังคับค่ะ** การไม่อนุญาตไม่มีผลต่อการเรียนของน้องเลย
+- น้องอายุ 10 ปีขึ้นไป คุณครูจะถามความเห็นของน้องเองด้วย เราจะใช้รูปที่มีน้องก็ต่อเมื่อทั้งคุณพ่อคุณแม่และน้องตกลงค่ะ
+- **ถอนความยินยอมได้ทุกเมื่อ** ผ่านลิงก์ "ความยินยอมของฉัน" ทาง LINE หรือบอกคุณครูที่สตูดิโอ เมื่อถอนแล้ว เราจะไม่พิมพ์สื่อใหม่ที่มีน้อง และจะนำน้องออกจากสื่อที่ยังใช้อยู่เท่าที่ทำได้ค่ะ สำเนาที่พิมพ์ไปแล้วอาจเรียกคืนไม่ได้ทั้งหมด ขอแจ้งไว้ตรงๆ นะคะ
+- เราเก็บบันทึกการยินยอมนี้ไว้ระหว่างที่ยังใช้อยู่ และต่ออีก 3 ปีหลังจากนั้นเพื่อเป็นหลักฐานค่ะ$txt$,
+ false, 10),
+
+-- -----------------------------------------------------------------------------
+-- media_print · EN   (decision 3, 14 Oct 2026 · LAWYER REVIEW · default not granted)
+-- -----------------------------------------------------------------------------
+('media_print', 1, 'en',
+ 'Photos and videos in the studio''s printed materials',
+ $txt$This asks your permission to use photos that include your child in **CherryLee & Co.'s printed materials**, such as posters, leaflets or promotional handouts. Printed material can be seen by anyone who picks it up.
+
+- You choose: **your child's face may be shown**, or **your child's face must not be shown**.
+- We never put your child's name in captions or image descriptions.
+- **This is optional.** Saying no makes no difference to your child's classes.
+- For children aged 10 and over, a teacher will also ask your child. We only use photos of your child when both you and your child agree.
+- **You can withdraw at any time** through your "My consents" link, on LINE, or by telling a teacher. From then on we will not print new material with your child in it, and we will take your child out of printed material still in use, as far as we can. Printed copies that are already out may not all be recoverable; we want to be honest about that.
 - We keep a record of this consent while it is in use and for 3 years afterwards, as evidence.$txt$,
  false, 10)
 

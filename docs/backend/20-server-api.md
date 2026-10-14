@@ -167,8 +167,10 @@ Rules:
 - Optional integrations (LINE alerts, Turnstile) use `optionalServerEnv` and degrade gracefully (alert `failed` with
   `missing_config`; Turnstile fails closed with the LINE fallback). `IP_HASH_SECRET` uses `requireServerEnv` (no
   silent fallback to an unsalted hash).
-- `PUBLIC_SITE_URL` (no trailing slash) builds links in alerts and private links; when unset, use
-  `getRequestUrl().origin` from `@tanstack/react-start/server`.
+- `PUBLIC_SITE_URL` (no trailing slash) builds links in alerts and private links; when unset (local development and preview only; the live site must set it), use `getRequestUrl().origin` from `@tanstack/react-start/server`.
+  **Value for this studio: `https://cherryleeandco.com`** (owner decision 9, 14 Oct 2026; the domain is live, G13 done).
+  It is not a secret: set it as a plain variable at G6. Every absolute link in this file (staff alerts, `/enrol` and
+  `/my` links) is built from it.
 
 Names (values are set by the owner at G6; never in chat, code, tests or commits): `IP_HASH_SECRET`,
 `TURNSTILE_SECRET_KEY`, `LINE_ALERT_CHANNEL_ID`, `LINE_ALERT_CHANNEL_SECRET`, `LINE_ALERT_TO`, `PUBLIC_SITE_URL`;
@@ -219,6 +221,7 @@ export type AdminErrorCode =
   | "file_type"
   | "confirm_mismatch"
   | "family_restricted"
+  | "make_up_notice_short"
   | "server_error";
 
 export function adminError(code: AdminErrorCode): Error {
@@ -240,6 +243,7 @@ const ADMIN_CODES: readonly AdminErrorCode[] = [
   "file_type",
   "confirm_mismatch",
   "family_restricted",
+  "make_up_notice_short",
   "server_error",
 ];
 
@@ -301,6 +305,12 @@ Parent-facing messages for `PublicErrorCode` (the copy itself lives in `src/cont
 | `link_expired` | past `expires_at` | ลิงก์นี้หมดอายุแล้วค่ะ ทักทีมงานทาง LINE เพื่อขอลิงก์ใหม่ได้เลยนะคะ | This link has expired. Please ask us on LINE for a new one. |
 | `link_used` | enrol link already submitted | ส่งข้อมูลผ่านลิงก์นี้เรียบร้อยแล้วค่ะ ถ้าต้องการแก้ไข ทักทีมงานทาง LINE ได้เลยนะคะ | This form has already been sent. To change anything, message us on LINE. |
 | `server_error` | anything else | ขออภัยค่ะ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้ง หรือทักเราทาง LINE ได้เลยค่ะ | Sorry, something went wrong on our side. Please try again, or message us on LINE. |
+
+`make_up_notice_short` (added 14 October 2026, owner decision 10; round two, option ก): a make-up was asked for, but the original
+booking was cancelled with notice that came less than `cancel_notice_hours` before the original session started (its status is
+`cancelled_late`, § 9.7). The same rule decides `cancelled` (credit kept) against `cancelled_late` (credit used) when staff record a
+cancellation. Staff copy: TH "แจ้งไม่ทันเวลาค่ะ ต้องแจ้งอย่างน้อย {n} ชั่วโมงก่อนเวลาเรียนเดิม" ·
+EN "Notice came too late. Notice of at least {n} hours before the original class is needed."
 
 Staff-facing messages for `AdminErrorCode` live in `src/content/admin/core.tsx` → `errors` (used as
 `adminContent[lang].errors`; full text in `30-ui.md` § 5 and § 5.1).
@@ -579,6 +589,10 @@ attempt and returns `boolean` **true = allowed**. If `10-data-model.md` defines 
 `return` line here.
 
 ### 7.4 `turnstile.server.ts` ✅ (F0-02)
+
+**Allowed hostnames (rev 14 Oct 2026, decision 9):** the Cloudflare Turnstile widget for the site lists `cherryleeandco.com`
+and nothing else. Any other host, the Lovable preview host included, is not listed. Whether testers may use the preview
+host is an owner decision (open question) and is not assumed here.
 
 ```ts
 import "@tanstack/react-start/server-only";
@@ -1117,17 +1131,17 @@ export async function deliverConsentAlert(consentRecordId: string): Promise<void
   push ok → `sent` with `attempts` 1; retry of a `sent` row → no push; any throw inside → returns `failed`, never throws;
   (P4-03) `deliverAlertIds([])` makes no query; `deliverAlertIds` skips `sent` rows and pushes at most 5.
 
-### 7.9 `consent-texts.server.ts` ✅ (F4-04)
+### 7.9 `consent-texts.server.ts` ✅ (F4-04; rev 14 Oct 2026: loads and checks `marketing_line` texts too)
 
 ```ts
 import "@tanstack/react-start/server-only";
-import { CONSENT_PURPOSES, type ConsentPurpose } from "@/lib/backend/common.schema";
+import { CONSENT_TEXT_PURPOSES, type ConsentTextPurpose } from "@/lib/backend/common.schema";
 import type { ConsentTextView } from "@/lib/backend/enrolment.schema";
 import { supabaseAdmin } from "./supabase-admin.server";
 
 type TextRow = {
   id: string;
-  purpose: ConsentPurpose;
+  purpose: ConsentTextPurpose;
   version: number;
   title: string;
   body_md: string;
@@ -1136,7 +1150,7 @@ type TextRow = {
 /** Latest published, not-retired text per purpose in one language (for /enrol and /my). */
 export async function loadCurrentConsentTexts(
   lang: "th" | "en",
-): Promise<Record<ConsentPurpose, ConsentTextView | null>> {
+): Promise<Record<ConsentTextPurpose, ConsentTextView | null>> {
   const { data, error } = await supabaseAdmin
     .from("consent_texts")
     .select("id, purpose, version, title, body_md")
@@ -1145,8 +1159,8 @@ export async function loadCurrentConsentTexts(
     .lte("effective_from", new Date().toISOString())
     .order("version", { ascending: false });
   if (error) throw new Error("consent_texts_failed");
-  const out = Object.fromEntries(CONSENT_PURPOSES.map((p) => [p, null])) as Record<
-    ConsentPurpose,
+  const out = Object.fromEntries(CONSENT_TEXT_PURPOSES.map((p) => [p, null])) as Record<
+    ConsentTextPurpose,
     ConsentTextView | null
   >;
   for (const r of (data ?? []) as TextRow[]) {
@@ -1158,7 +1172,7 @@ export async function loadCurrentConsentTexts(
 
 /** True when every id is a current (not retired) text for the stated purpose and language. */
 export async function areCurrentConsentTexts(
-  expected: Array<{ id: string; purpose: ConsentPurpose }>,
+  expected: Array<{ id: string; purpose: ConsentTextPurpose }>,
   lang: "th" | "en",
 ): Promise<boolean> {
   if (expected.length === 0) return true;
@@ -1579,6 +1593,15 @@ export function addDays(isoDate: string, days: number): string {
 export const weekdayOf = (isoDate: string): number => new Date(`${isoDate}T12:00:00Z`).getUTCDay();
 export const isWeekendDate = (isoDate: string): boolean => [0, 6].includes(weekdayOf(isoDate));
 
+/**
+ * Start of a session as an instant (rev 14 Oct 2026, decision 10). `sessions.starts_at` is a Bangkok wall-clock `time`
+ * with no zone, and Thailand has no daylight saving, so the offset +07:00 is fixed. Used by the make-up notice check.
+ * Unit test: sessionStartsAt("2026-10-20", "09:00:00") is 2026-10-20T02:00:00.000Z.
+ */
+export function sessionStartsAt(sessionDate: string, startsAt: string): Date {
+  return new Date(`${sessionDate}T${startsAt.slice(0, 5)}:00+07:00`);
+}
+
 /** Every Saturday and Sunday from `from` (inclusive) for `weeks` weeks. */
 export function upcomingWeekendDates(from: string, weeks: number): string[] {
   const out: string[] = [];
@@ -1708,14 +1731,17 @@ export type StaffAlertInput =
  * every other file imports ConsentPurpose from ./common.schema only (R-41, one exported name per type).
  */
 type ConsentPurpose =
-  "health_allergy" | "media_parents_group" | "media_website" | "media_social" | "media_youtube";
+  "health_allergy" | "media_parents_group" | "media_website" | "media_social" | "media_youtube" | "media_print";
 
+// marketing_line is never named in a staff alert: it is guardian-level, and withdrawing it queues no alert
+// (D29 covers consent_records only).
 const PURPOSE_LABEL_TH: Record<ConsentPurpose, string> = {
   health_allergy: "ข้อมูลการแพ้อาหาร",
   media_parents_group: "รูป/วิดีโอในกลุ่มผู้ปกครอง",
   media_website: "รูป/วิดีโอบนเว็บไซต์",
   media_social: "รูป/วิดีโอบนโซเชียลมีเดีย",
   media_youtube: "วิดีโอบน YouTube",
+  media_print: "รูป/วิดีโอในสิ่งพิมพ์",
 };
 
 function assertSafeUrl(url: string): void {
@@ -1754,7 +1780,7 @@ export function buildStaffAlertText(input: StaffAlertInput): string {
 ```ts
 import { buildStaffAlertText } from "./staff-alert-text";
 
-const ADMIN = "https://example.lovable.app/admin/inbox/00000000-0000-0000-0000-000000000001";
+const ADMIN = "https://cherryleeandco.com/admin/inbox/00000000-0000-0000-0000-000000000001";
 
 describe("buildStaffAlertText", () => {
   it("booking_request has only code, date, count and link", () => {
@@ -1877,17 +1903,35 @@ export const CONSENT_PURPOSES = [
   "media_website",
   "media_social",
   "media_youtube",
+  "media_print", // rev 14 Oct 2026 (decision 3): same rules as media_social, child-level, media_level
 ] as const;
 export const MEDIA_PURPOSES = [
   "media_parents_group",
   "media_website",
   "media_social",
   "media_youtube",
+  "media_print",
 ] as const;
+/**
+ * Guardian-level purposes (rev 14 Oct 2026, decision 2): one choice per guardian, never per child, used for
+ * news, classes and follow-up only. No child data is used for them except the child's nickname in the follow-up list's
+ * family label (§ 9.5a, owner decision 4, 14 Oct 2026 round two). Kept OUT of CONSENT_PURPOSES, so no
+ * child consent input can carry it. (The SQL enum consent_purpose has the value because consent_texts uses it.)
+ */
+export const GUARDIAN_PURPOSES = ["marketing_line"] as const;
+/** Text purposes: child purposes + guardian purposes (consent_texts rows, loadCurrentConsentTexts). */
+export const CONSENT_TEXT_PURPOSES = [...CONSENT_PURPOSES, ...GUARDIAN_PURPOSES] as const;
 export const ConsentPurposeSchema = z.enum(CONSENT_PURPOSES);
+export const GuardianPurposeSchema = z.enum(GUARDIAN_PURPOSES);
+/** How a guardian's choice was given: in person, on LINE, or "web" = the parent's own /my link. A phone answer has no channel in consent_channel yet (open question, § 9.5a). Paper evidence is OPEN for the owner (00 § 13C); paper is not accepted for a marketing choice (§ 9.5a). */
+export const GuardianConsentChannelSchema = z.enum(["in_person", "line", "web"]);
 export const MediaLevelSchema = z.enum(["face_visible", "face_hidden"]);
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 export type MediaPurpose = (typeof MEDIA_PURPOSES)[number];
+export type GuardianPurpose = (typeof GUARDIAN_PURPOSES)[number];
+export type ConsentTextPurpose = (typeof CONSENT_TEXT_PURPOSES)[number];
+export type GuardianConsentChannel = z.infer<typeof GuardianConsentChannelSchema>;
+
 ```
 
 ### 8.9 `limits.ts` ✅ (rev) (card P0-06, R-16)
@@ -2152,6 +2196,8 @@ export const UpdateStudioSettingsInput = z
     bookingFormOpen: z.boolean().optional(),
     staffAlertsEnabled: z.boolean().optional(),
     defaultSessionCapacity: z.number().int().min(1).max(60).nullable().optional(),
+    /** rev 14 Oct 2026 (decision 10): notice, in hours before the ORIGINAL session, for a make-up. Owner only. */
+    cancelNoticeHours: z.number().int().min(0).max(72).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "nothing_to_update");
 
@@ -2160,6 +2206,8 @@ export type StudioSettings = {
   bookingFormOpen: boolean;
   staffAlertsEnabled: boolean;
   defaultSessionCapacity: number | null;
+  /** rev 14 Oct 2026: studio_settings.cancel_notice_hours (integer 0-72, default 3; SQL check in 0004) */
+  cancelNoticeHours: number;
 };
 export type StaffUser = {
   userId: string;
@@ -2202,7 +2250,7 @@ export const getStudioSettings = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<StudioSettings> => {
     const { data, error } = await context.supabase
       .from("studio_settings")
-      .select("booking_form_open, staff_alerts_enabled, default_session_capacity")
+      .select("booking_form_open, staff_alerts_enabled, default_session_capacity, cancel_notice_hours")
       .eq("id", true)
       .single();
     if (error || !data) throw adminError("server_error");
@@ -2210,6 +2258,7 @@ export const getStudioSettings = createServerFn({ method: "GET" })
       bookingFormOpen: data.booking_form_open,
       staffAlertsEnabled: data.staff_alerts_enabled,
       defaultSessionCapacity: data.default_session_capacity,
+      cancelNoticeHours: data.cancel_notice_hours,
     };
   });
 
@@ -2281,6 +2330,7 @@ export const updateStudioSettings = createServerFn({ method: "POST" })
       patch["staff_alerts_enabled"] = data.staffAlertsEnabled;
     if (data.defaultSessionCapacity !== undefined)
       patch["default_session_capacity"] = data.defaultSessionCapacity;
+    if (data.cancelNoticeHours !== undefined) patch["cancel_notice_hours"] = data.cancelNoticeHours;
     const { error } = await context.supabase.from("studio_settings").update(patch).eq("id", true);
     if (error) throw adminError("server_error");
     return { saved: true as const };
@@ -2485,7 +2535,7 @@ contacted_at, created_at` + P2 `session_id` → `sessions.session_date` + P3 `co
 notifications for it (`staff_notifications` where `kind = 'booking_request' and ref_id = id`, newest first:
 `id, status, attempts, last_error, sent_at, created_at`). Not found → `not_found`. Return a camelCase
 `BookingRequestDetail`: **type and skeleton in § 14.1** (children parsed with zod, never cast). The LINE ID is shown to
-staff as a matching hint ("find this chat in @cherryleeandco"), never as "add this person" (D26).
+staff as a text hint only ("find this chat in @cherryleeandco"). No copy button and no "add this person" action (D26; owner decision 4, 14 Oct 2026).
 
 📝 `listPendingStaffAlerts` · staff · GET · no input (card P4-19, D29, R-30). Returns `PendingAlert[]` (add to
 `inbox.schema.ts`): `{ id: string; kind: "enrolment_submitted" | "consent_withdrawn"; status: "pending" | "failed";
@@ -2596,9 +2646,9 @@ seats_left, public_note_th, public_note_en` for `status = 'open'` sessions in th
 | Function | Method | Input | Steps | Returns / errors |
 |---|---|---|---|---|
 | `listSessions` | GET | `ListSessionsInput { from, to }` (max 93 days apart; add a `.refine`) | **one** `rpc("get_sessions_with_seats", { p_from, p_to })` (R-18; no per-row RPC). Skeleton § 14.2. | `SessionRow[]` (§ 14.2) |
-| `saveSession` | POST | `SaveSessionInput` | insert when no `id`, else update by `id`; `starts_at`/`ends_at` keep their DB defaults (09:00/15:00). From 0004 on, setting `status = 'cancelled'` also cancels the session's held/confirmed bookings (SQL trigger, R-23): the UI shows an `AlertDialog` with the booked count first. | `{ id }`; `23505` → `conflict` (date already exists) |
+| `saveSession` | POST | `SaveSessionInput` | insert when no `id`, else update by `id`; `starts_at`/`ends_at` keep their DB defaults (09:00/15:00). From 0004 on, setting `status = 'cancelled'` also cancels the session's held/confirmed bookings (SQL trigger, R-23): the UI shows an `AlertDialog` with the booked count first. The trigger sets each booking to `status = 'cancelled'` (the credit returns, as the view ignores cancelled bookings). It writes no notice: `validate_booking()` keeps the credit for a studio cancellation and sets `cancelled_at` (`0004`). A studio cancellation is not a family notice (§ 9.7 open question 1). | `{ id }`; `23505` → `conflict` (date already exists) |
 | `generateWeekendSessions` | POST | `GenerateWeekendSessionsInput { from, weeks 1–12, capacity }` | `rpc("generate_weekend_sessions", { p_from, p_weeks, p_capacity })`; existing dates are skipped by SQL | `{ created: number }` |
-| `getSessionRoster` (P3) | GET | `GetSessionRosterInput { sessionId }` | session row + `session_seats_left`; bookings (not cancelled) with child, family and pickup options in **three** queries (bookings → guardians of those families → active authorised contacts of those families); P4 adds **one** `rpc("consent_matrix", { p_child_ids })` for the photo badge (R-18). Skeleton § 14.3. | `SessionRoster` (§ 14.3); health flags come separately from `getSessionHealthFlags` |
+| `getSessionRoster` (P3) | GET | `GetSessionRosterInput { sessionId }` | session row + `session_seats_left`; bookings with `status <> 'cancelled'` (so `cancelled_late` stays on the roster, round two) with child, family and pickup options in **three** queries (bookings → guardians of those families → active authorised contacts of those families); P4 adds **one** `rpc("consent_matrix", { p_child_ids })` for the photo badge (R-18). Skeleton § 14.3. | `SessionRoster` (§ 14.3); health flags come separately from `getSessionHealthFlags` |
 
 ### 9.5 `families.functions.ts` (P3, needs `0004_families.sql`)
 
@@ -2610,6 +2660,7 @@ imports below include `ConsentPurpose` (for `ConsentCell`) and `PaymentRow` (for
 ```ts
 import { z } from "zod";
 import {
+  GuardianConsentChannelSchema,
   IsoMonth,
   LangSchema,
   LineIdSchema,
@@ -2629,6 +2680,32 @@ export const ListFamiliesInput = z.object({
   page: Page,
 });
 export const GetFamilyInput = z.object({ familyId: Uuid });
+
+/**
+ * rev 14 Oct 2026 (owner decision 2): one guardian's marketing choice. The box is always unticked on screen.
+ * It is strict: a child id, or any other key, is refused by the schema (the choice is guardian-level only).
+ */
+export const GuardianMarketingChoiceSchema = z
+  .object({
+    granted: z.boolean(),
+    /** The current marketing_line text the parent was shown. Always sent, so the record names the text. */
+    consentTextId: Uuid,
+    /** Read shape: any guardian channel, including "web" (the parent's own /my link). */
+    channel: GuardianConsentChannelSchema,
+  })
+  .strict();
+
+/**
+ * Staff path only (round two, decision 2 and card P3-04): a choice staff record is given on LINE or in person.
+ * "web" is /my only, and "paper" is not accepted for a marketing choice (§ 9.5a).
+ */
+export const StaffMarketingChannelSchema = z.enum(["line", "in_person"]);
+
+export const RecordGuardianMarketingInput = GuardianMarketingChoiceSchema.extend({
+  channel: StaffMarketingChannelSchema,
+  familyId: Uuid,
+  guardianId: Uuid,
+}).strict();
 
 export const CreateFamilyFromRequestInput = z.object({
   requestId: Uuid,
@@ -2650,6 +2727,8 @@ export const CreateFamilyFromRequestInput = z.object({
     )
     .min(1)
     .max(6),
+  /** rev 14 Oct 2026 (decision 2): the separate marketing box on the create screen. null = the box was not shown. */
+  marketingLine: GuardianMarketingChoiceSchema.nullable(),
 });
 
 export const SaveFamilyInput = z.object({
@@ -2669,6 +2748,8 @@ export const SaveGuardianInput = z
     phone: ThaiPhoneSchema.nullable(),
     lineId: LineIdSchema.nullable(),
     email: z.string().trim().toLowerCase().email().max(254).nullable(),
+    /** rev 14 Oct 2026: how this guardian prefers to be reached (follow-up list, § 9.5a) */
+    preferredContact: z.enum(["line", "phone"]).nullable(),
     isPrimary: z.boolean(),
     identityCheckMethod: z.enum(["in_person", "line_account", "phone_callback"]).nullable(),
     /** true → server sets identity_checked_by/at to this staff user and now() */
@@ -2686,7 +2767,8 @@ export const SaveGuardianInput = z
     confirmLinkChanges: z.boolean().default(false),
   })
   .refine((g) => g.phone !== null || g.lineId !== null, "contact_required")
-  .refine((g) => !g.markIdentityChecked || g.identityCheckMethod !== null, "method_required");
+  .refine((g) => !g.markIdentityChecked || g.identityCheckMethod !== null, "method_required")
+  .refine((g) => g.preferredContact !== "phone" || g.phone !== null, "phone_required");
 
 export const SaveChildInput = z.object({
   id: Uuid.optional(),
@@ -2711,6 +2793,12 @@ export const SaveFamilyContactInput = z
   .refine((c) => c.isEmergencyContact || c.isAuthorisedPickup, "role_required");
 
 export const DeleteFamilyContactInput = z.object({ id: Uuid });
+
+export type MarketingLineText = { id: string; version: number; title: string; bodyMd: string };
+// GetGuardianMarketingInput and GuardianMarketingPanel: § 9.5a. ListFollowUpFamiliesInput: follow-up.schema.ts (§ 9.5a).
+export type GuardianMarketingState = "granted" | "not_granted";
+export type GuardianMarketingResult = { changed: boolean; marketingLine: GuardianMarketingState };
+
 ```
 
 📝 All `.middleware([requireStaff])`, `context.supabase`:
@@ -2718,18 +2806,150 @@ export const DeleteFamilyContactInput = z.object({ id: Uuid });
 | Function | Method | Steps | Returns / errors |
 |---|---|---|---|
 | `listFamilies` | GET | Skeleton § 14.4: no `q` → one paged `families` query; with `q` → three id queries (family name, guardian name/phone, child nickname), de-duplicated, then the page; children + primary guardian for the page rows in two more queries. | `{ rows: FamilyListRow[], total }` (§ 14.4) |
-| `getFamily` | GET | Skeleton § 14.4: family (incl. restriction columns from 0007), guardians (incl. `pending_link_changes`), children (incl. `allergy_check_needed_at`), **active** contacts, package balances, payments (`hasSlip`, never the path), last 50 bookings; P4: `family_links` (**never `token_hash`**) and one `rpc("consent_matrix", { p_child_ids })`. | `FamilyDetail` (§ 14.4); `not_found` |
-| `createFamilyFromRequest` | POST | **One** `rpc("create_family_from_request", { p_request_id, p_display_name, p_guardian: { full_name, phone, line_id }, p_children: [{ nickname, age_years }] })` (R-15; one transaction). The RPC returns the bare family uuid: return `{ familyId: data }`. Errors: `throw adminErrorFromDb(error)` (`P0002` "Request not found" → `not_found`; `23514` "Request already converted" → `invalid_state`; `23505` → `conflict`). A LINE-path request may have no phone and no LINE ID (D26): the dialog makes staff add one first (zod `contact_required`, R-38). | `{ familyId }` |
+| `getFamily` | GET | Skeleton § 14.4: family (incl. restriction columns from 0007), guardians (incl. `pending_link_changes`, `preferred_contact` and `marketingLine` from one query on `current_marketing_consents`), children (incl. `allergy_check_needed_at`), **active** contacts, package balances, payments (`hasSlip`, never the path), last 50 bookings; P4: `family_links` (**never `token_hash`**) and one `rpc("consent_matrix", { p_child_ids })`. | `FamilyDetail` (§ 14.4); `not_found` |
+| `createFamilyFromRequest` | POST | **One** `rpc("create_family_from_request", { p_request_id, p_display_name, p_guardian: { full_name, phone, line_id }, p_children: [{ nickname, age_years }] })` (R-15; one transaction). The RPC returns the bare family uuid. Errors: `throw adminErrorFromDb(error)` (`P0002` "Request not found" → `not_found`; `23514` "Request already converted" → `invalid_state`; `23505` → `conflict`). Then, **after** the RPC (rev 14 Oct 2026): read the new family's primary guardian id (`guardians` where `family_id` and `is_primary`; none → `server_error`). If `marketingLine` is `null` → no marketing step. If `marketingLine.granted` is `false` → write nothing. If `true` → the shared helper `applyGuardianMarketing` (§ 9.5a) with `recordedBy = context.userId`. A failure in that step does **not** undo the family (the RPC already committed): the function still returns the family, with `marketingStatus: "not_saved"`, and the dialog tells staff to record the choice on the guardian sheet (P3-11). A LINE-path request may have no phone and no LINE ID (D26): the dialog makes staff add a phone number first (zod `contact_required`, R-38); see open question 2 in § 9.5a. | `{ familyId, marketingStatus: "granted" \| "not_granted" \| "not_saved" \| null }` (`null` = box not shown) |
 | `saveFamily` | POST | Insert (no `id`; also set `created_by = context.userId`, like `create_family_from_request`) or update by id: `display_name`, `preferred_lang`, `staff_note` only. `status`, `last_activity_at`, `retain_until` are system-managed by SQL: never write them. Never store health details in `staff_note` (UI hint). A restricted family refuses the update (`23514`, R-36) → `adminErrorFromDb` → `family_restricted`. | `{ id }` |
-| `saveGuardian` | POST | **Two steps, safe order (R-39):** (1) insert (`is_primary: false`) or update by id the plain fields (`full_name`, `phone`, `line_id`, `email`; never `is_primary` here); (2) only when `isPrimary` and the row is not primary yet: **one** `rpc("set_primary_guardian", { p_guardian_id })` (0004; clears the other primary and sets this one in one transaction). If (2) fails the old primary stays, so a family never loses its primary guardian (`submit_enrolment` needs one). `isPrimary: false` never un-sets the current primary: a family keeps one; to change it, mark another guardian primary. Identity columns are written **only** when `markIdentityChecked` (`identity_check_method`, `identity_checked_by = context.userId`, `identity_checked_at = now()`; only staff ever set identity, R-21); otherwise `identityCheckMethod` is ignored and the three columns stay as they are. When `confirmsParentalResponsibility`, set `has_parental_responsibility = true`, `responsibility_attested_at = now()` (never set back to false). When `confirmLinkChanges`, set `pending_link_changes = null`. A restricted family → `family_restricted`. | `{ id }`; `23505` (second primary) → `conflict` |
+| `saveGuardian` | POST | **Two steps, safe order (R-39):** (1) insert (`is_primary: false`) or update by id the plain fields (`full_name`, `phone`, `line_id`, `email`, `preferred_contact`; never `is_primary` here); (2) only when `isPrimary` and the row is not primary yet: **one** `rpc("set_primary_guardian", { p_guardian_id })` (0004; clears the other primary and sets this one in one transaction). If (2) fails the old primary stays, so a family never loses its primary guardian (`submit_enrolment` needs one). `isPrimary: false` never un-sets the current primary: a family keeps one; to change it, mark another guardian primary. Identity columns are written **only** when `markIdentityChecked` (`identity_check_method`, `identity_checked_by = context.userId`, `identity_checked_at = now()`; only staff ever set identity, R-21); otherwise `identityCheckMethod` is ignored and the three columns stay as they are. When `confirmsParentalResponsibility`, set `has_parental_responsibility = true`, `responsibility_attested_at = now()` (never set back to false). When `confirmLinkChanges`, set `pending_link_changes = null`. A restricted family → `family_restricted`. | `{ id }`; `23505` (second primary) → `conflict` |
 | `saveChild` | POST | Insert/update by id; `birth_month = birthMonth ? \`${birthMonth}-01\` : null`. A restricted family → `family_restricted`. | `{ id }` |
 | `saveFamilyContact` | POST | Insert (`guardian_attests_informed_at = now()`) or update by id. On update, read the row first (`name, phone`) and set `guardian_attests_informed_at = now()` **only when `name` or `phone` changed** (a different person or number needs a fresh "I told them"); otherwise keep the existing timestamp (R-39). Editing an inactive contact is allowed (staff may correct history); it stays inactive. A restricted family → `family_restricted`. | `{ id }` |
 | `deleteFamilyContact` | POST | **Soft delete** (R-22): `update family_contacts set is_active = false where id = …` with `.select("id")` (never `.delete()`), so the "picked up by" history on bookings stays. No row → `not_found`. Already inactive → still `{ deleted: true }` (idempotent). Allowed for a restricted family (it reduces processing). | `{ deleted: true }` |
+| `recordGuardianMarketing` | POST | `RecordGuardianMarketingInput` (§ 9.5a). Steps: guardian in this family (`not_found`); family restricted (`processing_restricted_at`) and `granted = true` → `family_restricted` (D28; withdrawal still works); `consentTextId` is a current `marketing_line` text in either language, else `invalid_state`; then the shared helper `applyGuardianMarketing` (one row at most; audited by the table's trigger with the staff user as actor; no `audit_log` write from TypeScript). **Never a child id** (strict schema). | `GuardianMarketingResult` (§ 9.5a); `not_found`, `family_restricted`, `invalid_state`, `forbidden` (42501) |
+| `getGuardianMarketing` | GET (staff) | `GetGuardianMarketingInput { lang, familyId? }` (§ 9.5a). Reads the latest published, not-retired `marketing_line` text in `lang` from `consent_texts` (`context.supabase`), and, when `familyId` is given, each guardian's current choice from `current_marketing_consents`. Read only. | `GuardianMarketingPanel` (§ 9.5a); `not_found` (family given but missing) |
+| `listFollowUpFamilies` | GET (staff) | `ListFollowUpFamiliesInput { page }` in **`follow-up.functions.ts`** (new file, § 9.5a). **One** `select` from view `marketing_follow_up_list` (0007; staff RLS), `range(page * 30, page * 30 + 29)`, `count: "exact"`. The view returns one row per guardian whose current `marketing_line` is `granted` (decision 5), for `active` and not restricted families. The label is the nickname only (decision 4, § 9.5a). No other read, no write, no audit row. | `{ rows: FollowUpRow[]; total: number }`; `server_error` |
 
 Families are never deleted from the UI; the owner uses `eraseFamily` (§ 9.13). Every write above follows the strict-TS
 rules in § 9.0 (no `undefined`-valued keys, update-by-id with `.select("id")` → `not_found`). The six functions are
 exported as `createServerFn` results with exactly these names: `createFamilyFromRequest`, `saveFamily`,
 `saveGuardian`, `saveChild`, `saveFamilyContact`, `deleteFamilyContact` (00 § 10).
+
+### 9.5a Guardian marketing choice and follow-up list (cards P3-04, P3-11, P3-19, P3-20, P4-13, P4-22; owner decision 2, 14 Oct 2026)
+
+`marketing_line` is a **guardian** purpose. Its rows go to `guardian_consent_records` (`0005` § 5b: append-only, RLS and audit like
+`consent_records`), **never** to `consent_records`, and no row ever carries a child id. The wording is a `consent_texts` row
+with `purpose = 'marketing_line'`, seeded by `sql/0006a_seed_marketing_text.sql` (card P3-20, applied at G4 before the family
+create screens go live). The text and the box are in the lawyer review (G9b).
+
+**Columns this file relies on** (SQL owns the DDL): `family_id`, `guardian_id`, `purpose` (SQL allows only `marketing_line`),
+`decision` (`granted` | `withdrawn`), `consent_text_id` (not null), `channel` (`consent_channel`; this file uses `in_person`,
+`line`, `web` only), `method` (`consent_method`: `checkbox` for in person and web, `staff_recorded_verbal` for LINE),
+`recorded_by` (staff user; null for web), `family_link_id` (web only), `given_at` (**set by the trigger, never sent**). The SQL
+guards: web must be a checkbox, staff rows need `recorded_by`, no update, no delete.
+
+**What a choice writes** (one helper, every writer):
+
+- Box ticked and no current yes → one `granted` row.
+- Box ticked and already a current yes → nothing (no duplicate rows).
+- Box unticked → nothing. "Not now" is not granted. The box is never pre-ticked.
+- "Withdraw" on a guardian whose current choice is yes → one `withdrawn` row. Withdraw when not yes → nothing.
+
+Saving the guardian sheet or `/my` never withdraws by itself: withdrawing is its own one-press action (PDPA s.19). A `withdrawn` row
+queues no staff alert (D29 covers `consent_records` only).
+
+**Shared helper** (plain function, not a server function, in `families.functions.ts`): `applyGuardianMarketing(db, { familyId,
+guardianId, granted, consentTextId, channel, recordedBy })`.
+
+1. Current state: the row of `current_marketing_consents` for this guardian (`decision = 'granted'` → granted; withdrawn or never
+   asked → not granted). The view orders by `given_at`.
+2. If the current state already equals the request, return `{ changed: false, marketingLine }` and write nothing.
+3. If granting and the family is restricted (`processing_restricted_at` set) → `family_restricted` (D28).
+4. Text check: `areCurrentConsentTexts([{ id: consentTextId, purpose: "marketing_line" }], "th")`, or the same with `"en"`
+   (either language, as in `updateMyConsent`). Not current → `invalid_state`.
+5. Insert `{ family_id, guardian_id, purpose: "marketing_line", decision, consent_text_id, channel, method, recorded_by,
+   family_link_id }`. `method` follows the channel (`in_person` → `checkbox`, `line` → `staff_recorded_verbal`). A `23514` from
+   the SQL guard → `family_restricted`.
+
+`recordGuardianMarketing` (staff, POST): `requireStaff`, `.validator(RecordGuardianMarketingInput)`, then the guardian must belong
+to this family (`not_found` otherwise), then `applyGuardianMarketing` with `recordedBy = context.userId`. It never reads or writes
+a child.
+
+`getGuardianMarketing` (staff, GET): reads only. Used by the create dialog (no family yet) and by the guardian sheet.
+
+```ts
+export const GetGuardianMarketingInput = z.object({ lang: LangSchema, familyId: Uuid.optional() }).strict();
+export type GuardianMarketingPanel = {
+  /** the current marketing_line text in `lang`; null = not published yet */
+  text: MarketingLineText | null;
+  /** one entry per guardian of the family; [] when familyId is absent */
+  guardians: Array<{ guardianId: string; granted: boolean; decidedAt: string | null }>;
+};
+```
+
+**Follow-up list (card P3-19; files `follow-up.schema.ts` and `follow-up.functions.ts`; round two, owner decisions 4 and 5, 14 Oct 2026).**
+`listFollowUpFamilies` (staff, GET, `ListFollowUpFamiliesInput { page }`) reads the SQL view `marketing_follow_up_list` (0007; staff only;
+the caller's RLS applies). One `select` with `range(page * 30, page * 30 + 29)` and `count: "exact"`, so 30 rows per page. The view
+returns only guardians whose current `marketing_line` choice is `granted` (`current_marketing_consents`, 0005), for families that are
+`active` and not restricted. It returns no other column.
+
+**Scope (decision 5): one row per granted guardian.** A family with two guardians who both said yes has two rows. Each row carries the
+same family label, and staff contact each guardian by hand, so the family may be contacted twice. The view is the contract.
+
+**Label (decision 4): "ครอบครัวน้อง" + the child's nickname** (Thai, for example "ครอบครัวน้องมะลิ"), and "Family of <nickname>" (English).
+The **view builds the label** (`family_label_th`, `family_label_en`, 0007), so the screen only shows it, with the copy in `30-ui.md` § 5.2.
+**Nickname only**: never a full name, never an age, never health data. The view takes the nickname of one active child of the family: the
+first registered active child (lowest `children.created_at`, then `id`). A family with no active child is **not listed**: there is no
+label to show, and staff see that family on its own page. The view's columns are the contract (cross-file, 0007): `family_id, guardian_id,
+guardian_name, family_label_th, family_label_en, consented_at`. There is no separate child-nickname column: the nickname appears only
+inside the label.
+
+```ts
+export type FollowUpRow = {
+  familyId: string;
+  /** "ครอบครัวน้อง" + the nickname of one active child, built by the view. The nickname appears only inside this label. */
+  familyLabelTh: string;
+  /** "Family of " + the same nickname, built by the view. */
+  familyLabelEn: string;
+  guardianId: string;
+  /** the guardian's full name, for a hand contact from the studio's LINE chat */
+  guardianName: string;
+  /** given_at of the current "granted" row */
+  consentedAt: string;
+};
+// listFollowUpFamilies returns { rows: FollowUpRow[]; total: number } (total = the view's count).
+```
+
+Not returned, ever: any child's name apart from the nickname inside `familyLabelTh` / `familyLabelEn`, ages, health data, child attendance dates, LINE IDs,
+phone numbers, emails, preferred contact, staff notes, restriction notes. The list is staff only and is never shown publicly, never
+exported and never sent. Contact is by hand, one family at a time, from the studio's own LINE chat. No bulk send exists in this plan.
+The consent text `0006a` says this truthfully (cross-file; G9b lawyer review, decision 4).
+
+**`/my` (cards P4-13, P4-22):** `updateMyMarketingConsent` and `getMyConsents().guardianMarketing` (§ 9.12) use the same helper rules,
+with `channel: "web"`, `method: "checkbox"` and no `recorded_by`.
+
+**Errors (`recordGuardianMarketing`, `applyGuardianMarketing`):**
+
+| Code | When | Staff copy key |
+|---|---|---|
+| `not_found` | guardian not in this family, or family missing | `errors.not_found` |
+| `family_restricted` | granting while `processing_restricted_at` is set (D28) | `errors.family_restricted` |
+| `invalid_state` | `consentTextId` is not a current `marketing_line` text (retired, unknown, or another purpose) | `errors.invalid_state` |
+| `forbidden` | SQL 42501 (should not happen for staff) | `errors.forbidden` |
+| `server_error` | anything else | `errors.server_error` |
+
+On `createFamilyFromRequest`, a failure of the marketing step after the family exists returns `marketingStatus: "not_saved"` and
+does not throw, so staff are not told that a created family failed.
+
+**Tests (vitest, Supabase mocked):**
+- `GuardianMarketingChoiceSchema` rejects an extra `childId` key (strict) and a missing `consentTextId`.
+- `RecordGuardianMarketingInput` rejects channel `web` and `paper` (staff record `line` or `in_person` only, P3-04).
+- New family, box unticked → no insert, `marketingStatus: "not_granted"`.
+- New family, box ticked and channel `line` → one insert with `decision: "granted"`, `method: "staff_recorded_verbal"`, `recorded_by` = the staff user id, and no `given_at` in the payload.
+- Ticked again on a guardian with a current yes → no insert (`changed: false`).
+- Withdraw on a current yes → one `withdrawn` row. Withdraw when not yes → no insert.
+- Restricted family: granting → `family_restricted`, no insert. Withdrawing → allowed.
+- Retired text, or a text of another purpose → `invalid_state`.
+- Guardian id from another family → `not_found`.
+- Insert fails after the RPC succeeded → `createFamilyFromRequest` returns the family id with `marketingStatus: "not_saved"`.
+- `getGuardianMarketing` returns `text: null` when no text is published, and `guardians: []` without a `familyId`.
+- `listFollowUpFamilies` maps exactly the `FollowUpRow` keys (no extra keys). Two granted guardians of one family → two rows with the same `familyLabelTh` and `familyLabelEn`. A family with no active child → no row.
+- SQL check (`sql/tests/rls_smoke.sql`, cross-file): no role can update or delete `guardian_consent_records`; `anon` cannot read it; `marketing_follow_up_list` leaves out an inactive family and a restricted family.
+
+**Open questions in this section (not decided here):** (1) Round two decided the label (nickname only) and the scope (one row per
+granted guardian). Still open: which child's nickname is used when a family has two active children. The view uses the first registered
+one; the owner should confirm, or ask for a staff-chosen label nickname on the family record (a SQL change). (2) A LINE-path request with neither a phone nor a LINE ID still cannot become a family
+(`contact_required`, R-38). The owner should say whether the OA chat alone may be a family's contact. (3) This spec refuses
+granting for a restricted family (D28). The owner should confirm. (4) A phone-call answer has no value in `consent_channel`
+(`web`, `line`, `paper`, `in_person`), so this spec accepts only `in_person`, `line` and `web`. The owner or the SQL owner should
+decide whether phone answers get a channel (an additive `ALTER TYPE`).
 
 ### 9.6 `payments.functions.ts` (P3, needs `0004`)
 
@@ -2746,9 +2966,7 @@ export const CreatePackagePurchaseInput = z.object({
   familyId: Uuid,
   packageCode: PackageCodeSchema,
   purchasedOn: IsoDate,
-  /** null = no expiry recorded (the studio hasn't set an expiry rule, D16) */
-  expiresOn: IsoDate.nullable(),
-});
+}).strict(); // rev 14 Oct 2026 (decision 10, D36): packages never expire. There is no expiry field; `expiresOn` is refused.
 
 export const RecordPaymentInput = z.object({
   familyId: Uuid,
@@ -2773,15 +2991,14 @@ export const ListPaymentsInput = z.object({ view: z.enum(["pending", "paid_this_
 export const GetSlipUrlInput = z.object({ paymentId: Uuid });
 export const VoidPaymentInput = z.object({ id: Uuid, status: z.enum(["void", "refunded"]) });
 
-/** R-23. Staff may only close an active package; void and expiry changes are owner-only (checked in the handler). */
+/** R-23. Staff may only close an active package; void is owner-only (checked in the handler). Rev 14 Oct 2026: no expiry changes (decision 10, D36). */
 export const UpdatePackagePurchaseInput = z
   .object({
     id: Uuid,
     status: z.enum(["active", "closed", "void"]).optional(),
-    expiresOn: IsoDate.nullable().optional(),
     staffNote: z.string().trim().max(500).nullable().optional(),
   })
-  .refine((v) => v.status !== undefined || v.expiresOn !== undefined || v.staffNote !== undefined, "nothing_to_update");
+  .refine((v) => v.status !== undefined || v.staffNote !== undefined, "nothing_to_update");
 /** R-23. Owner only: unlink the slip; the old file is queued in storage_cleanup_queue by the SQL trigger. */
 export const DeletePaymentSlipInput = z.object({ paymentId: Uuid });
 ```
@@ -2842,14 +3059,14 @@ export const uploadPaymentSlip = createServerFn({ method: "POST" })
 
 | Function | Method | Steps | Returns / errors |
 |---|---|---|---|
-| `createPackagePurchase` | POST | `price_thb = PRICES[packageCode]` from `@/content/business` (**ignore any client price**), `sessions_total = PACKAGE_SESSIONS[packageCode]`, `status 'active'`. `retain_until` is set by SQL. | `{ id }` |
+| `createPackagePurchase` | POST | `price_thb = PRICES[packageCode]` from `@/content/business` (**ignore any client price**), `sessions_total = PACKAGE_SESSIONS[packageCode]`, `status 'active'`. `retain_until` is set by SQL. No expiry is stored (decision 4). | `{ id }` |
 | `recordPayment` | POST | Insert (incl. optional `note`) with `recorded_by = context.userId`; when `status = 'paid'`: `paid_at = paidAt ?? now()`, `verified_by = context.userId`, `verified_at = now()`. Check the purchase belongs to the same family (`invalid_state`). | `{ id }`; `23505` on `receipt_no` → `conflict` |
 | `updatePayment` | POST | `markPaid` → same fields as above; `receiptNo`, `paidAt` updates. Staff can't set `void`/`refunded`. | `{ saved: true }` |
 | `listPayments` | GET | `pending`: `status = 'pending'` oldest first; `paid_this_month`: `status = 'paid'` and `paid_at` within the current Bangkok month. Join family `display_name`. | `PaymentRow[]` (`id, familyId, familyName, amountThb, method, status, paidAt, receiptNo, hasSlip`) |
 | `getSlipUrl` | GET | Load `slip_path` (`not_found` if none); `context.supabase.storage.from("payment-slips").createSignedUrl(path, 60)`. | `{ url }` (valid 60 s; open in a new tab, never store) |
 | `uploadPaymentSlip` | POST (FormData) | above | `{ slipPath }`; `file_too_large`, `file_type`, `not_found` |
 | `voidPayment` | **owner**, POST | `VoidPaymentInput { id, status: void \| refunded }`; update status. | `{ saved: true }` |
-| `updatePackagePurchase` | staff (close) / **owner** (void, `expiresOn`), POST | `UpdatePackagePurchaseInput`. If `context.role !== "owner"` and (`status` is `void` or `active`→ only `closed` allowed, or `expiresOn` is sent) → `forbidden`. Update only the sent fields. `sessions_used_purged` is never sent. | `{ saved: true }` |
+| `updatePackagePurchase` | staff (close) / **owner** (void), POST | `UpdatePackagePurchaseInput`. If `context.role !== "owner"` and (`status` is `void` or `active`→ only `closed` allowed) → `forbidden`. Update only the sent fields. `sessions_used_purged` is never sent. | `{ saved: true }` |
 | `deletePaymentSlip` | **owner**, POST | `DeletePaymentSlipInput`; `update payments set slip_path = null` (the trigger queues the file; the owner removes it with `runStorageCleanup` the same day). `not_found` if there was no slip. | `{ deleted: true }` |
 
 ### 9.7 `bookings.functions.ts` (P3, needs `0004`)
@@ -2858,7 +3075,7 @@ export const uploadPaymentSlip = createServerFn({ method: "POST" })
 
 ```ts
 import { z } from "zod";
-import { Uuid } from "./common.schema";
+import { IsoDateTime, Uuid } from "./common.schema";
 
 export const CreateBookingInput = z.object({
   sessionId: Uuid,
@@ -2866,6 +3083,8 @@ export const CreateBookingInput = z.object({
   /** null = booked without a package credit (agreed with the family on LINE); consumes_credit = false */
   packagePurchaseId: Uuid.nullable(),
   status: z.enum(["held", "confirmed"]).default("confirmed"),
+  /** rev 14 Oct 2026 (decision 10): set when this booking makes up a cancelled booking (see the make-up subsection) */
+  makeUpOfBookingId: Uuid.nullable().default(null),
 });
 
 const PickedUpBy = z.discriminatedUnion("kind", [
@@ -2880,7 +3099,29 @@ export const UpdateBookingStatusInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("mark_absent"), id: Uuid }),
 ]);
 
-export const CancelBookingInput = z.object({ id: Uuid });
+/**
+ * rev 14 Oct 2026, round two (decisions 1 and 2): every cancellation staff record for a family carries the family's notice. 'line' = the message in the
+ * studio's LINE OA chat; 'in_person' = told at the studio. There is no web notice form.
+ */
+export const NoticeChannelSchema = z.enum(["line", "in_person"]);
+
+export const CancelBookingInput = z
+  .object({
+    id: Uuid,
+    noticeChannel: NoticeChannelSchema,
+    /** when the notice arrived. For 'line', the time the message arrived in the OA chat (not the time staff typed it). */
+    noticeAt: IsoDateTime,
+  })
+  .strict()
+  .refine((v) => Date.parse(v.noticeAt) <= Date.now() + 60_000, "notice_in_future");
+
+export type CancelBookingResult = { status: "cancelled" | "cancelled_late" };
+
+/** Pure rule (round two, option ก), unit-tested. True = the notice came at or before (session start − cancel_notice_hours). */
+export function noticeInTime(input: { noticeAt: Date; sessionStartsAt: Date; noticeHours: number }): boolean {
+  const cutoff = input.sessionStartsAt.getTime() - input.noticeHours * 3_600_000;
+  return input.noticeAt.getTime() <= cutoff; // "at least": exactly at the cutoff is in time
+}
 ```
 
 ✅ `createBooking`:
@@ -2951,11 +3192,75 @@ export const createBooking = createServerFn({ method: "POST" })
 
 | Function | Steps | Errors |
 |---|---|---|
-| `updateBookingStatus` | Pickup options come only from **active** authorised contacts (R-22). `confirm`: `held → confirmed`. `check_in`: `checked_in_at = now()`, `status = 'attended'`. `check_out`: requires `checked_in_at`; the pickup person must belong to the booking's family (guardian) or be a `family_contacts` row with `is_authorised_pickup = true` of that family; set `checked_out_at`, `picked_up_by_guardian_id` **or** `picked_up_by_contact_id`. `mark_absent`: `status = 'absent'` (still uses the credit, D16). Don't write `families.last_activity_at` or `children.last_session_on`: SQL triggers keep them. The DB also checks the pickup person (`23514` "Pickup contact is not an authorised…" → `adminErrorFromDb` → `invalid_state`). | `not_found`, `invalid_state` (wrong family pickup, check-out before check-in, cancelled booking) |
-| `cancelBooking` | `status = 'cancelled'` (the credit returns automatically: the view counts non-cancelled bookings). Not allowed once `attended`. | `not_found`, `invalid_state` |
+| `updateBookingStatus` | Pickup options come only from **active** authorised contacts (R-22). `confirm`: `held → confirmed`. `check_in`: `checked_in_at = now()`, `status = 'attended'`. `check_out`: requires `checked_in_at`; the pickup person must belong to the booking's family (guardian) or be a `family_contacts` row with `is_authorised_pickup = true` of that family; set `checked_out_at`, `picked_up_by_guardian_id` **or** `picked_up_by_contact_id`. `mark_absent` (no notice given, round two option ก): `status = 'absent'` only. **An absence uses one credit**, as booked: `consumes_credit` is not written and stays as it was. This replaces the decision 10 wording that a missed day deducts nothing. Only `held` or `confirmed` bookings can become absent. The package balance view is unchanged (it counts non-cancelled `consumes_credit` bookings, so `absent` and `cancelled_late` keep their credit used). The update writes `status` and nothing else. Don't write `families.last_activity_at` or `children.last_session_on`: SQL triggers keep them. The DB also checks the pickup person (`23514` "Pickup contact is not an authorised…" → `adminErrorFromDb` → `invalid_state`). | `not_found`, `invalid_state` (wrong family pickup, check-out before check-in, cancelled booking) |
+| `cancelBooking` (round two, options ก and LINE) | `CancelBookingInput { id, noticeChannel, noticeAt }` (schema above, in this section). Steps: (1) load the booking (`id, session_id, status, child_id, family_id`); missing → `not_found`. (2) Only `held` or `confirmed` may be cancelled; anything else → `invalid_state` (attended, absent, cancelled, cancelled_late). (3) Load the session (`session_date, starts_at`) and read `cancel_notice_hours` from `studio_settings` (one select, never a hard-coded 3). (4) `noticeInTime({ noticeAt, sessionStartsAt, noticeHours })`: in time → `status = 'cancelled'` (credit kept); late → `status = 'cancelled_late'` (one credit used). (5) One update of `status`, `cancel_notice_channel = noticeChannel`, `cancel_notice_at = noticeAt`, guarded by `status in ('held','confirmed')`. The server never writes `cancelled_at`. The database decides the final status: `validate_booking()` (`0004`) repeats the same rule and may change the status the server sent (for example, a `cancelled` with a late notice becomes `cancelled_late`), so the function reads the row back and returns the status the row now has. The credit is not written by this function: the view counts `cancelled_late` as used and `cancelled` as not used. `23514` → `invalid_state`. Returns `{ status: "cancelled" \| "cancelled_late" }`. The session-cancel trigger (`cancel_bookings_of_cancelled_session`, `0004`) sets `status = 'cancelled'` only; `validate_booking()` then sets `cancelled_at` and keeps the credit, and writes no notice, because a studio cancellation has none. | `not_found`, `invalid_state`, `server_error`; the zod refine `notice_in_future` for a `noticeAt` later than now (validator error, not an AdminErrorCode) |
 
 Race note: two staff booking the last seat at the same second could overbook by one. Acceptable for 1–2 staff; the
 roster shows seats left, and SQL may add a check later.
+
+#### Make-up booking, through `createBooking` (rev 14 Oct 2026, owner decision 10; card P3-06)
+
+A make-up is a normal booking that also points at the cancelled booking it replaces (`makeUpOfBookingId`). It is created by
+the same function, so every seat, credit and duplicate check still runs. The rules: packages never expire; siblings share a
+package of the same family; an absence uses one credit (round two, option ก), so only a class that was cancelled with notice can be
+made up; the notice must be at least `cancel_notice_hours` (default 3, SQL range 0–72) **before the ORIGINAL session starts**. The
+notice is `bookings.cancel_notice_at`, recorded by `cancelBooking`: the time the LINE message arrived in the OA chat, or the time the parent
+told the studio in person (`cancel_notice_channel` `line` or `in_person`). An absence has no notice, so it has no make-up.
+
+**The make-up dialog runs in two steps (`MakeUpDialog`, `30-ui.md` § 4.3):** (a) when the original is `held` or `confirmed`, staff
+record the notice (channel and time) and call `cancelBooking`. `cancelled` continues to (b); `cancelled_late` stops the dialog with
+`make_up_notice_short`. (b) `createBooking` with `makeUpOfBookingId`. When the original is already `cancelled`, the dialog skips (a).
+The make-up step never takes a second notice: it reads the `cancel_notice_at` that `cancelBooking` stored.
+
+The notice rule is the single pure function `noticeInTime` (`bookings.schema.ts`, § 9.7 above), used by `cancelBooking` and by the
+make-up. It has no server imports and is unit-tested.
+
+When `makeUpOfBookingId` is set, `createBooking` runs these steps after the child lookup and before the normal checks:
+
+1. Load the original booking (`id, child_id, family_id, session_id, status, cancel_notice_at`). Missing → `not_found`. Its `child_id`
+   must equal `childId` and its `family_id` the child's family, else `invalid_state`.
+2. `status = 'cancelled_late'` → `make_up_notice_short`. Any other status except `cancelled` → `invalid_state` (`absent` has no
+   notice; an attended day is not missed; `held` or `confirmed` must be cancelled with notice first, which is step (a) of the dialog).
+3. Load the original session (`session_date, starts_at`) and compute `originalStartsAt = sessionStartsAt(session_date, starts_at)` (§ 8.5).
+4. Read `cancel_notice_hours` from `studio_settings` (one select, never a hard-coded 3). If `cancel_notice_at` is null, or
+   `noticeInTime({ noticeAt: cancel_notice_at, sessionStartsAt: originalStartsAt, noticeHours })` is false → `make_up_notice_short`.
+   (A `cancelled` row with a family notice is in time by construction. A studio-cancelled row has no notice, so it is refused here;
+   open question 1 below is the owner's decision on that.)
+5. Already made up: a non-cancelled booking with `makeup_of_booking_id = originalBookingId` → `conflict`. The partial unique index `bookings_one_makeup_per_original` (`0004`) is the backstop (`23505` on that index → `conflict`).
+6. Then the normal `createBooking` steps: open session (`cancelled` or `draft` → `invalid_state`), seats (`session_full`), package of the same family (`invalid_state`), credit (`no_credit_left`). The insert sets `makeup_of_booking_id`. `23505` on child and session → `already_booked`.
+
+Cross-file (`0004`, `10-data-model.md` § 6.14), added in round two: `bookings.cancelled_at` (set by `validate_booking()`, never by the
+server), `bookings.cancel_notice_at`, `bookings.cancel_notice_channel` (`'line' | 'in_person' | null`; null only for a studio
+cancellation, and then `cancel_notice_at` is null too, the pair CHECK `bookings_notice_pair`), the status value `cancelled_late`, and
+`bookings.makeup_of_booking_id uuid references bookings (id)`. `validate_booking()` decides the status of every row set to `cancelled`
+or `cancelled_late` (unless the studio-cancel flag is on): `cancelled` needs `cancel_notice_at` at or before the cutoff, otherwise the row
+becomes `cancelled_late`, so a cancellation with no notice is `cancelled_late`. For an insert with `makeup_of_booking_id`, it refuses
+(`23514`) unless the original is a `cancelled` booking of the same child with a notice time. Both the server check (step 4) and the
+database check apply (card P3-06 step 6).
+
+Errors: `make_up_notice_short` (added to `AdminErrorCode`, § 4), `not_found`, `invalid_state`, `conflict`, `session_full`, `already_booked`, `no_credit_left`, `server_error`. No public copy: the rule stays off the website unless the owner asks (decision 10).
+
+Tests:
+- `noticeInTime` (`bookings.schema.test.ts`): session start `2026-10-20 09:00 +07:00`, `noticeHours` 3. Notice exactly 3 hours before → true (`cancelled`). Notice 2 h 59 min before → false (`cancelled_late`). `noticeHours` 0 and notice one minute before the start → true. Notice after the start → false.
+- `CancelBookingInput`: a `noticeAt` later than now + 1 minute → `notice_in_future`. `noticeChannel` `"web"` → rejected (only `line` and `in_person`).
+- `cancelBooking` with mocked Supabase: `held` or `confirmed` with a notice in time → `{ status: "cancelled" }` and one update with `cancel_notice_channel`, `cancel_notice_at` and `status`, and no `cancelled_at`. Notice late → `{ status: "cancelled_late" }`. `attended`, `absent`, `cancelled` or `cancelled_late` → `invalid_state`. No `consumes_credit` in the update.
+- `createBooking` with `makeUpOfBookingId` and the original `cancelled_late` → `make_up_notice_short`; the original `absent` → `invalid_state`.
+- `createBooking` with mocked Supabase: original `absent`, `attended` or `held` → `invalid_state`. Second make-up for the same original → `conflict`. A booking of another child → `invalid_state`. Package of another family → `invalid_state`. `sessions_left = 0` → `no_credit_left`. A sibling of the same family using the family's package → allowed. A make-up booked on a date after the original session → allowed (no expiry check exists).
+- `updateBookingStatus` with `mark_absent` writes exactly `{ status: "absent" }`. SQL check (cross-file, `sql/tests`): an absent booking keeps `consumes_credit = true` (when it was booked on a package) and the package balance counts it as used.
+- `sessionStartsAt("2026-10-20", "09:00:00")` is `2026-10-20T02:00:00.000Z`.
+
+**Decided in round two (14 Oct 2026, option ก, `decisions-2026-10-14-b`):** a booking cancelled with notice in time (`cancelled`) keeps its
+credit. An absence (`absent`) or a late notice (`cancelled_late`) uses one credit. Make-up follows the same notice rule. The earlier
+"missed day deducts no credit" wording is withdrawn, and so is D16's "absent" wording: the staff choice absent vs cancelled (D16) stays
+as the record.
+
+**Open questions in § 9.7 (not decided here):** (1) A session the **studio** cancels: does a make-up of that class need any notice? The
+spec writes no notice for a studio cancellation (the notice pair allows none), so the make-up is refused. The owner must decide whether
+such a make-up should be allowed; if it is, the rule and the SQL check change together. (2) A `cancelled_late` booking still takes its seat in the roster and the seat count (like `absent`), because the
+studio cannot refill the seat on the day. The owner should confirm this. (3) The owner's round-two answers name LINE and in person only.
+A notice by phone call has no channel in this spec (`cancel_notice_channel` is `line` or `in_person`). The owner should say whether a phone
+call counts, and as which channel.
+
 
 ### 9.8 `enrolment.functions.ts` (P4, needs `0005_consent_health.sql` + `0006` texts)
 
@@ -3518,18 +3823,27 @@ Consent texts are **never updated** (SQL blocks it, D12); a wording change is al
 
 ### 9.10 `health.functions.ts` (P4)
 
+Rev 14 Oct 2026 (decision 8), round two (decision 7, 14 Oct 2026): the ten keys in `ALLERGENS` below are the list the owner asked for: the nine
+(milk, egg, peanut, tree_nut, wheat, soy, fish, shellfish, sesame) plus **`flour`**. `flour` covers flour of any kind and all products made
+with flour, and it is separate from `wheat` (`wheat` stays a separate key, labelled "แป้งสาลี / ข้าวสาลี"). `peanut` and `tree_nut` stay two
+keys; the screen shows them in one group "ถั่ว" (`30-ui.md` § 4 and § 5.2). Labels are in `30-ui.md` § 5.2. The server takes the list from `ALLERGENS`
+(zod, the enrolment schema, the print sheet); the DB allergen check in `0005` gets `flour` too (cross-file). `otherAllergens` and `foodsToAvoid` are unchanged.
+The owner's allergy answer is "แพ้ถั่ว" (nuts, the group ถั่ว) and "แป้ง" (flour), so the key list above is final (round two, brief item 7).
+
 ✅ (rev) `src/lib/backend/health.schema.ts` (R-07: two new flag fields + `healthRosterState`; test the three states):
 
 ```ts
 import { z } from "zod";
 import { Uuid } from "./common.schema";
 
+/** Ten keys (round two adds `flour`). peanut and tree_nut are one group on screen ("ถั่ว"), two keys in data. */
 export const ALLERGENS = [
   "peanut",
   "tree_nut",
   "milk",
   "egg",
   "wheat",
+  "flour",
   "soy",
   "fish",
   "shellfish",
@@ -3543,7 +3857,8 @@ export const ChildHealthFields = z.object({
   foodsToAvoid: z.string().trim().max(300),
   careNotes: z.string().trim().max(500),
 });
-export const GetChildHealthInput = z.object({ childId: Uuid });
+/** includeHealth is required (round two, decision 3): the staff "ดูข้อมูลสุขภาพ" dialog passes true; the print sheet and the export pass the staff choice. */
+export const GetChildHealthInput = z.object({ childId: Uuid, includeHealth: z.boolean() }).strict();
 export const SaveChildHealthInput = ChildHealthFields.extend({ childId: Uuid });
 export const GetSessionHealthFlagsInput = z.object({ sessionId: Uuid });
 
@@ -3607,6 +3922,7 @@ export const getChildHealth = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<ChildHealth | null> => {
     const { data: rows, error } = await context.supabase.rpc("get_child_health", {
       p_child_id: data.childId,
+      p_include_health: data.includeHealth,
     });
     if (error) throw adminError("server_error");
     const r = (
@@ -3714,6 +4030,8 @@ export const SaveMediaAssetInput = z
     onWebsite: z.boolean(),
     onSocial: z.boolean(),
     onYoutube: z.boolean(),
+    /** rev 14 Oct 2026 (decision 3): print channel, same rules as onSocial */
+    onPrint: z.boolean(),
   })
   .refine((v) => v.kind !== "youtube" || v.youtubeId !== null, {
     message: "youtube_id_required",
@@ -3733,7 +4051,13 @@ export const MarkMediaTakenDownInput = z.object({ assetId: Uuid });
 | `listMediaAssets` | GET | Three calls, no loops (R-18): `media_assets` (incl. `legacy_consent_purposes`), `media_asset_children` with children `nickname`, and **one** `rpc("media_publishability")`. Per asset and channel compute a `ChannelState` (§ 14.7): `not_used` (flag off) · `ok` (publishable) · `check_manually` (**legacy-only**: shows children, no linked children, `legacy_consent_note` set, and the channel is not in `legacy_consent_purposes`) · `blocked`. `needsTakedown` = asset `active` **and** at least one used channel is `blocked` (R-11: legacy-only assets are never "needs takedown"). Skeleton § 14.7. | `MediaAssetRow[]` (§ 14.7) |
 | `saveMediaAsset` | POST | insert/update (incl. `shows_faces`, `on_parents_group`). Never writes `legacy_consent_purposes` (seed only, R-11). The six homepage clips are already seeded by `0005`; F4-07 only links children. | `{ id }` |
 | `setMediaAssetChildren` | POST | **One** `rpc("set_media_asset_children", { p_asset_id, p_child_ids })` (R-15). | `{ saved: true }` |
-| `markMediaTakenDown` | POST | `status = 'taken_down'`, `taken_down_at = now()`, all `on_*` false. Reminder in the UI: also edit `src/content/videos.ts` and republish (D24). | `{ saved: true }` |
+| `markMediaTakenDown` | POST | `status = 'taken_down'`, `taken_down_at = now()`, all `on_*` false, `on_print` included. Reminder in the UI: also edit `src/content/videos.ts` and republish (D24). | `{ saved: true }` |
+
+Channels (rev 14 Oct 2026, decision 3): **five**, in `MEDIA_PURPOSES` order: parents' group, website, social, YouTube, and **print**
+(`on_print` ↔ `media_print`). `media_print` is child-level and follows the `media_social` rules (`media_level`, the same
+`publishable` check). `media_publishability` returns all five (cross-file). The four class clips keep their legacy purposes
+out of the seed until the written source is recorded (decision 7, G0 Q15). `legacy_consent_purposes` is never written by this
+API (seed only, R-11).
 
 ### 9.12 `my.functions.ts` (P5, needs `0005`)
 
@@ -3785,10 +4109,9 @@ export type MyConsents = {
       decidedAt: string | null;
     }>;
   }>;
-  consentTexts: Record<
-    z.infer<typeof ConsentPurposeSchema>,
-    { id: string; version: number; title: string; bodyMd: string } | null
-  >;
+  consentTexts: Record<ConsentTextPurpose, { id: string; version: number; title: string; bodyMd: string } | null>;
+  /** rev 14 Oct 2026 (P4-22): the primary guardian's marketing_line choice. Never child data. */
+  guardianMarketing: GuardianMarketingMine;
 };
 ```
 
@@ -3992,6 +4315,53 @@ Withdrawing (any purpose) makes the database queue a `consent_withdrawn` alert (
 pushes; media → staff open `/admin/media` (takedown runbook), health → the row is deleted, the child gets
 `allergy_check_needed_at`, and teachers check with the family before cooking.
 
+**Rev 14 Oct 2026: guardian marketing on `/my` (cards P4-13 and P4-22; owner decision 2).**
+
+```ts
+// my.schema.ts
+export const UpdateMyMarketingConsentInput = z
+  .object({
+    token: LinkToken,
+    /** true = yes (grant). false = withdraw; withdrawing when not yes writes nothing. */
+    granted: z.boolean(),
+    /** the marketing_line text the parent saw (either language is accepted) */
+    consentTextId: Uuid,
+  })
+  .strict();
+export type UpdateMyMarketingConsentRaw = z.input<typeof UpdateMyMarketingConsentInput>;
+
+export type GuardianMarketingMine = {
+  granted: boolean;
+  decidedAt: string | null;
+  /** the current marketing_line text in the page language; null = not published yet */
+  consentText: { id: string; version: number; title: string; bodyMd: string } | null;
+};
+```
+
+`getMyConsents` also returns `guardianMarketing`: one read of the primary guardian's row in `current_marketing_consents`,
+and `consentText` = `consentTexts.marketing_line`. `consentTexts` now covers `marketing_line` because the loader uses
+`CONSENT_TEXT_PURPOSES`. The child matrix still uses `CONSENT_PURPOSES` only, so no per-child marketing row exists.
+`UpdateMyConsentInput` refuses `marketing_line` (child purposes only).
+
+`updateMyMarketingConsent` (public, POST, `PublicResult<{ granted: boolean }>`):
+
+1. `safeParse` fails → `invalid_input`.
+2. `resolveLinkToken(token, "manage")`; a failed resolution returns its `link_*` code.
+3. The family's primary guardian (`is_primary = true`, as in `updateMyConsent`). None → `invalid_input`.
+4. Text: `areCurrentConsentTexts([{ id, purpose: "marketing_line" }], "th")`, or the same with `"en"`. Not current → `invalid_input`.
+5. Current state from `current_marketing_consents`. Equal to `granted` → `ok({ granted })`, nothing written.
+6. Granting while `processing_restricted_at` is set → `invalid_input` (D28). Withdrawing still works.
+7. Insert `guardian_consent_records` `{ family_id, guardian_id, purpose: "marketing_line", decision: granted ? "granted" : "withdrawn", consent_text_id, channel: "web", method: "checkbox", family_link_id: res.link.id }`. No `recorded_by`. `given_at` is set by the SQL trigger and never sent. SQL `23514` → `invalid_input`; other errors → `server_error`.
+8. No alert, so `deliverConsentAlert` is not called (D29 covers `consent_records` only). Log only the code: `console.error("[my] marketing_failed")`.
+9. Return `ok({ granted })`.
+
+The `/my` screen shows a checkbox while the parent is not yes, and a "withdraw" button while they are yes (`30-ui.md` § 3.6). Saving never withdraws.
+
+Tests: `UpdateMyConsentInput` refuses `purpose: "marketing_line"`. `UpdateMyMarketingConsentInput` rejects an extra `childId`. A
+first yes writes one `web` row with no `recorded_by`; a repeated yes writes nothing. Withdrawing when not yes writes nothing;
+withdrawing when yes writes one `withdrawn` row. A restricted family: yes → `invalid_input`, withdraw → `ok`. An invalid or expired
+token → `link_invalid` / `link_expired`, with no insert. `deliverConsentAlert` is never called on any path.
+
 ### 9.13 `privacy.functions.ts` (P5, owner only, needs `0007_privacy_ops.sql`)
 
 **Core (Stage B, card P5-01):** `exportFamilyData`, `eraseFamily`, `setFamilyRestriction`, `listStorageCleanup`,
@@ -4054,7 +4424,8 @@ export const SaveDsrRequestInput = z
     path: ["refusalReason"],
   });
 
-export const ExportFamilyDataInput = z.object({ familyId: Uuid });
+/** Round two (decision 3, 14 Oct 2026): health in an export only through get_child_health, with the owner's explicit choice for this export. */
+export const ExportFamilyDataInput = z.object({ familyId: Uuid, includeHealth: z.boolean().default(false) }).strict();
 export const EraseFamilyInput = z.object({ familyId: Uuid, confirmText: z.string().max(80) });
 /** D28 (R-09). note: short reason, never health details; SQL max 200 */
 export const SetFamilyRestrictionInput = z.object({
@@ -4100,7 +4471,7 @@ export const ListAuditLogInput = z.object({
 |---|---|---|---|
 | `listDsrRequests` | GET — parked | `open` = status not in (`completed`, `refused`). Order by `due_at`. Include `review_due_at`, `due_at`, `extended_until` (set by SQL triggers). | `DsrRow[]` (§ 14.8) |
 | `saveDsrRequest` | POST — parked | insert/update; map `requestedRight` → column **`requested_right`** (not `right`, a reserved SQL word), `requesterContact` → `requester_contact`, `details`; set `handled_by = context.userId`, and `identity_verified_by` when `identityVerifiedAt` is first set. Deadlines are computed by the BEFORE trigger, never sent from the browser. `refused` needs a written reason. | `{ id }` |
-| `exportFamilyData` | POST | `rpc("export_family_data", { p_family_id })` → jsonb. Returned to the owner's browser for download only; never stored or logged. | `{ json: unknown, exportedAt }` |
+| `exportFamilyData` | POST | `ExportFamilyDataInput { familyId, includeHealth }` (round two, decision 3; `includeHealth` defaults to false in zod). One call only: `rpc("export_family_data", { p_family_id, p_include_health: includeHealth })` → jsonb. The SQL function (`0007`) reads health only through `get_child_health(child, includeHealth)` (one audit row per child) and only when `includeHealth` is true, so the file has no health data when it is false. This function makes **no second health read**, and there is no `.from("child_health")` and no plain join. Returned to the owner's browser for download only; never stored or logged. | `{ json: unknown, exportedAt }` |
 | `eraseFamily` | POST | Load `display_name`; `confirmText.trim() !== display_name.trim()` → `confirm_mismatch`. Then `rpc("erase_family", { p_family_id })` (keeps anonymised payment amounts/dates **and their slip files** for accounting, G11; consent evidence files stay with the detached records for 3 years). Files are only queued when their row is deleted or `slip_path` is cleared; the owner then runs `runStorageCleanup` (R-08). | `{ erased: true, summary }` |
 | `setFamilyRestriction` | POST | `SetFamilyRestrictionInput` → `rpc("set_family_restriction", { p_family_id, p_restricted, p_note })` (D28). `P0002` → `not_found`. Restricting also revokes the family's unused enrol links in SQL; manage links stay so the parent can still withdraw consent. | `{ saved: true }` |
 | `listStorageCleanup` | GET | `ListStorageCleanupInput { includeDone }`; `storage_cleanup_queue` (`id, bucket_id, reason, queued_at, deleted_at, last_error`; show the path only as "…/<last 8 chars>") | `CleanupRow[]` (§ 14.8) |
@@ -4131,7 +4502,8 @@ export type Reports = {
     booked: number;
     heldOffline: number;
   }>;
-  attendanceMonthly: Array<{ month: string; attended: number; absent: number }>;
+  /** round two (option ก): cancelledLate = a cancellation with late notice, which uses a credit like an absence (0008, cross-file) */
+  attendanceMonthly: Array<{ month: string; attended: number; absent: number; cancelledLate: number }>;
   /** null for staff (owner only) */
   revenueMonthly: Array<{ month: string; amountThb: number }> | null;
   outstandingCredits: number;
@@ -4151,6 +4523,114 @@ payload is built by `src/lib/backend/promptpay.ts` (`promptPayPayload`, spec and
 `PROMPTPAY_ID` is read server-side only, and the QR is rendered with `uqr` (added by Lovable).
 
 ---
+
+### 9.16 `print.functions.ts` (P4-25; owner decision 5, 14 Oct 2026; needs `0005`)
+
+Files: `print.schema.ts`, `print.functions.ts`. One family's enrolment and consent record, printed for signing with the browser's
+print dialog (`@media print`). No PDF package. Nothing is stored on the server. The sheet is read **only** when staff press the
+print button (POST, never prefetched, never cached). Every call is audited **before** any data is read (the audit row says that a
+print was prepared; the print dialog itself cannot be observed).
+
+```ts
+// print.schema.ts
+import { z } from "zod";
+import { Uuid, type ConsentPurpose } from "./common.schema";
+import type { Allergen } from "./health.schema";
+
+export const PrintSheetInput = z
+  .object({
+    familyId: Uuid,
+    /** false by default. true = also print foods to avoid and care notes (read through get_child_health, audited per child). The allergen checklist always prints. */
+    includeHealth: z.boolean().default(false),
+  })
+  .strict();
+
+export type PrintSheet = {
+  familyId: string;
+  familyDisplayName: string;
+  /** banner only; the restriction note is never printed */
+  processingRestricted: boolean;
+  /** server time the sheet was prepared (ISO), printed in the footer */
+  preparedAt: string;
+  includeHealth: boolean;
+  guardians: Array<{
+    fullName: string;
+    phone: string | null;
+    isPrimary: boolean;
+    hasParentalResponsibility: boolean;
+    responsibilityAttestedAt: string | null;
+    /** the marketing_line choice as granted or not (for the record; no date needed) */
+    marketingLine: "granted" | "not_granted";
+  }>;
+  children: Array<{
+    nickname: string;
+    /** "YYYY-MM" or null */
+    birthMonth: string | null;
+    reportedAgeYears: number | null;
+    isActive: boolean;
+    /** child-level purposes from consent_matrix plus the latest record. health_allergy is present ONLY when includeHealth is true. */
+    consents: Array<{
+      purpose: ConsentPurpose;
+      status: "granted" | "needs_child" | "not_granted";
+      givenBy: "guardian" | "child" | null;
+      mediaLevel: "face_visible" | "face_hidden" | null;
+      decidedAt: string | null;
+      /** the text the decision was made on: title, version, and the first 12 characters of consent_texts.sha256 */
+      textTitle: string | null;
+      textVersion: number | null;
+      textHashPrefix: string | null;
+    }>;
+    /** null = no health record for this child. `allergens` (ticked keys only) and `otherAllergens` always print (the checklist is the list teachers use in class). `foodsToAvoid` and `careNotes` are null unless includeHealth is true. */
+    health: { allergens: Allergen[]; otherAllergens: string | null; foodsToAvoid: string | null; careNotes: string | null } | null;
+  }>;
+  /** active contacts with an authorised-pickup or emergency role only */
+  contacts: Array<{
+    name: string;
+    relationship: string;
+    phone: string;
+    isEmergencyContact: boolean;
+    isAuthorisedPickup: boolean;
+  }>;
+};
+```
+
+`getPrintSheet` (staff, **POST**, `requireStaff`, `.validator(PrintSheetInput)`):
+
+1. **Audit first, fail closed.** `context.supabase.rpc("record_family_print", { p_family_id, p_include_health })` (cross-file SQL,
+   a definer function that calls `log_audit_event`). It writes one `audit_log` row: action `print_record` (the only print audit name, round two), table `families`, row id
+   = the family id, details `{ include_health }` only. It never holds a name, a value or a health field. An error →
+   `adminErrorFromDb` (`P0002` → `not_found`), and nothing else runs.
+2. Family (`display_name, processing_restricted_at`). Missing → `not_found`.
+3. Guardians (`id, full_name, phone, is_primary, has_parental_responsibility, responsibility_attested_at`) and their current
+   `marketing_line` rows (`current_marketing_consents`, one query).
+4. Children (`id, nickname, birth_month, reported_age_years, is_active`), **one** `rpc("consent_matrix", { p_child_ids })`, and the
+   latest `consent_records` row per child and purpose (one select, newest first, first per key) with its `consent_texts` title,
+   version and `sha256` prefix. When `includeHealth` is false, the query leaves out the `health_allergy` rows, so they are never fetched.
+5. Active contacts with `is_authorised_pickup` or `is_emergency_contact` (`family_contacts`, `is_active`).
+6. For **every** child, in sequence, `rpc("get_child_health", { p_child_id, p_include_health: includeHealth })`, whatever the staff choice.
+   This is the same audited SQL as `getChildHealth` (one audit row per child). Map it as in § 9.10. **This is the only health route of the
+   print sheet and of the export (round two, decision 3): there is no second exception route.** Never `.from("child_health")`, never
+   cached, logged or sent. The SQL returns the allergen keys and the other-allergies text always, and the foods to avoid and care notes
+   only when `includeHealth` is true. The allergen checklist on the screen (`30-ui.md` § 4.3) prints every key in `ALLERGENS` (ten, with
+   `flour`), ticked when the key is in `allergens`, on every sheet. It is a large, readable Thai and English checklist so teachers can use it
+   in class.
+7. Assemble the `PrintSheet`. `preparedAt = new Date().toISOString()`.
+
+Never returned or printed: LINE IDs, emails, staff notes, restriction notes, payment and package data, booking history, slip and
+evidence paths, link tokens or their hashes, IPs, and consent text bodies. (Data minimisation; the owner may ask for more later.)
+
+Errors: `not_found`, `server_error`; `unauthorized` and `forbidden` from the middleware. The screen keeps the sheet in component
+state only (no React Query cache, `gcTime: 0`).
+
+Tests:
+- `record_family_print` is the first call. When it fails, no other call runs and the function throws.
+- `includeHealth: false` → `get_child_health` is called once per child with `p_include_health: false`; each child's `health` keeps `allergens` and `otherAllergens`, and `foodsToAvoid` and `careNotes` are `null`. No `health_allergy` consent row is returned.
+- `includeHealth: true` → exactly one `get_child_health` per child with `p_include_health: true`, and no other health read.
+- The allergen checklist (all ten keys, with `flour`) is in the sheet data for both values of `includeHealth`.
+- Key-set test: the result has no `lineId`, `email`, `staffNote`, `restrictionNote`, `token_hash`, `evidence_path`, `slip_path` keys.
+- The audit detail contains only `include_health`, and the audit action is `print_record`.
+- `getPrintSheet` and `exportFamilyData` read health only through `get_child_health`: grep test, no `child_health` in either file and no plain join in `0007`.
+- Grep test: `print.functions.ts` never passes a sheet value to `console.*`.
 
 ## 10. Server routes
 
@@ -4367,6 +4847,20 @@ These are additions the architect didn't name. Use them exactly; `90-task-breakd
 | `CurrentMediaDecision`, `EnrolmentForm.children[].currentMedia`, `EnrolmentForm.children[].childRefusedHealth` | `enrolment.schema.ts` | Re-sent enrol links keep earlier media decisions (R-33); a child's health "no" hides the health box (R-34) |
 | `auth.middleware.test.ts` | `src/lib/backend/` | Role-gate test, card P0-17 (R-40) |
 | SQL `set_primary_guardian(p_guardian_id uuid)` (called by `saveGuardian`) | `0004` | Primary-guardian swap in one transaction (R-39) |
+| `GUARDIAN_PURPOSES`, `GuardianPurpose`, `GuardianPurposeSchema`, `CONSENT_TEXT_PURPOSES`, `ConsentTextPurpose`, `GuardianConsentChannelSchema`, `GuardianConsentChannel` | `common.schema.ts` | Rev 14 Oct 2026: `marketing_line` is guardian-level and never a child purpose (decision 2) |
+| `GuardianMarketingChoiceSchema`, `RecordGuardianMarketingInput`, `GetGuardianMarketingInput`, `GuardianMarketingPanel`, `MarketingLineText`, `GuardianMarketingState`, `GuardianMarketingResult`, `GuardianMarketingView` | `families.schema.ts` | Rev 14 Oct 2026: marketing box (P3-04, P3-11) |
+| `recordGuardianMarketing`, `getGuardianMarketing`; helper `applyGuardianMarketing` | `families.functions.ts` | Rev 14 Oct 2026: guardian-level writes and reads |
+| `FollowUpRow` (`familyLabelTh`, `familyLabelEn`; no `familyDisplayName`, no child field), `ListFollowUpFamiliesInput`, `listFollowUpFamilies` | `follow-up.schema.ts`, `follow-up.functions.ts` | Round two (14 Oct 2026): follow-up list, one row per granted guardian, nickname-only label (decisions 4 and 5; P3-19) |
+| `SaveGuardianInput.preferredContact`, `CreateFamilyFromRequestInput.marketingLine`, `marketingStatus`, `GuardianView.preferredContact` / `marketingLine` | `families.schema.ts`, `families.functions.ts` | Rev 14 Oct 2026: contact preference for follow-up; marketing step after create |
+| `UpdateMyMarketingConsentInput`, `UpdateMyMarketingConsentRaw`, `GuardianMarketingMine`, `updateMyMarketingConsent`, `MyConsents.guardianMarketing` | `my.schema.ts`, `my.functions.ts` | Rev 14 Oct 2026: `/my` marketing control (P4-13, P4-22) |
+| `CreateBookingInput.makeUpOfBookingId`, `noticeInTime` (replaces `makeUpNoticeOk`), `NoticeChannelSchema`, `CancelBookingInput` `{ id, noticeChannel, noticeAt }`, `CancelBookingResult` | `bookings.schema.ts`, `bookings.functions.ts` | Round two (14 Oct 2026): notice channel `line` / `in_person`; `cancelled` keeps the credit, `cancelled_late` uses it (decisions 1 and 2); make-up with notice through `createBooking` (decision 10, P3-06) |
+| `ExportFamilyDataInput.includeHealth` | `privacy.schema.ts` | Round two (decision 3): health in an export only through `get_child_health` |
+| `sessionStartsAt` | `dates.ts` | Rev 14 Oct 2026: session start as an instant (Bangkok, +07:00) |
+| `make_up_notice_short` | `result.ts` | Rev 14 Oct 2026: make-up notice refused |
+| `StudioSettings.cancelNoticeHours`, `UpdateStudioSettingsInput.cancelNoticeHours` | `staff.schema.ts` | Rev 14 Oct 2026: `studio_settings.cancel_notice_hours` (default 3, 0–72, owner only) |
+| `SaveMediaAssetInput.onPrint` | `media.schema.ts` | Rev 14 Oct 2026: print channel (decision 3) |
+| `PrintSheetInput`, `PrintSheet`, `getPrintSheet` | `print.schema.ts`, `print.functions.ts` | Rev 14 Oct 2026: print sheet for signing (decision 5, P4-25). Audited inside `getPrintSheet`; there is no separate `logFamilyPrint` |
+| SQL names this file calls (cross-file, for `0004`, `0005`, `0006a`, `0007`, `0008` and `10-data-model.md`): `guardian_consent_records` (exists in `0005`); views `current_marketing_consents` and `marketing_follow_up_list` (columns `family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at`); RPC `record_family_print` (0005 § 9b); audit action `print_record` (the only print audit name); `export_family_data(family, includeHealth)` with no plain `child_health` join (0007); columns `bookings.cancelled_at`, `bookings.cancel_notice_at`, `bookings.cancel_notice_channel` (`line` / `in_person` / null), `bookings.makeup_of_booking_id`, status `cancelled_late`, `guardians.preferred_contact`, `media_assets.on_print` (exists in `0005`); `studio_settings.cancel_notice_hours` (exists in `0004`); enum values `marketing_line`, `media_print` | SQL and `10-data-model.md` | Names the server code depends on |
 
 ---
 
@@ -4520,7 +5014,7 @@ export type SessionRow = {
   staffNote: string | null;
   /** null = capacity not set */
   seatsLeft: number | null;
-  /** held + confirmed + attended + absent bookings (0 before 0004) */
+  /** held + confirmed + attended + absent + cancelled_late bookings (a late cancellation keeps its seat, § 9.7 open question 2; 0 before 0004) */
   booked: number;
 };
 ```
@@ -4580,7 +5074,8 @@ export type PickupOption =
   | { kind: "contact"; id: string; name: string; phone: string; relationship: string };
 export type RosterRow = {
   bookingId: string;
-  status: "held" | "confirmed" | "attended" | "absent" | "cancelled";
+  /** round two: 'cancelled' = cancelled with notice (credit kept); 'cancelled_late' = late notice (credit used) */
+  status: "held" | "confirmed" | "attended" | "absent" | "cancelled" | "cancelled_late";
   childId: string;
   nickname: string;
   /** from birth_month (ageFromBirthMonth) or, until enrolment, the age reported on the request */
@@ -4634,13 +5129,18 @@ export type GuardianView = {
   lineId: string | null;
   email: string | null;
   isPrimary: boolean;
+  /** rev 14 Oct 2026: contact_preference of this guardian; null = not recorded */
+  preferredContact: "line" | "phone" | null;
   hasParentalResponsibility: boolean;
   responsibilityAttestedAt: string | null;
   identityCheckMethod: "in_person" | "line_account" | "phone_callback" | null;
   identityCheckedAt: string | null;
   /** R-21: fields a parent changed via the enrol link, with the OLD values, until staff confirm */
   pendingLinkChanges: { at: string; before: Partial<Record<LinkChangeField, string | null>> } | null;
+  /** rev 14 Oct 2026: current marketing_line choice (current_marketing_consents); decidedAt null = never asked */
+  marketingLine: GuardianMarketingView;
 };
+export type GuardianMarketingView = { granted: boolean; decidedAt: string | null };
 export type ChildView = {
   id: string;
   nickname: string;
@@ -4666,7 +5166,6 @@ export type PackageView = {
   packageCode: "single" | "four" | "eight";
   status: "active" | "closed" | "void";
   purchasedOn: string;
-  expiresOn: string | null;
   priceThb: number;
   sessionsTotal: number;
   sessionsUsed: number;
@@ -4677,7 +5176,7 @@ export type BookingHistoryRow = {
   id: string;
   sessionDate: string;
   childNickname: string | null;
-  status: "held" | "confirmed" | "attended" | "absent" | "cancelled";
+  status: "held" | "confirmed" | "attended" | "absent" | "cancelled" | "cancelled_late";
   checkedInAt: string | null;
   checkedOutAt: string | null;
   pickedUpByName: string | null;
@@ -4921,7 +5420,7 @@ export const needsTakedown = (status: "active" | "taken_down", channels: Record<
 ```
 
 Channel flag ↔ purpose: `on_parents_group` ↔ `media_parents_group`, `on_website` ↔ `media_website`, `on_social` ↔
-`media_social`, `on_youtube` ↔ `media_youtube`. Tests: legacy-only clip used on YouTube with website-only cover →
+`media_social`, `on_youtube` ↔ `media_youtube`, `on_print` ↔ `media_print`. Tests: legacy-only clip used on YouTube with website-only cover →
 `check_manually` and `needsTakedown = false`; a linked child who withdrew → `blocked` and `needsTakedown = true`.
 
 ### 14.8 Privacy (`privacy.schema.ts`; core P5-01, parked PK-01)

@@ -1,6 +1,6 @@
 # 90 · Task breakdown: task cards for Claude Haiku
 
-Planning document, October 2026. This file turns `00-overview.md` §§ 8–9 into **112 small task cards** (one card = one
+Planning document, October 2026. This file turns `00-overview.md` §§ 8–9 into **115 small task cards** (one card = one
 small, testable change of about 1–4 files), a gate tracker, the dependency graph and the support agents that check every
 card. Nothing here is done yet: Lovable Cloud is not enabled.
 
@@ -54,7 +54,9 @@ STAGE B · Records ────────────────────�
                         ├─ P3-16 notice v2
                         └─ P3-17 SQL 0005 [G4] ── P3-18 SQL 0007 [G4] ── P5-01 privacy fns ─┬─ P5-03 owner card
                                                               P5-02 privacy copy ───────────┴─ P5-04 files tab
-   P5-05 retention check (human) → P5-06 STAGE B GO-LIVE [G9a …-v2, G10]
+   P3-04 + P3-11 (marketing choice, default off) ── P3-20 apply 0006a [G9b, G4 · 0006a] (also P1-02, P3-16)
+   P3-09 + P3-11 + P3-17 ── P3-19 follow-up list (staff only, nothing is sent)
+   P5-05 retention check (human) → P5-06 STAGE B GO-LIVE [G9a …-v2, G10] (also P3-19, P3-20)
 ═══ G-HEALTH decided · G0 Q9/Q15/Q17 answered · G9b legal review ════════════════════════════════════════════
 STAGE C · Consent and safety ───────────────────────────────────────────────────────────────────────────────
    P4-01 SQL 0006 (+0006b) [G9b, G4] ─┬─ P4-02 tokens ─────────────────┬─ P4-05 enrol fns ── P4-06 submit ──┐
@@ -66,8 +68,9 @@ STAGE C · Consent and safety ────────────────�
                                       ├─ P4-15 admin copy ─┬─ P4-16 roster health
                                       │                    ├─ P4-17 links tab ── P4-18 consents tab
                                       │                    └─ P4-19 alerts list ── P4-21 media screen ── P4-23 videos.ts
-                                      └─ P4-20 notice v3
-   → P4-24 STAGE C GO-LIVE [HEALTH_IN_SYSTEM set, G9a …-v3, G10]
+                                      └─ P4-20 notice v3 (also P3-20)
+   P4-07 + P4-11 + P4-15 + P4-18 ── P4-25 print sheet (browser print; health only with includeHealth; audited)
+   → P4-24 STAGE C GO-LIVE [HEALTH_IN_SYSTEM set, G9a …-v3, G10] (also P4-25)
 STAGE D (optional): P6-01 SQL 0008 [G4] → P6-02 reports fn → P6-03 screen → P6-04 publish
 PARKED (G-PARK, one item at a time, never in parallel with another card): PK-01 → PK-02 · PK-03 · PK-04 · PK-05 ·
 PK-06 · PK-07 · PK-08
@@ -106,12 +109,13 @@ PK-06 · PK-07 · PK-08
 
 - The **batch** number in § 4 is the card's depth inside its stage. Cards with the same batch number in the same stage
   can run in parallel **once their cross-stage dependencies are done**. The build check behind this file proved that two
-  cards which touch the same file are always ordered by `depends_on`, so one batch never edits a file twice.
+  cards which touch the same file are always ordered by `depends_on`, so one batch never edits a file twice. Batch numbers are advisory where a dependency points to a later batch in the same stage: P5-01 (batch 1) depends on P3-18 (batch 3), and P5-06 (batch 4) depends on P3-14, P3-19 and P3-20 (batch 8). `depends_on` decides the order.
 - Shared files are edited in a chain, in this order: `src/content/admin/index.ts` (P0-18 → P1-12 → P1-15 → P2-03 →
   P3-08 → P5-02 → P4-15 → P6-03), `src/components/admin/AdminShell.tsx` (P0-22 → P1-15 → P1-17 → P2-04 → P3-09 →
   P3-15 → P5-04 → P4-21 → P6-03), the dashboard `src/routes/admin/_staff/index.tsx` (P0-22 → P1-17 → P2-04 → P3-15 →
   P5-04 → P4-19 → P4-21), `src/server/staff-notify.server.ts` (P1-03 → P2-05 → P4-03), `src/content/privacy.tsx`
-  (P1-02 → P3-16 → P4-20), the family page route (P3-10 → P3-12 → P5-03 → P4-17 → P4-18).
+  (P1-02 → P3-16 → P3-20 → P4-20), the family page route (P3-10 → P3-12 → P5-03 → P4-17 → P4-18).
+  Added 14 Oct 2026: `src/lib/backend/staff.schema.ts` and `staff.functions.ts` (P0-19 → P1-15 → P1-19), `src/lib/backend/families.schema.ts` (P3-02 → P3-04), `src/lib/backend/families.functions.ts` (P3-03 → P3-04 → P5-03 → P4-17), `src/content/admin/families.tsx` (P3-08 → P3-11 → P3-19), `src/routes/admin/_staff/families/index.tsx` (P3-09 → P3-19), `src/components/consent/MarketingConsentBlock.tsx` (P3-11 → P3-14 → P3-20 → P4-22), `src/components/admin/family/FamilyConsentsTab.tsx` (P4-18 → P4-25), `src/content/admin/consents.tsx` (P4-15 → P4-25), `src/content/admin/media.tsx` (P4-15 → P4-21).
 - Parked cards may share files with finished cards (PK-04 with `public-config.ts`/`Pricing.tsx`, PK-06 with `site.tsx`,
   PK-08 with `40-integrations.md`): run a parked card **alone**, after checking no open card lists the same files.
 - Optional or conditional cards: P1-16 (only if `cron.schedule` was refused), P1-20 (staff group alerts), P2-07 (homepage
@@ -197,38 +201,40 @@ confirms it in chat; no agent ever marks a gate on its own evidence.
 
 | Gate | What (details in 00 § 9) | Who | Needed before | Status | Date | By | Notes |
 |---|---|---|---|---|---|---|---|
-| G0 | Answers to 00 § 13 (legal form, accounts, capacity habit, payment timing, retention OK) | Owner | P0 (partial OK) | ☐ | | | |
+| G0 | Answers to 00 § 13 (legal form, accounts, capacity habit, payment timing, retention OK) | Owner | P0 (partial OK) | ◐ | 2026-10-14 | Owner (in chat) | Answers recorded. Decisions 1–10 of 14 Oct applied in this file (lawyer review and budget, family follow-up opt-in, print channel, LINE OA reading, signing export, Lovable Cloud kept, clip evidence, allergen list, domain, cancellations). Still open: 2 (staff list, LINE-alert recipients), 17 (approve list, at G9b). Q15 is closed (owner certified 14 Oct, see its row). The two allergen confirmations are closed by the owner's round-two answer (item 7, D46). Round two (eight items): see row G0 · round 2. Q12: lawyer review approved (budget); sign-off pending. Q20 done. See 00 § 13A–C |
+| G0 · round 2 | The owner's second set of eight answers (14 Oct 2026): 00 § 13B and decisions D40–D47 | Owner | P3-04, P3-06, P3-11, P3-16 (notice v2), P3-19, P3-20, P4-08, P4-15, P4-20 (notice v3), P4-25 | ◐ | 2026-10-14 | Owner (in chat) | 1 credit with notice kept, absent or late uses one (D40); 2 notice by LINE or in person, `cancel_notice_at` (D41); 3 one health route for export and print, allergen checklist on every print (D42); 4 follow-up label "ครอบครัวน้อง" + nickname, staff only, lawyer checks (D43); 5 one follow-up row per granted guardian (D44); 6 class clips certified, G0 Q15 ☑ (D45); 7 allergen `flour` and nut group (D46); 8 LINE OA rule kept (D47). Still open, one line each: a family with two children or no nickname (D43); export when includeHealth is false (D42); allergen checklist without the tick (D42). |
 | G1 | Cloud permissions: Enable Cloud / Modify DB / Configure auth = Ask; backward-incompatible = Never | Owner | P0-15 | ☐ | | | |
 | G2 | Enable Cloud on main, region Asia Pacific (permanent); save the DPA | Owner | P0-15 | ☐ | | | |
 | G3 | Bootstrap auth prompt; sign-up disabled; leaked-password check on | Builder | P0-15 | ☐ | | | |
 | G4 · 0001 | Apply `0001_foundation.sql`; record migration folder and live-DB behaviour (40 § 2 rows 4–5); `types.ts` lists `current_app_role` and `app_role` | Builder | P0-16, P0-17 | ☐ | | | |
 | G5 | Owner user + owner role via Cloud → SQL editor | Owner | P0-16 | ☐ | | | |
 | G4 · 0002 | Apply `0002`; pg_cron jobs visible? (40 § 2 row 16); `types.ts` lists `booking_requests`, `studio_settings`, `check_rate_limit` | Builder | P1-03, P1-04, P1-06 | ☐ | | | cron refused? → P1-16 |
-| G6 | Secrets in Cloud → Secrets (`IP_HASH_SECRET`, `TURNSTILE_SECRET_KEY`, `LINE_ALERT_*`, `PUBLIC_SITE_URL`) | Owner | P1-21 | ☐ | | | |
-| G7 | Turnstile widget with exact hostnames; site key committed | Owner + builder | P1-21 | ☐ | | | |
+| G6 | Secrets in Cloud → Secrets (`IP_HASH_SECRET`, `TURNSTILE_SECRET_KEY`, `LINE_ALERT_*`); `PUBLIC_SITE_URL` is plain config, not a secret (D37) | Owner | P1-21 | ☐ | | | |
+| G7 | Turnstile widget with exact hostnames (`cherryleeandco.com`; whether it covers `www.` is UNVERIFIED: check in the console, list `www.` explicitly if not); site key committed | Owner + builder | P1-21 | ☐ | | | |
 | G8 | Staff Alerts OA (Free), `LINE_ALERT_TO` | Owner | P1-21 | ☐ | | | |
 | G4 · 0003 | Apply `0003` (also when the P2 screens are skipped) | Builder | P2-02, P3-01 | ☐ | | | |
-| G9a · v1 | Notice `…-v1` approved, placeholders filled, draft banner off; the `/book` short notice (`bookingContent.notice`, cards P1-13/P1-14) approved with it; retention periods confirmed (G0 Q6) | Owner (+ lawyer) | P2-08 go-live | ☐ | | | version: |
+| G9a · v1 | Notice `…-v1` approved, placeholders filled, draft banner off; the `/book` short notice (`bookingContent.notice`, cards P1-13/P1-14) approved with it; retention periods confirmed (G0 Q6) | Owner (+ lawyer) | P2-08 go-live | ◐ | 2026-10-14 | Owner (in chat) | Owner approved the lawyer review and its budget. Notice text not yet reviewed by the lawyer. version: |
 | G10 · Stage A | Publish; scan fixed; sign-up disabled; `rls_smoke.sql` no FAIL | Owner | end of Stage A | ☐ | | | |
-| **G-MVP** | ≥ 8 weeks of real use → go / no-go for Stage B | Owner | P3-01 | ☐ | | | decision: |
+| **G-MVP** | ≥ 8 weeks of real use → go / no-go for Stage B | Owner | P3-01 | ☐ | | | intent: yes (family records as customer base). Marketing needs G4 · 0006a first (opt-in line, default off; decision 2 of 14 Oct) |
 | G11 | Payment record retention (accountant) | Owner + accountant | P3-01 (may be "pending") | ☐ | | | |
 | G4 · 0004 | Apply `0004`; `types.ts` lists `families`, `create_family_from_request`, `set_primary_guardian` | Builder | P3-02 … | ☐ | | | |
-| G0 Q15 | What the 4 class clips' consent covered → `legacy_consent_purposes` | Owner | P3-17 | ☐ | | | |
-| G4 · 0005 | Apply the **whole** `0005` file in Stage B (tables and every function, incl. `submit_enrolment`); only the P4 screens wait for Stage C. `types.ts` then lists `consent_records`, `child_health`, `submit_enrolment` | Builder | P3-18, P4-* | ☐ | | | |
-| G4 · 0007 | Apply `0007` | Builder | P5-01 | ☐ | | | |
+| G0 Q15 | What the 4 class clips' consent covered → `legacy_consent_purposes` | Owner | P3-17 | ☑ | 2026-10-14 | Owner (in chat), certified | Owner certified 14 Oct 2026 (D45): parents agreed to all five channels (website, parents' LINE group, social, YouTube, print). Legacy note: "Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents' LINE group, social, YouTube, print)". The seed for the four clips runs at G4 · 0005 with this note. The builder still runs the session-setting step at G4 · 0005. Print was in the certification. |
+| G4 · 0005 | Apply the **whole** `0005` file in Stage B (tables and every function, incl. `submit_enrolment` and `record_family_print` (print audit, § 9b); only the P4 screens wait for Stage C. `types.ts` then lists `consent_records`, `guardian_consent_records`, `child_health`, `submit_enrolment` | Builder | P3-04, P3-18, P4-* | ☐ | | | |
+| G4 · 0006a | Apply `sql/0006a_seed_marketing_text.sql` (`marketing_line` text, TH + EN) after the lawyer review (G9b). Stage B, before the family create and edit screens go live. Same route as G4 · 0006. `rls_smoke.sql` no FAIL | Builder | P3-20, P5-06 | ☐ | | | |
+| G4 · 0007 | Apply `0007`. The export health route is decided (D42, 14 Oct 2026): `export_family_data` reads health only through `get_child_health` with the explicit includeHealth choice; the plain join is removed before this gate. The follow-up view follows D43 and D44 | Builder | P5-01, P4-25 | ☐ | | | route decided; the gate itself waits for the build |
 | F5-06 | Owner MFA available? (record only) | Builder | P5-05 | ☐ | | | |
 | G9a · v2 | Notice `…-v2` approved | Owner (+ lawyer) | P5-06 go-live | ☐ | | | version: |
 | G10 · Stage B | Publish Stage B; delete fake families first | Owner | end of Stage B | ☐ | | | |
-| **G-HEALTH** | System (`HEALTH_IN_SYSTEM = true`) or paper (health rows removed from 0006) | Owner (+ lawyer) | P4-01 | ☐ | | | choice: |
-| G0 Q9 / Q17 | Private parents' group? Approve OWNER-APPROVE lines | Owner | P4-01 | ☐ | | | |
-| G9b | Lawyer + owner review of consent texts and D11 | Owner + lawyer | P4-01 (before G4 · 0006) | ☐ | | | |
+| **G-HEALTH** | System (`HEALTH_IN_SYSTEM = true`) or paper (health rows removed from 0006) | Owner (+ lawyer) | P4-01 | ◐ | 2026-10-14 | Owner (in chat) | choice: **system** (14 Oct). Blocked until G9b is signed off |
+| G0 Q9 / Q17 | Private parents' group? Approve OWNER-APPROVE lines | Owner | P4-01 | ◐ | 2026-10-14 | Owner (in chat) | Q9 yes (parents' LINE group is one of the channels). Q17: list given (00 § 13C), approval pending |
+| G9b | Lawyer + owner review of consent texts and D11 | Owner + lawyer | P4-01 (before G4 · 0006); P3-20 (before G4 · 0006a) | ◐ | 2026-10-14 | Owner (in chat) | Owner approved the lawyer review and its budget. Sign-off pending. Covers `0006`, `0006a`, the OWNER-APPROVE lines, the D11 rule (10+ child's health refusal), and the new marketing and print texts, and the four class clips' legacy cover (G0 Q15, print included) Round two (D43): this includes the child-nickname line in `0006a` and in notice § 3.10, the § 3.6 allergy list with flour (D46), and the § 3.11 draft (D40, D41, publish only if the owner asks). |
 | G4 · 0006 (+0006b) | Apply consent wording (0006b only if Q9 = yes) | Builder | P4-02 … | ☐ | | | |
 | G9a · v3 | Notice `…-v3` approved | Owner (+ lawyer) | P4-24 go-live | ☐ | | | version: |
 | G10 · Stage C | Publish Stage C | Owner | end of Stage C | ☐ | | | |
 | G4 · 0008 | Apply `0008` (Stage D, optional) | Builder | P6-02 | ☐ | | | |
 | G10 · Stage D | Publish reports | Owner | end of Stage D | ☐ | | | |
-| G12 | Analytics cookie check; optional Umami / Resend / PromptPay ID | Owner | PK-04, PK-05, PK-07 | ☐ | | | |
-| G13 | Custom domain + follow-ups (40 § 12) | Owner | any time | ☐ | | | |
+| G12 | Analytics cookie check; optional Umami / Resend / PromptPay ID | Owner | PK-04, PK-05, PK-07 | ◐ | 2026-10-14 | Owner (in chat) | PromptPay: wants QR + bank account, ID blank for now. Analytics not asked yet |
+| G13 | Custom domain + follow-ups (40 § 12) | Owner | any time | ☑ | 2026-10-14 | Owner (in chat) | cherryleeandco.com is live. Used as `PUBLIC_SITE_URL` and as the Turnstile hostname. The 40 § 12 follow-ups are not covered by this answer |
 | G-PARK | Un-park one item (write which) | Owner | each PK card | ☐ | | | item: |
 
 ### 2.1 Notes log
@@ -239,6 +245,38 @@ and why, and any deviation from a card.
 
 | Date | Who | Note |
 |---|---|---|
+| 2026-10-14 | Owner (in chat) | G0 answers recorded (00 § 13A). Not applied to the plan yet. |
+| 2026-10-14 | Owner (in chat) | Answer 9 adds print as a channel → new purpose `media_print` needed (00 § 13B item 3). |
+| 2026-10-14 | Owner (in chat) | Answer 12: no lawyer budget. Conflicts with G9a / G9b. Decision open (00 § 13B item 1). |
+| 2026-10-14 | Owner (in chat) | Answer 16 changes D26: staff LINE accounts may add parents. Plan change open (00 § 13B item 4). |
+| 2026-10-14 | Owner (in chat) | Answer 19 adds family follow-up and sales: out of scope in the plan. Decision open (00 § 13B item 2). |
+| 2026-10-14 | Owner (in chat) | Answer 18: G-HEALTH = system. Export to paper/PDF is a new feature, not yet a card (00 § 13B item 5). |
+| 2026-10-14 | Owner (in chat) | Answer 20 asks for Supabase. Unclear: Lovable Cloud already is Supabase. Clarify (00 § 13B item 6). |
+| 2026-10-14 | Owner (in chat) | Decision 1: lawyer review approved ("ได้ ให้ฝ่ายกฎหมายตรวจ"); budget approved. Scope: every notice version, the consent texts in `sql/0006*`, the OWNER-APPROVE lines, D11, and the new marketing and print texts. G9a and G9b are owner + lawyer. No Stage C go-live before G9b. |
+| 2026-10-14 | Owner (in chat) | Decision 2: family follow-up and sales opt-in YES, set up from the start, default OFF ("ได้ ตั้งค่าแต่ต้นและแจ้งผู้ปกครอง"). Purpose `marketing_line` is a guardian purpose (children's data is never used for sales), stored in `guardian_consent_records`. Unticked box with the full text above it; "not now" records nothing. Changeable on `/my`. Text in `0006a`, applied at G4 before the family screens go live. Notice v2 and v3 mention it. Follow-up list P3-19: staff only, contact by hand, no bulk sends. |
+| 2026-10-14 | Owner (in chat) | Decision 3: print as a media channel YES. `media_print` added to `consent_purpose` (child level, media_level, default not granted). TH/EN text in `0006`. Own control in MediaSection (P4-09), in the publishability matrix, and on /admin/media (P4-21). |
+| 2026-10-14 | Owner (in chat) | Decision 4: "มันเป็นไลน์ OA นะ". An OA cannot add a user by LINE ID, so D26 stays and the Q16 answer ("yes add friends") is superseded. Remove any copy or field that asks staff to copy a parent's LINE ID in order to add them. The 30-ui hint is text only (no copy button; reference only, never for adding a parent); owner to confirm in one line. |
+| 2026-10-14 | Owner (in chat) | Decision 5: export for signature YES (card P4-25). Browser print with the existing `@media print` rules; nothing stored on the server. Health only when "include health" is ticked and only through the audited function. Every print is written to the audit log (action, family id, date; never the content). Route `/admin/families/$familyId/print`. |
+| 2026-10-14 | Owner (in chat) | Decision 6: keep Lovable Cloud ("ถ้าทำอยู่แล้วไม่ต้องทำใหม่"). Lovable Cloud is Supabase. G1 and G2 unchanged. G0 Q20 done. |
+| 2026-10-14 | Owner (in chat) | Decision 7: G0 Q15 partly confirmed. Parents agreed to all channels; the source is "from another source we used on the website", not yet written. Four clips: `legacy_consent_purposes` = all five channels, note "Owner statement 14 Oct 2026; written source to be recorded before G4 (G0 Q15)". The 0005 seed for these clips does not run at G4 until the source is recorded. G0 Q15 stays ◐. |
+| 2026-10-14 | Owner (in chat) | Decision 8: allergen list = the nine FDA major allergen values already in `0005` (no enum change), plus `other_allergens` and `foods_to_avoid`. Thai labels added in P4-15. Not described as a Thai list (none found). Owner still to confirm "แพ้ทั่ว" and "แพ้แป้ง". |
+| 2026-10-14 | Owner (in chat) | Decision 9: domain https://cherryleeandco.com is live. Used as `PUBLIC_SITE_URL`, as the Turnstile hostname and as the JSON-LD base (a website task, not this plan). G13 done. |
+| 2026-10-14 | Owner (in chat) | Decision 10: packages never expire; siblings may share one; a missed day does not deduct a credit; a make-up needs notice at least `cancel_notice_hours` (default 3) before the ORIGINAL session starts. Setting = column `cancel_notice_hours` on `studio_settings` (P1-15), enforced in the make-up booking path (P3-06). Not published on the site unless the owner asks. |
+| 2026-10-14 | Plan revision (card brief) | New cards: P3-19 `cl-p3-follow-up-list`, P3-20 `cl-p3-apply-0006a` (human-gated), P4-25 `cl-p4-print-sheet`. Cards modified: P0-13, P1-15, P3-04, P3-06, P3-11, P4-09, P4-13, P4-15, P4-21, P4-22. |
+| 2026-10-14 | Plan revision (card brief) | depends_on changed, and why: P3-04 +P3-17 (writes `guardian_consent_records`). P3-19 +P3-11 (both edit `src/content/admin/families.tsx`). P3-20 also lists P3-04, P3-11 and P3-16 (its files come after those cards). P4-20 +P3-20 (both edit `src/content/privacy.tsx`). P4-24 +P4-25 (batch 7 → 8, after its dependency) and P5-06 +P3-19, +P3-20 (stage go-live checks wait for the new features). P4-25 +P4-15 and +P4-18 (copy file and family tab come first). |
+| 2026-10-14 | Plan revision (consistency pass, verifier issues) | Names aligned to the SQL drafts: views `current_marketing_consents` and `marketing_follow_up_list`; RPC `record_family_print` added to `0005` (print audit, G4 · 0005). Follow-up list: `lastSessionOn` (child attendance) and `guardian_line_id` removed, route `/admin/families?view=follow-up`. Marketing block is `src/components/consent/MarketingConsentBlock.tsx` with `marketingLine.*` keys (30 § 2.6). Staff channels `in_person` or `line` (paper not accepted). `PUBLIC_SITE_URL` is config. Cards changed: P0-08, P1-02, P1-17, P3-04, P3-11, P3-14, P3-16, P3-19, P3-20, P4-12, P4-13, P4-20, P4-22, P4-25. OPEN for the owner: follow-up label rule and scope; export health route (blocks G4 · 0007); paper evidence; phone channel; print in the class-clip seed (G0 Q15). |
+| 2026-10-14 | Owner (in chat), round two | Item 1 (D40): cancellation with notice at or before the threshold keeps the credit (`cancelled`); absent or late cancellation uses one credit (`absent`, `cancelled_late`). Overrides the missed-day sentence of decision 10 below. |
+| 2026-10-14 | Owner (in chat), round two | Item 2 (D41): notice by LINE (`cancel_notice_at` = time the LINE message arrived; channel `cancel_notice_channel` = `line`) or in person (`in_person`). No paper, no web form. |
+| 2026-10-14 | Owner (in chat), round two | Item 3 (D42): export and print read health only through `get_child_health` with includeHealth; the plain join in `export_family_data` is removed. The print sheet always shows the allergen checklist; other notes only with includeHealth. Overrides D33 for the allergen checklist. |
+| 2026-10-14 | Owner (in chat), round two | Item 4 (D43): follow-up label = "ครอบครัวน้อง" + the child's nickname (EN "Family of <nickname>"), staff only. Overrides the "never used" promise for this one label. Lawyer checks under G9b. |
+| 2026-10-14 | Owner (in chat), round two | Item 5 (D44): one follow-up row per granted guardian. |
+| 2026-10-14 | Owner (in chat), round two | Item 6 (D45): owner certified the four class clips' consent on all five channels. G0 Q15 set to ☑. Legacy note replaced. Overrides R-55's written-source condition. |
+| 2026-10-14 | Owner (in chat), round two | Item 7 (D46): `flour` added to the allergen check (`wheat` kept); nut group "ถั่ว" with `peanut` and `tree_nut`. Overrides D39's "nine values". Closes the two open confirmations. |
+| 2026-10-14 | Owner (in chat), round two | Item 8 (D47): the LINE OA rule (D26, D35) is kept. No change. |
+| 2026-10-14 | Plan revision (round two) | Cards changed: P0-18 (allergen labels type gets `flour`); P3-04 (channels `line` and `in_person` only, no `paper`; test); P3-06 (credit rule, `notice_at` and `notice_channel`, make-up on the notice time, status mapping, D40–D41); P3-11 (the channel radio has two choices); P3-16 (notice v2: § 3.11 only if the owner asks; the nickname line); P3-17 (G0 Q15 is ☑: the seed uses all five channels with the D45 note); P3-19 (label and one row per guardian; the owner rules are recorded here and in 00 § 5); P3-20 (corrected 0006a text, the nickname line, lawyer G9b); P4-08 (allergen labels, ten keys and the nut group, step 2b); P4-15 (ten allergen labels with `flour`; nut group); P4-20 (v3: § 3.6 flour and the print checklist; the nickname line, not "never used"); P4-25 (print: allergen checklist always, notes only with includeHealth; `get_child_health` for every print; the owner's one-line confirmation is a gate before step 3). |
+| 2026-10-14 | Plan revision (round two) | `session-setting` note: the brief mentions a G4 · 0005 gate note about the session setting; no such note was found in 90 § 2 or 00 § 9, so the G4 · 0005 row is unchanged. Owner or orchestrator to confirm. |
+| 2026-10-14 | Plan revision (round two) | Open after round two (owner, one line each): (a) family with two children, or a child with no nickname, label rule (D43; P3-19 stops and reports); (b) export when includeHealth is false (D42: the plan says no health); (c) allergen checklist without the include-health tick (D42; P4-25 stops until the owner confirms). |
+| 2026-10-14 | Plan revision (verifier pass, round two) | SQL names kept: `cancel_notice_at`, `cancel_notice_channel`; `cancelled_at` and `makeup_of_booking_id` added to 0004, and the make-up rule is enforced in `validate_booking()`; `get_child_health` and `export_family_data` take an explicit `includeHealth` (no default); allergen checklist always on the print sheet (D42); follow-up view returns `family_label_th` / `family_label_en`; print audit name `print_record`; `cancelled_studio` split in 0008. Log: 00 § 15 R-70. |
 | | | |
 
 ---
@@ -320,27 +358,29 @@ Batch = depth inside its stage (§ 1.4). Status: ☐ open · ☑ done · `skippe
 | P3-01 | 1 | `cl-p3-sql-0004` | Review SQL 0004_families.sql, then G4 | P2-01, P2-08 | ☐ |
 | P3-02 | 3 | `cl-p3-families-schema` | families.schema.ts with view types (§14.4) and boundary tests | P3-01, P0-04, P0-06, P3-05 | ☐ |
 | P3-03 | 4 | `cl-p3-families-read` | families.functions.ts part 1: listFamilies, getFamily | P3-02, P0-17 | ☐ |
-| P3-04 | 5 | `cl-p3-families-write` | families.functions.ts part 2: create from request, save family/guardian/child/contact, soft delete | P3-03 | ☐ |
+| P3-04 | 5 | `cl-p3-families-write` | families.functions.ts part 2: create from request, save family/guardian/child/contact, soft delete, guardian marketing choice | P3-03, P3-17 | ☐ |
 | P3-05 | 2 | `cl-p3-payments-functions` | payments.schema.ts + payments.functions.ts (packages, payments, slips) | P3-01, P0-17, P0-06 | ☐ |
 | P3-06 | 2 | `cl-p3-bookings-functions` | bookings.schema.ts + bookings.functions.ts (book, status, cancel) | P3-01, P0-17 | ☐ |
 | P3-07 | 2 | `cl-p3-session-roster-fn` | getSessionRoster (SessionRoster type, three queries) | P3-01, P2-02 | ☐ |
 | P3-08 | 2 | `cl-p3-admin-copy-families-payments` | Admin copy modules: families and payments | P2-03, P3-01 | ☐ |
 | P3-09 | 5 | `cl-p3-families-list` | /admin/families list screen + nav tab | P3-03, P3-08, P2-04 | ☐ |
 | P3-10 | 6 | `cl-p3-family-overview` | /admin/families/$familyId: page, banners and Overview tab (read + staff note) | P3-09, P3-04 | ☐ |
-| P3-11 | 7 | `cl-p3-family-edit-sheets` | Family Overview edit sheets: guardian, child, contact (soft delete) | P3-10 | ☐ |
+| P3-11 | 7 | `cl-p3-family-edit-sheets` | Family Overview edit sheets: guardian, child, contact (soft delete) | P3-04, P3-10 | ☐ |
 | P3-12 | 8 | `cl-p3-family-packages-history` | Family page: Packages & payments tab and Class history tab | P3-11, P3-05, P3-06 | ☐ |
 | P3-13 | 5 | `cl-p3-roster` | Roster /admin/sessions/$sessionId (check-in/out, pickup, add booking) + cancel warning | P3-07, P3-06, P2-04, P3-03 | ☐ |
-| P3-14 | 6 | `cl-p3-convert-request` | Convert an inbox request into a family (one SQL call) | P3-04, P2-05 | ☐ |
+| P3-14 | 8 | `cl-p3-convert-request` | Convert an inbox request into a family (one SQL call) | P3-04, P3-11, P2-05 | ☐ |
 | P3-15 | 9 | `cl-p3-payments-screen` | /admin/payments screen, slip upload, nav tab, dashboard card | P3-12, P3-09 | ☐ |
 | P3-16 | 2 | `cl-p3-privacy-notice-v2` | Privacy notice …-v2: add every [P3] section and row | P1-02, P1-10, P3-01 | ☐ |
 | P3-17 | 2 | `cl-p3-sql-0005` | Review SQL 0005_consent_health.sql, then G4 (whole file in Stage B, P4 screens later) | P3-01 | ☐ |
 | P3-18 | 3 | `cl-p3-sql-0007` | Review SQL 0007_privacy_ops.sql, then G4 | P3-17 | ☐ |
+| P3-19 | 8 | `cl-p3-follow-up-list` | Follow-up list: families whose guardian opted in to marketing (staff only, nothing is sent) | P3-09, P3-11, P3-17 | ☐ |
+| P3-20 | 8 | `cl-p3-apply-0006a` | Apply sql/0006a (marketing text) after the lawyer review, then wire the marketing checkbox to the published text (human-gated) | P1-02, P3-04, P3-11, P3-16, P3-17 | ☐ |
 | P5-01 | 1 | `cl-p5-privacy-functions` | privacy.schema.ts + privacy.functions.ts core (export, erase, restrict, files to delete) | P3-18, P0-16, P0-17, P0-06 | ☐ |
 | P5-02 | 1 | `cl-p5-admin-copy-privacy` | Admin copy module: privacy (owner card + files to delete) | P3-08 | ☐ |
 | P5-03 | 2 | `cl-p5-family-privacy-card` | Owner privacy card on the family page + restriction banner | P5-01, P5-02, P3-12, P3-04 | ☐ |
 | P5-04 | 2 | `cl-p5-files-to-delete` | /admin/privacy 'Files to delete' tab (owner), nav item, dashboard card | P5-01, P5-02, P3-15 | ☐ |
 | P5-05 | 3 | `cl-p5-retention-check` | Retention, export, erase and restriction check with fake data (human-run) | P5-03, P5-04 | ☐ |
-| P5-06 | 4 | `cl-p5-stage-b-golive` | Stage B go-live check (G9a …-v2, G10) | P3-13, P3-14, P3-15, P3-16, P5-05 | ☐ |
+| P5-06 | 4 | `cl-p5-stage-b-golive` | Stage B go-live check (G9a …-v2, G10) | P3-13, P3-14, P3-15, P3-16, P3-19, P3-20, P5-05 | ☐ |
 | P4-01 | 1 | `cl-p4-sql-0006` | Review consent wording 0006 (+0006b), then G9b and G4 | P3-18, P5-06 | ☐ |
 | P4-02 | 2 | `cl-p4-link-tokens` | link-tokens.server.ts (32-byte tokens, hash only) with tests | P3-17, P0-09, P0-16, P4-01 | ☐ |
 | P4-03 | 2 | `cl-p4-consent-alerts` | staff-notify: consent_withdrawn branch + deliverAlertIds / deliverConsentAlert | P3-17, P2-05, P4-01 | ☐ |
@@ -360,11 +400,12 @@ Batch = depth inside its stage (§ 1.4). Status: ☐ open · ☑ done · `skippe
 | P4-17 | 5 | `cl-p4-family-links` | Family page: parent links tab and consent chips (getFamily P4 fields) | P4-05, P4-11, P4-13, P4-15, P5-03 | ☐ |
 | P4-18 | 6 | `cl-p4-family-consents` | Family page: Consents tab, record dialog, child script | P4-17 | ☐ |
 | P4-19 | 3 | `cl-p4-pending-alerts` | Unsent enrolment/consent alerts: listPendingStaffAlerts + dashboard list | P4-03, P4-15, P5-04, P2-05, P3-14 | ☐ |
-| P4-20 | 2 | `cl-p4-privacy-notice-v3` | Privacy notice …-v3: [P4] sections and the /my sentence | P3-16, P4-01 | ☐ |
+| P4-20 | 2 | `cl-p4-privacy-notice-v3` | Privacy notice …-v3: [P4] sections and the /my sentence | P3-16, P3-20, P4-01 | ☐ |
 | P4-21 | 4 | `cl-p4-media-screen` | /admin/media screen, nav item, dashboard takedown card | P4-12, P4-15, P4-19 | ☐ |
 | P4-22 | 5 | `cl-p4-my-page` | my-consents.tsx copy, MyConsentsPage and the /my/$token route | P4-13, P4-08 | ☐ |
 | P4-23 | 5 | `cl-p4-videos-link` | videos.ts: optional mediaAssetId + takedown note in README | P4-21, P0-13 | ☐ |
-| P4-24 | 7 | `cl-p4-stage-c-golive` | Stage C go-live check (G-HEALTH switch, G9a …-v3, G10) | P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23 | ☐ |
+| P4-24 | 8 | `cl-p4-stage-c-golive` | Stage C go-live check (G-HEALTH switch, G9a …-v3, G10) | P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23, P4-25 | ☐ |
+| P4-25 | 7 | `cl-p4-print-sheet` | Print or save as PDF: enrolment and consent record for signing (health only with includeHealth, audited) | P4-07, P4-11, P4-15, P4-18 | ☐ |
 | P6-01 | 1 | `cl-p6-sql-0008` | Review SQL 0008_reporting.sql, then G4 (Stage D, optional) | P3-18 | ☐ |
 | P6-02 | 2 | `cl-p6-reports-functions` | reports.schema.ts + getReports (aggregates only) | P6-01, P0-17 | ☐ |
 | P6-03 | 3 | `cl-p6-reports-screen` | Admin copy: reports module + /admin/reports screen with CSV | P6-02, P4-15, P4-21 | ☐ |
@@ -533,6 +574,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   1. Copy the ✅ blocks and the test block from 20 §8.6 and §8.7 exactly. Do NOT add HEALTH_IN_SYSTEM yet (card P4-07 adds it).
   2. Add one test: the text built for every kind never contains a name, a phone number or a LINE ID (use the fake inputs from the test block).
   3. Leave TURNSTILE_SITE_KEY = "" and UMAMI_WEBSITE_ID = "".
+  4. (14 Oct 2026, decision 9) Add `PUBLIC_SITE_URL` = `https://cherryleeandco.com` to public-config.ts: plain config, not a secret, no trailing slash. Stop and report if 20 § 8.7 does not name it.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/lib/backend/staff-alert-text.test.ts: all pass
@@ -633,6 +675,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   2. README.md: add a 2–4 line '## Backend (planned)' section before '## Content sources' pointing to docs/backend/README.md and saying nothing is live until the owner enables Lovable Cloud.
   3. AGENTS.md, first 'CherryLee & Co. project notes' bullet (R-46): change only its bold part from 'Copy lives in `src/content/site.tsx`' to 'Copy lives in `src/content/*`' and add after its first sentence: '(homepage: `site.tsx`; backend pages: `booking.tsx`, `privacy.tsx`, `enrol.tsx`, `my-consents.tsx`, `admin/*`)'. Keep the rest of that bullet as it is.
   4. Keep both files' existing wording unchanged otherwise.
+  5. (14 Oct 2026, decision 9) In the new '## Backend' section of AGENTS.md and in the '## Backend (planned)' section of README.md, add one line: the public site is https://cherryleeandco.com (live now), named `PUBLIC_SITE_URL` in the plan. It is the allowed Turnstile hostname and the base for the privacy notice's website and contact fields. Say that the JSON-LD change is a website task outside this plan. No code in this card; the constant itself is not added here.
 - **acceptance:**
   - npx prettier --check AGENTS.md README.md exits 0 (or run --write first)
   - git diff shows changes only outside <!-- LOVABLE:BEGIN --> … <!-- LOVABLE:END -->
@@ -731,7 +774,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** —
 - **steps:**
   1. Create src/content/admin/core.tsx: export type Labels`<K extends string>` = Record`<K, string>`; export type AdminCore = { meta; common; login; shell; dashboard; labels; errors } copied from the reference type; const th: AdminCore and const en: AdminCore copied from the reference th/en objects; export const adminCore: Record`<Lang, AdminCore>` = { th, en }.
-  2. Write labels.allergens as Labels<"peanut" | "tree_nut" | "milk" | "egg" | "wheat" | "soy" | "fish" | "shellfish" | "sesame"> (do not import health.schema). labels.consentPurpose uses ConsentPurpose from @/lib/backend/common.schema; errors uses Record`<AdminErrorCode, string>` from @/lib/backend/result.
+  2. Write labels.allergens as Labels<"peanut" | "tree_nut" | "milk" | "egg" | "flour" | "wheat" | "soy" | "fish" | "shellfish" | "sesame"> (round two, D46: `flour` added) (do not import health.schema). labels.consentPurpose uses ConsentPurpose from @/lib/backend/common.schema; errors uses Record`<AdminErrorCode, string>` from @/lib/backend/result.
   3. Add the §5.1 core keys (errors.family_restricted, dashboard.consentAlerts(n), dashboard.filesToDelete(n)) in Thai and English.
   4. Create src/content/admin/index.ts exactly like the index.ts block in 30 §5 (core only).
   5. Do not create src/content/admin.tsx. Change Thai and English together; Thai staff copy keeps ค่ะ where natural.
@@ -863,7 +906,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 - **agent_name:** `cl-p1-privacy-notice-v1` · **phase:** P1 · **batch:** 2
 - **depends_on:** P1-08
-- **human_gate:** AFTER: owner fills placeholders and approves (G9a for …-v1, lawyer review recommended) before Stage A goes live (card P2-08). Until then draftBanner stays non-null.
+- **human_gate:** AFTER: owner fills placeholders and approves with the Thai PDPA lawyer (G9a for …-v1: owner + lawyer, D38) before Stage A goes live (card P2-08). Until then draftBanner stays non-null.
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §3.4 (single-source note, id/phase table, ✅ privacy.tsx code pattern)
@@ -1145,13 +1188,18 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/30-ui.md §5 reference member settings (type L4667–4703; th L5443–5498; en L6263–6319)
   - docs/backend/30-ui.md §4.1 (add the nav item in the same task)
   - docs/backend/20-server-api.md §11 (query keys)
+  - docs/backend/10-data-model.md §6.3 `studio_settings` (the settings table; `cancel_notice_hours` is a column there, decision 10)
+  - docs/backend/20-server-api.md §9 staff functions row updateStudioSettings (add the new field there first)
 - **creates:** `src/content/admin/settings.tsx`, `src/routes/admin/_staff/settings.tsx`
-- **modifies:** `src/content/admin/index.ts`, `src/components/admin/AdminShell.tsx`
+- **modifies:** `src/content/admin/index.ts`, `src/components/admin/AdminShell.tsx`, `src/lib/backend/staff.schema.ts`, `src/lib/backend/staff.functions.ts`
 - **steps:**
   1. Create src/content/admin/settings.tsx (type AdminSettings = { settings }, th/en from the reference) and add it to index.ts like card P1-12 did.
   2. Create route createFileRoute("/admin/_staff/settings"): owner only (if me.role !== 'owner' show t.errors.forbidden); sections 'บัญชีทีมงาน' (listStaff table, setStaffRole by email, removeStaffRole with AlertDialog, hidden on own row) and 'การตั้งค่าสตูดิโอ' (two Switch + capacity input → updateStudioSettings). Do not build the consent-text section (parked PK-03).
   3. AdminShell: add { to: "/admin/settings", key: "settings", ownerOnly: true } to MORE (widen the declared type if P0-22 typed it).
   4. Query keys ['admin','staff'] and ['admin','settings']; errors via toAdminErrorCode → toast t.errors[code].
+  5. (14 Oct 2026, decision 10) In the 'การตั้งค่าสตูดิโอ' section add one number field for `cancelNoticeHours` (integer, 0 or more, step 1; default shown as 3). Label and hint in TH and EN: the hours of notice needed before a make-up session (it counts from the ORIGINAL session's start). Save through updateStudioSettings. Add the same field to its zod input in staff.schema.ts (integer ≥ 0 only; do not invent an upper limit: report it as an open question) and write it to the studio_settings column `cancel_notice_hours` in staff.functions.ts.
+  6. Do not show the value on the public site, /book or /privacy. The owner may ask for the rule to be published later; that is not decided here.
+  7. Stop and report if types.ts has no `cancel_notice_hours` on `studio_settings` (the column belongs in the 0001 studio_settings table or a fix-forward file that the spec owner adds first).
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - Preview (human): staff user does not see Settings in More; owner can grant and remove a test staff role
@@ -1190,7 +1238,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** `src/components/admin/AdminShell.tsx`, `src/routes/admin/_staff/index.tsx`
 - **steps:**
   1. Copy the ✅ inbox list skeleton (createFileRoute("/admin/_staff/inbox/")).
-  2. Build the detail page from 30 §4.3: contact card with tel: link; for LINE show request.lineHowTo(ref) and, when given, the LINE ID with request.lineHint and a Copy button (never 'add friend'); children; interests; message; team status buttons + staff note → updateBookingRequest; alerts list with resend → retryStaffNotification. No convert button yet (P3-14).
+  2. Build the detail page from 30 §4.3: contact card with tel: link; for LINE show request.lineHowTo(ref) and, when given, the LINE ID as a text hint only (request.lineHint; no copy button, decision 4; never 'add friend'); children; interests; message; team status buttons + staff note → updateBookingRequest; alerts list with resend → retryStaffNotification. No convert button yet (P3-14).
   3. AdminShell: add { to: "/admin/inbox", key: "inbox", Icon: Inbox } to TABS.
   4. Dashboard: add cards t.dashboard.newRequests(n) and t.dashboard.failedAlerts(n) linking to /admin/inbox; show t.dashboard.allClear when both are 0.
   5. Run npx vite build before tsc. Never show last_error raw beyond its short code.
@@ -1505,8 +1553,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 #### P3-04 · families.functions.ts part 2: create from request, save family/guardian/child/contact, soft delete
 
 - **agent_name:** `cl-p3-families-write` · **phase:** P3 · **batch:** 5
-- **depends_on:** P3-03
-- **human_gate:** BEFORE (inherited through P3-03 → P3-02 → P3-01): G-MVP = go and G4 · 0004 marked done in 90 §2 with types regenerated. Read-only check first: src/integrations/supabase/types.ts lists families, guardians, children, family_contacts, create_family_from_request and set_primary_guardian; if not, stop and report "types not regenerated".
+- **depends_on:** P3-03, P3-17 (14 Oct 2026: writes `guardian_consent_records`, which 0005 creates)
+- **human_gate:** BEFORE (inherited through P3-03 → P3-02 → P3-01): G-MVP = go and G4 · 0004 marked done in 90 §2 with types regenerated. Read-only check first: src/integrations/supabase/types.ts lists families, guardians, children, family_contacts, create_family_from_request and set_primary_guardian and (after G4 · 0005) guardian_consent_records; if not, stop and report "types not regenerated".
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
   - docs/backend/20-server-api.md §4 (adminError, adminErrorFromDb, AdminErrorCode incl. family_restricted)
@@ -1515,8 +1563,11 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/20-server-api.md §9.5 (✅ (rev) families.schema.ts block for the input schema names: CreateFamilyFromRequestInput (children[].ageYears), SaveFamilyInput, SaveGuardianInput, SaveChildInput, SaveFamilyContactInput, DeleteFamilyContactInput; and the table rows createFamilyFromRequest … deleteFamilyContact with the paragraph under them)
   - docs/backend/sql/0004_families.sql §14b create_family_from_request and §14c set_primary_guardian (return value and errors)
   - docs/backend/00-overview.md D13, D28, R-21, R-22, R-36, R-39
+  - docs/backend/10-data-model.md §6.9 (guardians), §6.16 (consent_texts: the in-effect `marketing_line` text), §6.17 (staff channels `in_person` or `line`; insert rules)
+  - the `guardian_consent_records` table, its rules and the marketing rows of 20 § 9.5 (the spec owner adds them before this card; if they are missing, stop and report "spec missing: guardian_consent_records")
+  - 90 § 2.1, the 14 Oct 2026 line for decision 2
 - **creates:** —
-- **modifies:** `src/lib/backend/families.functions.ts`
+- **modifies:** `src/lib/backend/families.functions.ts`, `src/lib/backend/families.schema.ts`, `src/lib/backend/families.schema.test.ts`
 - **steps:**
   1. Imports: the six input schemas from ./families.schema, adminError and adminErrorFromDb from ./result, requireStaff from ./auth.middleware. Add and export six `createServerFn` results named exactly createFamilyFromRequest, saveFamily, saveGuardian, saveChild, saveFamilyContact, deleteFamilyContact (00 §10), each `.middleware([requireStaff]).validator(<Name>Input)`, method POST, client `context.supabase`.
   2. createFamilyFromRequest: ONE rpc('create_family_from_request', …) with each child's age_years taken from the input (never matched by index); the RPC returns the bare uuid → return `{ familyId: data }`; on error `throw adminErrorFromDb(error)` (P0002 → not_found, 23514 already converted → invalid_state, 23505 → conflict).
@@ -1526,10 +1577,17 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   6. deleteFamilyContact = update is_active = false with .select('id') (never .delete()); empty result → not_found; an already inactive contact still returns { deleted: true }.
   7. Every update by id chains .select('id') and throws not_found when nothing came back; build payloads without undefined-valued keys (conditional spread); guard array access (20 §9.0).
   8. Errors: saveFamily, saveGuardian, saveChild and saveFamilyContact pass DB errors through adminErrorFromDb, so 23514 'processing is restricted' becomes family_restricted (the database refuses edits of a restricted family, incl. the family row itself, R-36). deleteFamilyContact is allowed for a restricted family.
-  9. No unit-test file: createServerFn handlers are not unit-tested in this plan (20 §7.10 note). The behaviour is checked by cl-reviewer against the §9.5 rows and on the preview in P3-11 and P5-05; say so in your report.
+  9. Server handlers are not unit-tested in this plan (20 §7.10 note). The behaviour is checked by cl-reviewer against the §9.5 rows and on the preview in P3-11 and P5-05; say so in your report. The unit tests in this card are the zod cases in step 15.
+  10. Marketing choice (decision 2, 14 Oct 2026). Pre-check: stop if 20 § 9.5a has no rows for `recordGuardianMarketing` and `getGuardianMarketing`. The purpose is always `marketing_line` and is set on the server; the client never sends a purpose. Nothing is pre-ticked: a choice that was not made writes nothing ("not now" = no row).
+  11. families.schema.ts: add `GuardianMarketingChoiceSchema` and `RecordGuardianMarketingInput` exactly as 20 § 9.5a (strict; `familyId`, `guardianId`, `granted` boolean, `consentTextId` uuid, always sent; `channel` `'in_person' | 'line'`: the staff member says which, 10 § 6.17). Round two (D41, 14 Oct 2026): the only two channels are `line` and `in_person`; there is no paper option. Add `marketingLine: GuardianMarketingChoiceSchema.nullable()` to `CreateFamilyFromRequestInput` (no guardian id: the primary guardian is read after the family exists).
+  12. `recordGuardianMarketing` (staff, `requireStaff`, POST, `context.supabase`): `RecordGuardianMarketingInput`; the guardian must belong to the family (`not_found`); then the shared helper `applyGuardianMarketing` (20 § 9.5a): current state from `current_marketing_consents`; a grant while the family is restricted → `family_restricted`; `consentTextId` must be a current `marketing_line` text, else `invalid_state`; one insert with `recorded_by = context.userId` and `method` from the channel. The SQL validator (0005) is the source of truth: `23514` → `family_restricted` through `adminErrorFromDb`. Never a child id.
+  13. `getGuardianMarketing` (staff, GET, `GetGuardianMarketingInput { lang, familyId? }`): returns `GuardianMarketingPanel` = `{ text, guardians }` (20 § 9.5a). `text` is the in-effect `marketing_line` text in `lang`, or null when none is published. `guardians` gives each guardian's `granted` and `decidedAt` from `current_marketing_consents` (`[]` without `familyId`). Read only.
+  14. `createFamilyFromRequest` (20 § 9.5 row): when `marketingLine` is not null, after the RPC returns the family id, read the primary guardian id (one select on `guardians`). If `granted` is true, run `applyGuardianMarketing`; if false, write nothing. A failure after the family exists does not throw: return `marketingStatus: "not_saved"` (the RPC already committed). Return `{ familyId, marketingStatus }`.
+  15. Tests in families.schema.test.ts: `GuardianMarketingChoiceSchema` requires `consentTextId`, rejects an extra `childId` or `purpose` key (strict object), and rejects channel `paper` (staff channels are `in_person` and `line`; `web` is /my only), and accepts `line` and `in_person` (round two, D41).
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - grep -n "\.delete()" src/lib/backend/families.functions.ts prints nothing
+  - npx vitest run src/lib/backend/families.schema.test.ts: all pass, including the marketing cases (step 15)
 
 #### P3-05 · payments.schema.ts + payments.functions.ts (packages, payments, slips)
 
@@ -1560,12 +1618,21 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
   - docs/backend/20-server-api.md §9.7 (✅ (rev) bookings.schema.ts, ✅ createBooking, 📝 table, race note)
+  - docs/backend/10-data-model.md §6.3 (studio_settings: `cancel_notice_hours`), §6.14 (bookings: status `cancelled` / `cancelled_late` / `absent`, `consumes_credit`, the `cancel_notice_at` and `cancel_notice_channel` columns, `cancelled_at` and `makeup_of_booking_id` (all in 0004 since round two), D40 and D41)
+  - docs/backend/10-data-model.md §7 and 0004 `validate_booking()` (the SQL half of the make-up rule)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 10
 - **creates:** `src/lib/backend/bookings.schema.ts`, `src/lib/backend/bookings.functions.ts`, `src/lib/backend/bookings.schema.test.ts`
 - **modifies:** —
 - **steps:**
   1. Copy the ✅ blocks; add updateBookingStatus (confirm, check_in, check_out with pickup from guardians or ACTIVE authorised contacts of the same family, mark_absent) and cancelBooking (not after attended).
   2. Errors: 23505 on bookings → already_booked; 'no sessions left' → no_credit_left; session full → session_full; others through adminErrorFromDb.
   3. Tests: UpdateBookingStatusInput requires a pickup person for check_out.
+  4. Make-up notice (decision 10, D40 and D41, round two). A make-up booking is created with `makeUpOfBookingId` (20 § 9.7 defines it). Refuse it with `make_up_notice_short` unless the ORIGINAL booking has `status` `cancelled` and its `cancel_notice_at` is at or before the ORIGINAL session start minus `cancel_notice_hours` hours. Read `cancel_notice_hours` from `studio_settings` (one select, never a hard-coded 3). The notice time is `bookings.cancel_notice_at` (the time the LINE message arrived, from the OA chat), not `cancelled_at`.
+  5. Put the pure rule in bookings.schema.ts as `noticeInTime({ noticeAt, sessionStartsAt, noticeHours })` (it replaces `makeUpNoticeOk`), with no server imports, and test it: notice exactly 3 hours before the start with noticeHours 3 → in time; 2 h 59 min before → not in time; noticeHours 0 and notice one minute before the start → in time; notice after the start → not in time. The make-up check also reads the ORIGINAL booking's status: `cancelled_late`, `absent` or any other status → refused (round two, D40).
+  6. The SQL half is in 0004 (round two): `validate_booking()` refuses a make-up row unless the original is a `cancelled` booking of the same child with a notice time, and `check_make_up_notice()` refuses a NULL notice. The server check alone is not enough, so report it if the SQL half is missing.
+  7. Credit rule (round two, D40, 14 Oct 2026; replaces the missed-day sentence of decision 10). `absent` uses one credit (`consumes_credit` true). `cancelled` with `cancel_notice_at` at or before the session start minus `cancel_notice_hours` keeps the credit (`consumes_credit` false). `cancelled_late` uses one credit. The 0004 balance (`validate_booking`, `package_balances`) and 0007 and 0008 counts must match this; stop and report if 0004 does not carry these three statuses or the `consumes_credit` rule.
+  8. Confirm `make_up_notice_short` is in the AdminErrorCode list in 20 § 4 before using it (round two adds it). If it is missing, stop and report; do not invent the code in result.ts.
+  9. Notice fields (round two, D41). `cancelBooking` takes `noticeChannel` (`line` or `in_person`; `web` and `paper` refused) and `noticeAt` (required, not in the future), and writes `cancel_notice_channel` and `cancel_notice_at`. It sends `cancelled` or `cancelled_late` from `noticeInTime`, and reads the status back: the database decides the final status (`validate_booking()` recomputes it), and the server never writes `cancelled_at`. A booking with no notice at all is not cancelled here; staff mark it `absent` (one credit). `mark_absent` saves `absent` and writes nothing else. Tests in bookings.schema.test.ts: `web` and `paper` refused; `line` and `in_person` accepted; a `noticeAt` in the future refused (`notice_in_future`); `noticeInTime` cases from step 5.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/lib/backend/bookings.schema.test.ts: all pass
@@ -1639,7 +1706,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **steps:**
   1. Route createFileRoute("/admin/_staff/families/$familyId") with ?tab (overview default); Tabs shell with only the Overview tab for now.
   2. FamilyBanners: scheduledDeletion(date) when retainUntil is set; per guardian with pendingLinkChanges the linkChangesBanner listing each changed field with its OLD value (family.linkChangeOld) and a button confirmLinkChanges → saveGuardian({ id, confirmLinkChanges: true }). (Restriction banner: P5-03.)
-  3. FamilyOverviewTab: guardian cards (tel: link, LINE ID copy, identityChecked/NotChecked, responsibility tick), children cards (age from birth month, else reportedAge, else ageUnknown), active contacts with role badges, staff note editor (hint: no health details). Edit sheets come in P3-11.
+  3. FamilyOverviewTab: guardian cards (tel: link, the LINE ID as plain text with no copy button (D35, D47), identityChecked/NotChecked, responsibility tick), children cards (age from birth month, else reportedAge, else ageUnknown), active contacts with role badges, staff note editor (hint: no health details). Edit sheets come in P3-11.
   4. Run npx vite build before tsc.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -1648,20 +1715,27 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 #### P3-11 · Family Overview edit sheets: guardian, child, contact (soft delete)
 
 - **agent_name:** `cl-p3-family-edit-sheets` · **phase:** P3 · **batch:** 7
-- **depends_on:** P3-10
-- **human_gate:** —
+- **depends_on:** P3-04, P3-10 (P3-04 added 14 Oct 2026: the marketing server functions)
+- **human_gate:** BEFORE: G4 · 0005 done (`guardian_consent_records`, `current_marketing_consents`), and G4 · 0006a done (the marketing block shows only `marketingLine.noText` until the text exists; the sheet does not go live before it).
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §4.3 Overview bullet (guardianForm, childForm, contactForm, deleteContactConfirm)
   - docs/backend/30-ui.md §1.3 (form pattern)
-  - docs/backend/20-server-api.md §9.5 rows saveGuardian, saveChild, saveFamilyContact, deleteFamilyContact
-- **creates:** `src/components/admin/family/GuardianSheet.tsx`, `src/components/admin/family/ChildSheet.tsx`, `src/components/admin/family/ContactSheet.tsx`
-- **modifies:** `src/components/admin/family/FamilyOverviewTab.tsx`
+  - docs/backend/20-server-api.md §9.5 rows saveGuardian, saveChild, saveFamilyContact, deleteFamilyContact, and (14 Oct 2026) recordGuardianMarketing, getGuardianMarketing
+  - docs/backend/30-ui.md §4.3 Overview, the marketing block on the guardian sheet (spec owner adds it before this card)
+  - docs/backend/10-data-model.md §6.16 (consent_texts, the in-effect `marketing_line` text)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 2
+- **creates:** `src/components/admin/family/GuardianSheet.tsx`, `src/components/admin/family/ChildSheet.tsx`, `src/components/admin/family/ContactSheet.tsx`, `src/components/consent/MarketingConsentBlock.tsx`
+- **modifies:** `src/components/admin/family/FamilyOverviewTab.tsx`, `src/content/admin/families.tsx`
 - **steps:**
   1. Three Sheet forms with react-hook-form + zodResolver using the families.schema inputs; FieldError for messages; Checkbox rows min-h-11, never pre-ticked (responsibility, informed).
   2. ContactSheet remove → AlertDialog deleteContactConfirm → deleteFamilyContact (soft delete, pickup history stays).
   2b. GuardianSheet: the isPrimary checkbox is ticked and disabled on the current primary guardian and starts unticked on the others (30 §4.3 Overview, R-39).
   3. Wire the edit/add buttons in FamilyOverviewTab; invalidate ['admin','family',familyId]; family_restricted shows t.errors.family_restricted.
+  4. (14 Oct 2026, decision 2) MarketingConsentBlock, shown inside GuardianSheet for a SAVED guardian only (a new guardian sees it after its first save). It reads `getGuardianMarketing({ lang, familyId })` and uses this guardian's entry in `guardians`. When `text` is null, the block shows only `marketingLine.noText` and no checkbox (30 § 2.6).
+  5. The block shows the full published text (`ConsentTextBody`) ABOVE its control, never collapsed, under `marketingLine.textHeading`. Mode `ask` (no choice yet): ONE unticked Checkbox labelled `marketingLine.label`, with `marketingLine.notNow` under it. Mode `manage` (a choice exists): the status line (`marketingLine.statusGranted(date)` or `marketingLine.statusNotGranted`). When not granted, the unticked checkbox. When granted, NO checkbox: only the withdraw button `marketingLine.withdraw` (one press). The checkbox is never checked from the stored choice and never pre-ticked. Keys are `marketingLine.*` (30 § 2.6 and § 5.2), not `families.marketing.*`.
+  6. Save: ticked → `recordGuardianMarketing({ familyId, guardianId, granted: true, consentTextId, channel })`, where `consentTextId` is the id from `getGuardianMarketing` (the client never types it) and `channel` is the staff radio (`in_person` or `line`; required; no default; 30 § 2.6). The withdraw button → `recordGuardianMarketing({ ..., granted: false, consentTextId, channel })` with the same radio. Not ticked and never granted → call nothing ("not now" writes no row). Staff never choose `paper` or `web` here. Round two (D41, 14 Oct 2026): the radio has two choices only, LINE (`line`) and in person (`in_person`).
+  7. Copy: every new string is in src/content/admin/families.tsx in TH and EN. Say that the family can change its choice later from their own page (/my) and that the studio contacts families about news only by hand. Touch targets ≥ 44 px; labels on the checkbox and radios; the status line is text, not colour only. The primary-guardian logic and every other field stay unchanged.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
 
@@ -1708,9 +1782,9 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-14 · Convert an inbox request into a family (one SQL call)
 
-- **agent_name:** `cl-p3-convert-request` · **phase:** P3 · **batch:** 6
-- **depends_on:** P3-04, P2-05
-- **human_gate:** —
+- **agent_name:** `cl-p3-convert-request` · **phase:** P3 · **batch:** 8
+- **depends_on:** P3-04, P3-11, P2-05 (P3-11 added 14 Oct 2026: the shared MarketingConsentBlock)
+- **human_gate:** BEFORE: G4 · 0006a (the marketing box stays hidden while `text` is null, so the dialog can be built before it).
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §4.3 '/admin/inbox/$requestId' P3 bullet (convertDialog)
@@ -1722,6 +1796,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **steps:**
   1. inbox.functions.ts getBookingRequest: fill convertedFamilyId from booking_requests.converted_family_id.
   2. ConvertDialog: prefilled family name (guardian name), guardian phone and LINE ID (editable) and each child's nickname (required here) and ageYears from the request. When the request has neither a phone nor a LINE ID (a LINE-path request, D26), show convertDialog.contactNeeded above the two fields; zod contact_required keeps the dialog from submitting until one is filled (R-38). Staff confirm → createFamilyFromRequest → invalidate inbox + families → navigate to the family page.
+  2b. (14 Oct 2026, decision 2) The dialog shows `MarketingConsentBlock` (30 § 2.6, mode `ask`, `src/components/consent/MarketingConsentBlock.tsx`, created by P3-11) below the contact fields. The box is UNTICKED, with the full text above it, when `getGuardianMarketing({ lang })` returns a text. The channel radio (`in_person` or `line`, no default) sits next to the box. When `text` is null the box is hidden and `marketingLine` is sent as `null`. Submit sends `marketingLine` = `{ granted, consentTextId, channel }` or `null`. A `not_saved` status tells staff to record the choice on the guardian sheet (P3-11).
   3. Detail page: show the convert button when not converted; when converted show the convertedTo link instead.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -1748,7 +1823,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 - **agent_name:** `cl-p3-privacy-notice-v2` · **phase:** P3 · **batch:** 2
 - **depends_on:** P1-02, P1-10, P3-01
-- **human_gate:** AFTER: owner approves …-v2 (G9a) before Stage B goes live (card P5-06).
+- **human_gate:** AFTER: owner + Thai PDPA lawyer approve …-v2 (G9a, D38) before Stage B goes live (card P5-06).
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §3.4 (id/phase table)
@@ -1760,6 +1835,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   1. Insert sections family-records and contacts (phase "P3") after 'chat', TH and EN, from 50 §§11.3/11.4.
   2. Add the [P3] rows to the 'sharing' and 'retention' tables and nothing tagged [P4]/[P5]/[P6].
   3. Bump PRIVACY_NOTICE_VERSION to '`<YYYY-MM>`-v2' (month it goes live) and update the `updated` lines; set draftBanner back to the draft text until G9a.
+  3b. Round two (14 Oct 2026): the [P3] sections carry § 3.10 with the nickname bullet (D43) and § 4 with the nickname exception, both from 50 § 11.3 and § 11.4 as now written. § 3.11 (notice by LINE and the credit rule, D40 and D41) is NOT added unless the owner asks in writing to publish it (D36).
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - cl-privacy-checker: every [P3] item of 50 §11.3 present, nothing [P4]
@@ -1769,7 +1845,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 - **agent_name:** `cl-p3-sql-0005` · **phase:** P3 · **batch:** 2
 - **depends_on:** P3-01
-- **human_gate:** BEFORE: owner answers G0 Q15 (what the 4 class clips' consent covered) so media_assets.legacy_consent_purposes in the seed is right; the builder edits only that seed line in the UNAPPLIED draft if needed. AFTER review: builder G4 applies the WHOLE 0005 file (tables and every function, incl. submit_enrolment), git pull, types.ts contains consent_records, child_health and submit_enrolment (args p_link_id, p), rls_smoke.sql no FAIL. Only the P4 screens stay off until Stage C.
+- **human_gate:** BEFORE: G0 Q15 is ☑ (owner certified 14 Oct 2026, D45: all five channels). The seed line must be all five channels with the D45 note; the builder edits only that seed line in the UNAPPLIED draft if it still says website only. AFTER review: builder G4 applies the WHOLE 0005 file (tables and every function, incl. submit_enrolment), git pull, types.ts contains consent_records, child_health and submit_enrolment (args p_link_id, p), rls_smoke.sql no FAIL. Only the P4 screens stay off until Stage C.
 - **reads:**
   - docs/backend/10-data-model.md §§6.16–6.20, 7–11, 13
   - docs/backend/sql/0005_consent_health.sql
@@ -1802,6 +1878,60 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   2. Check rls_smoke.sql covers the new tables and functions; list gaps. Do not edit files.
 - **acceptance:**
   - Read-only review report: one line per check (additive only, RLS on every new table, anon has no grants, every SECURITY DEFINER function has set search_path = '' and explicit revoke/grant, names match 10-data-model.md, safe to run twice, depends-on order) marked PASS or FAIL with file:line; no file changed
+
+#### P3-19 · Follow-up list: families whose guardian opted in to marketing (staff only, nothing is sent)
+
+- **agent_name:** `cl-p3-follow-up-list` · **phase:** P3 · **batch:** 8
+- **depends_on:** P3-09, P3-11, P3-17 (P3-11 added 14 Oct 2026: both cards edit `src/content/admin/families.tsx`)
+- **human_gate:** BEFORE: (1) G4 · 0005 done (`guardian_consent_records`, `current_marketing_consents`). (2) G4 · 0007 done (view `marketing_follow_up_list`; the export health route is decided, D42, so 0007 is no longer blocked by it). (3) The owner's round-two rules are recorded in 90 § 2.1 and 00 § 5: D43 (label "ครอบครัวน้อง" + the child's nickname, staff only) and D44 (one row per granted guardian). If a family has two children, or a child has no nickname, the label rule is still open (00 § 13B a): stop and report "owner decision open (D43 children)". The lawyer checks the changed promise under G9b. AFTER: none beyond the preview check in step 7.
+- **reads:**
+  - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
+  - docs/backend/30-ui.md §4.3 '/admin/families' (the follow-up tab, `?view=follow-up`, and the `families.followUp.*` keys)
+  - docs/backend/20-server-api.md §9.5a (follow-up contract: `listFollowUpFamilies`, `FollowUpRow`)
+  - docs/backend/10-data-model.md §6.17a (view `marketing_follow_up_list`) and §6.9 (guardians)
+  - docs/backend/50-security-privacy.md (data minimisation for staff views)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 2
+- **creates:** `src/lib/backend/follow-up.schema.ts`, `src/lib/backend/follow-up.functions.ts`, `src/components/admin/family/FollowUpList.tsx`
+- **modifies:** `src/routes/admin/_staff/families/index.tsx` (reads the `view` search param), `src/content/admin/families.tsx`
+- **steps:**
+  1. Pre-check: stop and report if 20 § 9.5a has no `listFollowUpFamilies` contract or 0007 has no view `marketing_follow_up_list`. Read-only check: types.ts lists `guardian_consent_records`, `current_marketing_consents` and `marketing_follow_up_list` (after G4 · 0005 and G4 · 0007).
+  2. follow-up.schema.ts: `ListFollowUpFamiliesInput { page }` (non-negative integer, default 0) and the row type `FollowUpRow` exactly as 20 § 9.5a: `{ familyId, familyLabelTh, familyLabelEn, guardianId, guardianName, consentedAt }`. `familyLabelTh` and `familyLabelEn` are built by the view `marketing_follow_up_list` (0007, D43), never by the client. No phone, LINE ID, email, child field other than the nickname inside that label, preferred contact or staff note in the type. Strict zod object.
+  3. follow-up.functions.ts: `listFollowUpFamilies` (staff, GET, `requireStaff`, `context.supabase`): one `select` from `marketing_follow_up_list` with `range(page * 30, page * 30 + 29)` and `count: "exact"`; map only the six keys of `FollowUpRow`. Never export, never log names. One row per granted guardian (D44): the view returns one row per guardian, so a family with two granted guardians gives two rows with the same label.
+  4. Screen: `/admin/families?view=follow-up` (the families index reads the search param; there is no separate route file), component `FollowUpList`. A heading and one short note from the copy file: contact a family only by hand from the studio's LINE OA chat, one family at a time; this list does not send anything. Each row: the family label (`familyLabelTh` in Thai, `familyLabelEn` in English, D43) linked to /admin/families/$familyId, the guardian name, and the consent date (dates.ts; Buddhist year in TH). 30 per page with previous and next buttons (≥ 44 px). An empty-state line when there are no rows.
+  5. Do NOT add any send button, select-all, bulk action, CSV, copy-all, LINE push, email or broadcast. LINE broadcasts stay parked (decision 2).
+  6. families/index.tsx: add one button "รายการติดตาม / Follow-up list" that sets `?view=follow-up`. Nothing else on that screen changes.
+  7. Copy keys in src/content/admin/families.tsx (`families.followUp.*`, TH and EN): title, note, column labels (family · guardian · yes since), empty state, link label. Thai: warm, no fear wording, ค่ะ where natural. Preview check with fake data (human): a granted guardian appears; a withdrawn guardian and a guardian who was never asked do not; a family with two granted guardians shows two rows with the same label (D44); the label shows the nickname only (D43); no child name, age, LINE ID or phone appears anywhere on the page.
+- **acceptance:**
+  - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
+  - cl-privacy-checker: no contact detail, child field or LINE ID in the list or in the output type; opt-in only ('granted', never withdrawn); nothing sent
+  - cl-i18n-checker: TH/EN parity in families.tsx; no "money game"
+  - cl-ui-a11y-checker: links have text; 360 px without horizontal scroll; list markup where the list is styled
+
+#### P3-20 · Apply sql/0006a (marketing text) after the lawyer review, then wire the marketing checkbox to the published text (human-gated)
+
+- **agent_name:** `cl-p3-apply-0006a` · **phase:** P3 · **batch:** 8
+- **depends_on:** P1-02, P3-04, P3-11, P3-16, P3-17 (P3-04, P3-11 and P3-16 added 14 Oct 2026: this card edits their files, so it must come after them)
+- **human_gate:** BEFORE: (1) G9b: owner and Thai PDPA lawyer approved the CORRECTED wording of `sql/0006a_seed_marketing_text.sql` (TH and EN, purpose `marketing_line`). The correction (round two, D43) replaces the promise that a child's information is never used: the staff list shows the child's nickname only, as a label. Use 50 § 12.5 and § 3.10 (TH and EN, LEGAL REVIEW). The earlier text must not be applied. (2) G4 · 0005 done. AFTER: the builder runs G4 · 0006a (applies 0006a the same way as G4 · 0006, git pull, types regenerated if needed, rls_smoke.sql no FAIL) and marks it ☑ in 90 § 2 with the date. Only then do steps 2 to 5 start. The builder applies the SQL; the card agent never runs SQL.
+- **reads:**
+  - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
+  - docs/backend/sql/0006a_seed_marketing_text.sql (written and lawyer-reviewed before this card; if it is missing, stop and report)
+  - docs/backend/10-data-model.md §6.16 (consent_texts) and §6.17 (consent_records: children never get `marketing_line`)
+  - docs/backend/50-security-privacy.md §11.1, §11.3, §11.4 (the [P3] family-records text; the spec owner adds the marketing paragraph there before this card)
+  - docs/backend/30-ui.md §3.4 (privacy id/phase table)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 2
+- **creates:** —
+- **modifies:** `src/components/consent/MarketingConsentBlock.tsx`, `src/content/privacy.tsx`
+- **steps:**
+  1. Builder step (not the agent): G9b and G4 · 0006a as in human_gate. Check that G4 · 0006a is ☑ in § 2.
+  2. Read-only check in the preview with fake data: `getGuardianMarketing` for a fake guardian returns a non-null `text` for `lang` = `th` and again for `lang` = `en` (both published). Stop and report if it returns null.
+  3. MarketingConsentBlock: the block shows the TH or EN text in the page language (both exist; never show only one). The consentTextId sent with a 'granted' decision is the one returned by getGuardianMarketing; the client never types it. If the text is retired later, `text` becomes null, the block shows only `marketingLine.noText` (30 § 2.6), and existing rows stay (10 § 6.16).
+  4. Notice v2 (decision 2: parents are told in notice v2): add to the family-records section (phase "P3") one short paragraph in TH and EN, using the 50 wording: an optional news and offers line, default off, the parent's own choice, changeable later on the parent's own page, on the staff list only the child's nickname as a label (D43), and no other child information used for it, and the studio contacts families about it only by hand. Round two: § 3.11 is not part of this paragraph and is added only if the owner asks (D36). Do not change the version or the draft banner (P3-16 set them). Keep the paragraph under phase "P3"; add nothing tagged [P4] or later.
+  5. Check the child path: `grep -rn "marketing_line" src/lib/backend` lists only guardian-side files (families, follow-up, my), never consent or enrolment files.
+- **acceptance:**
+  - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
+  - cl-privacy-checker: the marketing paragraph matches 50 §11.3/§11.4; default off; nothing tagged [P4] or later
+  - cl-i18n-checker: TH/EN parity in privacy.tsx
+  - grep -c 'phase: "P3"' src/content/privacy.tsx is unchanged from P3-16 (the paragraph adds no section)
 
 ### Stage B · P5 core privacy operations
 
@@ -1903,7 +2033,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 #### P5-06 · Stage B go-live check (G9a …-v2, G10)
 
 - **agent_name:** `cl-p5-stage-b-golive` · **phase:** P5 · **batch:** 4
-- **depends_on:** P3-13, P3-14, P3-15, P3-16, P5-05
+- **depends_on:** P3-13, P3-14, P3-15, P3-16, P3-19, P3-20, P5-05 (P3-19 and P3-20 added 14 Oct 2026: the family follow-up list and the marketing text must be checked before Stage B goes live)
 - **human_gate:** Human: owner approves …-v2 (G9a), confirms sign-up disabled, rls_smoke.sql no FAIL, fixes critical publish-scan findings, deletes all fake test families, then Publish (G10). Only after this may real family data be entered.
 - **reads:**
   - docs/backend/00-overview.md §8.0 Stage B row, §8 P3 acceptance
@@ -2080,6 +2210,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **steps:**
   1. Copy the four ✅ blocks from 30 §3.5 (enrol.tsx incl. health.childRefusedNote and media.currentGranted / currentNotGranted / keepNote, R-33/R-34; HealthSection with the optional childRefused prop; its test incl. the R-34 case). ConsentTextBody renders stored wording as text, never as HTML.
   2. HealthSection: the checkbox label is the consent text title and the full body is shown directly above it; never pre-ticked; 'Not now' records nothing (skipped); 'I don't want to share this' records refused with the declineNote; childRefused shows only childRefusedNote (no box).
+  2b. (14 Oct 2026, round two, D46) If the enrol form asks for allergies, it uses the same ten keys and labels as P4-15 (incl. `flour`, and the nut group "ถั่ว" with `peanut` and `tree_nut`). Do not write a second list by hand.
   3. The new copy lines marked OWNER-APPROVE (childRefusedNote, keepNote) are approved at G9b/G0 Q17 with the rest of the enrol page: copy them unchanged and list them in your report.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -2098,14 +2229,18 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/00-overview.md R-04, R-06, R-33
   - docs/backend/20-server-api.md §9.8 (CurrentMediaDecision, EnrolmentForm.children[].currentMedia)
   - docs/backend/20-server-api.md §8.5 (formatDateTime)
+  - docs/backend/10-data-model.md §6.16 (consent_texts) and §6.20 (media channels, incl. `media_print`)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 3
 - **creates:** `src/components/enrol/MediaSection.tsx`, `src/components/enrol/MediaSection.test.tsx`
 - **modifies:** —
 - **steps:**
   1. Build MediaSection exactly as the 📝 spec: for each purpose in MEDIA_PURPOSES that has a text: bordered block, `<h4>`{title}`</h4>`, `<ConsentTextBody/>`, the current-decision line when `current[p]` exists, then an unticked Checkbox labelled media.agree (checked={value.on[p] === true}, never defaultChecked, never pre-ticked from `current`), then media.keepNote when `current[p]` exists (R-33). No Collapsible, no 'read more'. Face-level RadioGroup (no default) only when a box is ticked.
   2. Tests: every checkbox starts unchecked, also when current says granted; every published purpose's body is visible (toBeVisible); a purpose without a text renders nothing; ticking one shows the face question with nothing selected; a decided purpose shows its status line and keepNote.
+  3. (14 Oct 2026, decision 3) `media_print` is the fifth channel. It gets its own block, its own full text, its own unticked checkbox and its own face question, exactly like the other channels. It is never bundled with another channel. It shows only when its text is published (0006). Its checkbox is never pre-ticked by the print default or by a current decision.
+  4. Test: with all five published media texts, five blocks and five unticked checkboxes render, each with its text visible; with media_print unpublished, four blocks render.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
-  - npx vitest run src/components/enrol/MediaSection.test.tsx: all pass
+  - npx vitest run src/components/enrol/MediaSection.test.tsx: all pass (including the five-channel case)
 
 #### P4-10 · GuardianSection and ContactsSection for /enrol
 
@@ -2164,6 +2299,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   1. Copy the ✅ schema and add the §14.7 types and helpers.
   2. listMediaAssets: three calls, no loops (assets, asset-children with nicknames, ONE rpc media_publishability). saveMediaAsset never writes legacy_consent_purposes. setMediaAssetChildren = ONE rpc set_media_asset_children. markMediaTakenDown sets taken_down + all on_* false.
   3. Tests: a legacy-only asset with no linked children is 'check_manually', never needsTakedown; a youtube asset on the website needs media_youtube too.
+  4. (14 Oct 2026, decision 3) The publishability matrix covers five channels, including `on_print` (`media_print`), from `media_publishability` (0005). `ChannelState` gets the print channel. Test: an asset with `on_print` false is never shown as printable; `markMediaTakenDown` clears `on_print` with the others.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/lib/backend/media.schema.test.ts: all pass
@@ -2177,11 +2313,16 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
   - docs/backend/20-server-api.md §9.12 (✅ (rev) my.schema.ts, ✅ (rev) my.functions.ts)
   - docs/backend/00-overview.md R-27 (all children, inactive labelled), D29
+  - docs/backend/10-data-model.md §6.16, §6.17 (texts; the channel rule for web) and the `guardian_consent_records` rows (the spec owner adds them first)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 2
 - **creates:** `src/lib/backend/my.schema.ts`, `src/lib/backend/my.functions.ts`, `src/lib/backend/my.schema.test.ts`
 - **modifies:** —
 - **steps:**
   1. Copy both ✅ (rev) blocks. getMyConsents loads EVERY child of the family (isActive flag), one consent_matrix call. updateMyConsent inserts one record then deliverConsentAlert. Manage links last 90 days.
   2. Tests: UpdateMyConsentInput needs mediaLevel when granting media; decision 'withdrawn' needs no text id if the schema says so.
+  3. (14 Oct 2026, decision 2) Guardian marketing on /my (20 § 9.12). `getMyConsents` also returns `guardianMarketing` = `GuardianMarketingMine` for the primary guardian of the link: `granted` and `decidedAt` (from `current_marketing_consents`) and `consentText` (the in-effect `marketing_line` text in the page language, or null). Child rows never carry it.
+  4. `updateMyMarketingConsent` (public, POST; name in 20 § 9.12 and the § 6 names table): input `UpdateMyMarketingConsentInput` = `{ token, granted, consentTextId }`, strict (an extra `childId` or `purpose` is refused). `resolveLinkToken(token, "manage")`; the primary guardian; `consentTextId` must be a current `marketing_line` text (either language), else `invalid_input`; current state from `current_marketing_consents`, equal → `ok({ granted })` and nothing written; granting while restricted → `invalid_input` (D28; withdrawing still works); one insert with `channel: "web"`, `method: "checkbox"`, `family_link_id`, no `recorded_by`; no staff alert. Returns `ok({ granted })`.
+  5. Test in my.schema.test.ts: `UpdateMyMarketingConsentInput` accepts `{ token, granted, consentTextId }` and rejects any `childId` or `purpose` key (strict object).
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/lib/backend/my.schema.test.ts: all pass
@@ -2219,12 +2360,16 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/30-ui.md §5 reference members health (type L4405–4418; th L5099–5112; en L5919–5932), consents and childScript (type L4511–4548; th L5248–5291; en L6071–6116), media (type L4549–4579; th L5292–5329; en L6117–6154)
   - docs/backend/30-ui.md §5.1 rows 'health · …'
   - docs/backend/30-ui.md §4.4 (child consent script)
+  - docs/backend/30-ui.md §5.1 health rows (the allergen labels; the spec owner adds the ten labels first (D46))
+  - 90 § 2.1, the 14 Oct 2026 line for decision 8
 - **creates:** `src/content/admin/health.tsx`, `src/content/admin/consents.tsx`, `src/content/admin/media.tsx`
 - **modifies:** `src/content/admin/index.ts`
 - **steps:**
   1. Create the three modules (AdminHealth = { health }, AdminConsents = { consents; childScript }, AdminMedia = { media }) with TH and EN, plus the §5.1 health keys (noInfo, reportedNone(date), removedOn(date), paperForm).
   2. Add all three to index.ts.
   3. The child script keeps 'no is always fine' and never asks about channels the guardian did not allow.
+  4. (14 Oct 2026, decision 8) Allergen labels in src/content/admin/health.tsx, TH and EN. The keys are the values of the 0005 check list, verbatim (round two, D46: ten values, `flour` added; the nine existing ones unchanged): `milk` (นม / Milk), `egg` (ไข่ / Egg), `flour` (แป้ง (ทุกชนิด และผลิตภัณฑ์จากแป้ง) / Flour (all kinds, and products made with flour)), `peanut` (ถั่วลิสง / Peanut), `tree_nut` (ถั่วเปลือกแข็ง เช่น อัลมอนด์ วอลนัท เม็ดมะม่วงหิมพานต์ / Tree nuts, such as almond, walnut and cashew), `wheat` (แป้งสาลี / ข้าวสาลี / Wheat), `soy` (ถั่วเหลือง / Soy), `fish` (ปลา / Fish), `shellfish` (อาหารทะเลเปลือกแข็ง เช่น กุ้ง ปู / Shellfish, such as shrimp and crab), `sesame` (งา / Sesame). Add labels for `other_allergens` (free text) and `foods_to_avoid` (free text) as well. Wrap Thai compound words (ถั่วเปลือกแข็ง, อาหารทะเลเปลือกแข็ง) in `<Nobr>` or U+2060. Round two (D46): show `peanut` and `tree_nut` as one group, "ถั่ว / Nuts", with the two choices as separate checkboxes; keep both keys.
+  5. Round two (D46, 14 Oct 2026): the owner's answer is "แพ้ถั่ว" (nuts: the group ถั่ว, with `peanut` and `tree_nut`) and "แป้ง" (flour, including wheat flour, other flours and all products made from flour: the `flour` key). Both open items are closed. No other label is added. Do not call the list a Thai or official list: no Thai list was found, so copy says "major allergens" at most. The enrol page (P4-08, step 2b) uses the same labels.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - cl-i18n-checker: TH/EN parity; Thai kid-friendly lines kept
@@ -2312,8 +2457,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 #### P4-20 · Privacy notice …-v3: [P4] sections and the /my sentence
 
 - **agent_name:** `cl-p4-privacy-notice-v3` · **phase:** P4 · **batch:** 2
-- **depends_on:** P3-16, P4-01
-- **human_gate:** AFTER: owner approves …-v3 (G9a) before Stage C goes live (card P4-24).
+- **depends_on:** P3-16, P3-20, P4-01 (P3-20 added 14 Oct 2026: both cards edit `src/content/privacy.tsx`)
+- **human_gate:** AFTER: owner + Thai PDPA lawyer approve …-v3 (G9a, D38) before Stage C goes live (card P4-24).
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §3.4 (id/phase table)
@@ -2323,6 +2468,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** `src/content/privacy.tsx`
 - **steps:**
   1. Insert sections health (ONLY if G-HEALTH = system), media and links (phase "P4") after 'contacts', TH and EN; include the [P5] /my sentence in links.
+  1b. (14 Oct 2026, decisions 2, 3, 5) Also in v3, TH and EN, phase "P4": the print channel paragraph (notice section 3.7 in 50 § 11: photos or videos that show children may be printed only with the parent's own choice `media_print`, default off) and the `/my` marketing control paragraph (section 3.10: an optional news line on LINE, default off, changeable on /my; the child's nickname is used only as a staff-only label (D43)). Add a checker line for both. Round two (14 Oct 2026): also in v3, TH and EN, phase "P4": the § 3.6 allergy list with flour and the nut group (D46) and the print-checklist sentence (D42). § 3.11 is not added unless the owner asks (D36).
   2. Add the [P4] paragraph to 'children' and the [P4] rows to 'sharing' and 'retention' (skip health rows if G-HEALTH = paper).
   3. Bump PRIVACY_NOTICE_VERSION to '`<YYYY-MM>`-v3'; draftBanner back to draft text until G9a.
 - **acceptance:**
@@ -2339,10 +2485,11 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/30-ui.md §4.3 '/admin/media'
   - docs/backend/20-server-api.md §14.7 (ChannelState)
   - docs/backend/50-security-privacy.md §17 (takedown runbook)
+  - docs/backend/10-data-model.md §6.20 (media channels, incl. `media_print`) and 90 § 2.1, the 14 Oct 2026 line for decision 3
 - **creates:** `src/routes/admin/_staff/media.tsx`, `src/components/admin/media/MediaAssetSheet.tsx`
-- **modifies:** `src/components/admin/AdminShell.tsx`, `src/routes/admin/_staff/index.tsx`
+- **modifies:** `src/components/admin/AdminShell.tsx`, `src/routes/admin/_staff/index.tsx`, `src/content/admin/media.tsx`
 - **steps:**
-  1. Route createFileRoute("/admin/_staff/media"): lead, 'เพิ่มสื่อ' MediaAssetSheet (media.form.* incl. showsFaces + hint, onParentsGroup, titleHint: never children's names), table: title + kind, children chips with multi-select → setMediaAssetChildren, four channel cells as icon + text from ChannelState, status; needsTakedown rows get a destructive Badge with text, takedownReminder and 'บันทึกว่านำออกแล้ว' → markMediaTakenDown.
+  1. Route createFileRoute("/admin/_staff/media"): lead, 'เพิ่มสื่อ' MediaAssetSheet (media.form.* incl. showsFaces + hint, onParentsGroup, titleHint: never children's names), table: title + kind, children chips with multi-select → setMediaAssetChildren, five channel cells as icon + text from ChannelState (the print cell reads `media_assets.on_print`, 0005, decision 3) (decision 3: the fifth is print; its label key is added to src/content/admin/media.tsx, TH and EN; ChannelState must already include `media_print`, otherwise stop and report), status; needsTakedown rows get a destructive Badge with text, takedownReminder and 'บันทึกว่านำออกแล้ว' → markMediaTakenDown.
   2. AdminShell: add { to: "/admin/media", key: "media", ownerOnly: false } to MORE. Dashboard: takedowns(n) card.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -2365,6 +2512,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   2. Route like /enrol (ssr false, noindex, no-referrer, ?lang). MyConsentsPage: one card per child (every child; inactive labelled), one row per purpose with status text, since(date) and the purpose's full current text visible; Withdraw = one press → updateMyConsent({ decision: 'withdrawn' }) with an aria-live note; Give consent (media) = Dialog with title + full text + unticked agree checkbox + face choice; health has no grant button (healthGrantNote).
   3. MyConsentsPage.test.tsx: withdraw is one press (no confirm dialog); every row shows its full text; an inactive child still has its withdraw buttons.
   4. Run npx vite build before tsc.
+  5. (14 Oct 2026, decision 2) Marketing block on /my, after the children, titled `my.guardianMarketing.title` (TH and EN). Use `MarketingConsentBlock` (30 § 2.6; /my has no channel radio) with `getMyConsents().guardianMarketing`: the full `consentText` above the control, then the status line (granted with the date, or not yet). Not granted: ONE unticked checkbox → `updateMyMarketingConsent({ token, granted: true, consentTextId })`. Granted: no checkbox, one withdraw press → `updateMyMarketingConsent({ token, granted: false, consentTextId })`, with the aria-live note. When `consentText` is null, show only `marketingLine.noText` (no checkbox).
+  6. (decisions 2 and 3) Media rows: one row per published media purpose, so the five channels (incl. media_print) show when their texts are published. Each row shows its full text and status as the others do; nothing is pre-ticked. Add to MyConsentsPage.test.tsx: the marketing checkbox starts unticked; withdraw is one press; the marketing block shows only `marketingLine.noText` when `consentText` is null.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/components/my/MyConsentsPage.test.tsx: all pass
@@ -2392,8 +2541,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-24 · Stage C go-live check (G-HEALTH switch, G9a …-v3, G10)
 
-- **agent_name:** `cl-p4-stage-c-golive` · **phase:** P4 · **batch:** 7
-- **depends_on:** P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23
+- **agent_name:** `cl-p4-stage-c-golive` · **phase:** P4 · **batch:** 8
+- **depends_on:** P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23, P4-25 (P4-25 added 14 Oct 2026: a Stage C feature that must be checked before go-live)
 - **human_gate:** Human: HEALTH_IN_SYSTEM matches G-HEALTH; owner approves …-v3 (G9a); sign-up disabled; rls_smoke.sql no FAIL; seed_dev.sql run in the SQL editor ends with its success row (§§ 6, 7 and 7b PASS lines: health needs consent, withdrawal deletes and alerts, child 10+ rules, R-33 re-enrol keeps media decisions, R-34 child's health "no", R-35 first health text, submit_enrolment scope/link_used); publish-scan findings fixed; Publish (G10).
 - **reads:**
   - docs/backend/00-overview.md §8 P4 acceptance, §8.0 Stage C row
@@ -2408,6 +2557,41 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - Every P4 acceptance line in 00 §8 is checked or listed as open
+
+#### P4-25 · Print or save as PDF: enrolment and consent record for signing (health only with includeHealth, audited)
+
+- **agent_name:** `cl-p4-print-sheet` · **phase:** P4 · **batch:** 7
+- **depends_on:** P4-07, P4-11, P4-15, P4-18 (P4-15 and P4-18 added 14 Oct 2026: this card edits their files, so it must come after them)
+- **human_gate:** BEFORE: G9b done (the sheet prints consent texts and health data); the allergen checklist and the include-health rule are decided by the owner's round-two answer (D42, brief item 3), so the card does not wait for a second confirmation; G-HEALTH decided (if it is `paper`, skip the health branch of step 3 and report); G4 · 0005 done; the print audit function `record_family_print` (in `0005` § 9b) applied with G4 · 0005. AFTER: the owner checks one printed sheet in the preview with fake data, with and without includeHealth, and approves the layout (this is the post-build check of the D42 rule: the allergen checklist on every sheet without the tick, and the notes only with it; it does not block the build); the builder checks one audit row with a read-only SELECT on audit_log (shape only, no values).
+- **reads:**
+  - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
+  - docs/backend/README.md (golden rules: logging; health only through the audited functions)
+  - docs/backend/20-server-api.md §9.9 (listChildConsents), §9.10 (health: get_child_health is audited per call; never a plain select), §7.10 note (handlers are not unit-tested)
+  - docs/backend/10-data-model.md §6.2 (audit_log: "never field values"), §7 (log_audit_event: definer functions only)
+  - docs/backend/30-ui.md §4.3 '/admin/families/$familyId' (Consents tab) and the print route rows (the spec owner adds them first)
+  - src/styles.css `@media print` (the existing rules; this card adds no new print CSS)
+  - 90 § 2.1, the 14 Oct 2026 line for decision 5
+- **creates:** `src/lib/backend/print.schema.ts`, `src/lib/backend/print.functions.ts`, `src/lib/backend/print.schema.test.ts`, `src/routes/admin/_staff/families/$familyId_.print.tsx`, `src/components/admin/print/PrintSheet.tsx`, `src/components/admin/print/PrintSheet.test.tsx`
+- **modifies:** `src/components/admin/family/FamilyConsentsTab.tsx` (one link button), `src/content/admin/consents.tsx` (print copy, TH and EN)
+- **steps:**
+  1. Pre-check: stop and report unless the spec and the SQL drafts define the print audit function `record_family_print(p_family_id uuid, p_include_health boolean)` (14 Oct 2026 proposal: a definer function that calls log_audit_event with action `print_record`, table `families`, row id = the family id, details { include_health }). Read-only check: types.ts lists `record_family_print`.
+  2. print.schema.ts: `PrintSheetInput` = { familyId (uuid); includeHealth (boolean, default false) }. No other fields; strict object.
+  3. print.functions.ts (all staff: `requireStaff`, `context.supabase`; log no content):
+     a. `getPrintSheet(PrintSheetInput)`: the family name; guardians (name, phone, primary badge, parental-responsibility status); children (nickname, age as the family page shows it); active authorised contacts (name, relationship, phone); consent rows (purpose, decision, date, given by, media level, text title and version, and the first 12 characters of `consent_texts.sha256`) from ONE rpc `consent_matrix` call plus the latest records. Health (round two, D42): one rpc `get_child_health` per child on EVERY print, with `p_include_health: includeHealth`, because the allergen checklist always prints (the database audits each call). Keep `foods_to_avoid` and `care_notes` only when includeHealth is true; otherwise drop them before rendering. Never `.from('child_health')`.
+     b. The audit: `getPrintSheet` calls `rpc("record_family_print", { p_family_id, p_include_health })` FIRST, before any other read (20 § 9.16). An error stops the call and nothing is returned, so nothing is printed. There is no separate `logFamilyPrint` function.
+     Do NOT print or return: LINE IDs, staff notes, payment or package data, booking history, slip paths, IPs or tokens (data minimisation; open question for the owner).
+  4. Route `$familyId_.print.tsx` (the trailing underscore keeps the family page layout from wrapping it; confirm the generated path /admin/families/$familyId/print after npx vite build). ssr false; a noindex robots meta; the staff guard comes from the _staff layout. Toolbar, hidden when printing (`print:hidden`): one unticked checkbox "include health" (copy says the allergen checklist always prints, that foods to avoid and care notes print only when this is ticked, and that every print is recorded), and one button "พิมพ์หรือบันทึกเป็น PDF / Print or save as PDF". On press: `getPrintSheet` (the server writes the print audit first and fails closed), then render the sheet, then `window.print()` once it has rendered. If the call fails, nothing is rendered or printed.
+  5. PrintSheet: A4 layout using the existing @media print rules. Header: the studio's name from the site copy, the family name, the print date (formatDateTime from dates.ts). Sections in this order: guardians, children, authorised contacts, consent record (per purpose: title, decision, date, given by, version; the full body is not printed, see the open question), health: the allergen checklist ALWAYS (large and readable: every allergen key with its Thai and English label, marked when the child has it; with no record, the line "no allergy info, check with the family before cooking", never "no allergies"); foods to avoid and care notes ONLY when includeHealth is true (then the heading says staff ticked include health), then two signature blocks: guardian signature and date; staff signature and date. When includeHealth is false the notes (foods to avoid, care notes) are left out of the DOM, not hidden with CSS; the allergen checklist stays.
+  6. Entry link: FamilyConsentsTab gets one button "พิมพ์ใบลงทะเบียนและยินยอม / Print enrolment and consent record" to the print route (≥ 44 px). Nothing else on the tab changes.
+  7. Copy keys in src/content/admin/consents.tsx (TH and EN): every toolbar label, sheet heading, health label and signature label. Plain Thai on a form; no fear wording.
+  8. Tests: print.schema.test.ts: PrintSheetInput defaults includeHealth to false and rejects extra keys. PrintSheet.test.tsx: with includeHealth false, the allergen checklist is in the DOM and no foods-to-avoid or care-notes text is; with includeHealth true the notes render too; with no record the no-info line shows and never "no allergies"; both cases show two signature blocks.
+- **acceptance:**
+  - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
+  - npx vitest run src/lib/backend/print.schema.test.ts src/components/admin/print/PrintSheet.test.tsx: all pass
+  - grep -rn "from(\"child_health\")" src returns nothing
+  - cl-privacy-checker: health only through get_child_health; the allergen checklist on every print, the notes only when includeHealth (D42); getPrintSheet writes the print audit before printing; no content in logs, URLs or titles
+  - cl-ui-a11y-checker: buttons and the checkbox ≥ 44 px with labels; the route is noindex; the toolbar is hidden in print
+  - Preview (human, fake data): one printed page with includeHealth off shows the allergen checklist and no note text; audit_log has one `print_record` row whose details hold only the flag
 
 ### Stage D · P6 Reports (optional)
 
@@ -2651,6 +2835,29 @@ Use them exactly. Names introduced by the spec files are listed in `20-server-ap
 | Query key `["admin", "alerts"]` | dashboard alerts list | P4-19 |
 | `auth.middleware.test.ts` | `src/lib/backend/` | P0-17 (R-40) |
 | `BookingThanks.test.tsx` | `src/components/booking/` | P1-14 (R-45) |
+| `guardian_consent_records` | table (created by `sql/0005`; the spec row is added first) | P3-17 (applies), P3-04 (writes) |
+| `marketing_line` | `consent_purpose` value for guardians only; never on child records | P3-04, P3-20 |
+| `media_print` | `consent_purpose` value, child level with `media_level`, default not granted | P4-09, P4-21 |
+| `sql/0006a_seed_marketing_text.sql` | seed file: marketing text, TH and EN; applied at G4 · 0006a | P3-20 |
+| `cancel_notice_hours` | column of `studio_settings` (integer, default 3) | P1-15, P3-06 |
+| `PUBLIC_SITE_URL` | config constant `https://cherryleeandco.com` (not a secret, D37) | P0-08 (public-config.ts); docs in P0-13 |
+| `/admin/families/$familyId/print` | route file `src/routes/admin/_staff/families/$familyId_.print.tsx` (ssr false, noindex) | P4-25 |
+| `/admin/families?view=follow-up` | search param on the families index (no route file; round two fixes the older name) | P3-19 |
+| `getGuardianMarketing`, `recordGuardianMarketing` | `src/lib/backend/families.functions.ts` | P3-04 |
+| `updateMyMarketingConsent` | `src/lib/backend/my.functions.ts` | P4-13 |
+| `listFollowUpFamilies` | `src/lib/backend/follow-up.functions.ts` | P3-19 |
+| `getPrintSheet` | `src/lib/backend/print.functions.ts` | P4-25 (audits through `record_family_print`) |
+| `record_family_print` | SQL function in `0005` § 9b (definer; calls `log_audit_event`; applied with G4 · 0005) | P4-25 |
+| `print_record` | `audit_log.action` value written for every print (details: the include_health flag only) | P4-25 |
+| `current_marketing_consents` | view: latest marketing decision per guardian | P3-19 |
+| `make_up_notice_short` | AdminErrorCode (add to 20 § 4 first) | P3-06 |
+| `bookings.cancelled_at` | column added to 0004 in round two (set by `validate_booking()`, never by the server); the credit rule uses `cancel_notice_at` (D41) | P3-06 |
+| `FollowUpList` | `src/components/admin/family/` | P3-19 |
+| `MarketingConsentBlock` | `src/components/admin/family/` | P3-11 (created), P3-20 (wired) |
+| `PrintSheet` | `src/components/admin/print/` | P4-25 |
+| `cl-p3-follow-up-list` (card P3-19) | `.claude/agents/cl-p3-follow-up-list.md` (§ 1.7) | P3-19 |
+| `cl-p3-apply-0006a` (card P3-20) | `.claude/agents/cl-p3-apply-0006a.md` (§ 1.7) | P3-20 |
+| `cl-p4-print-sheet` (card P4-25) | `.claude/agents/cl-p4-print-sheet.md` (§ 1.7) | P4-25 |
 
 ---
 
@@ -2717,3 +2924,19 @@ Feature ids (`F…`) come from `00-overview.md` § 8.
 | Click-to-load map (parked) | PK-06 |
 | F6-04 PromptPay page (parked, spec first) | PK-07 |
 | P7 LINE Login / LIFF (parked, decision first) | PK-08 |
+| Guardian marketing opt-in, default off (14 Oct decision 2) | P3-04, P3-11, P3-19, P3-20, P4-13, P4-22 |
+| Print channel `media_print` (14 Oct decision 3) | P4-09, P4-21, P4-22 |
+| Family enrolment and consent sheet for signing (14 Oct decision 5) | P4-25 |
+| Allergen labels: ten values incl. `flour`, nut group (14 Oct decision 8; round two D46) | P0-18, P4-08, P4-15, P4-25 |
+| Make-up notice and missed-day rule (14 Oct decision 10; round two D40 replaces the missed-day sentence) | P1-15, P3-06 |
+| Public domain as `PUBLIC_SITE_URL` (14 Oct decision 9) | P0-13 |
+| Credit rule with notice, D40 (round two): statuses `cancelled` (no credit), `absent` and `cancelled_late` (one credit) | P3-06, P5-01 (0004, 0007, 0008 cross-file) |
+| Notice record, D41 (round two): `bookings.cancel_notice_at`, `bookings.cancel_notice_channel` = `line` or `in_person` | P3-06 |
+| Channels `line` and `in_person` for the marketing choice (D41) | P3-04, P3-11 |
+| Booking status `cancelled_late` (D40) | P3-06 |
+| Allergen key `flour` (D46) and the nut group `peanut` / `tree_nut` | P0-18, P4-08, P4-15, P4-25 |
+| Follow-up label `familyLabelTh` / `familyLabelEn` (built by the view) = "ครอบครัวน้อง" + nickname / "Family of" + nickname (D43) | P3-19, P3-20 |
+| One follow-up row per granted guardian (D44) | P3-19 |
+| Clips certified, `legacy_consent_note` (D45) | P3-17 |
+| Export and print health route, `get_child_health` with includeHealth (D42) | P4-25, P5-01 |
+| LINE OA rule kept (D26, D35; round two D47) | no card change |

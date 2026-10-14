@@ -3,6 +3,8 @@
 Planning document, October 2026. Lovable Cloud is not enabled yet. This file sets the decisions and the names
 every other file in `docs/backend/` must follow.
 
+Updated 14 October 2026 with the owner's decisions: D31–D39 (§ 5), the status of each answer (§ 13A) and the review log (§ 15, R-49 to R-59).
+
 ---
 
 ## สรุปสำหรับเจ้าของสตูดิโอ (Thai summary)
@@ -25,7 +27,7 @@ every other file in `docs/backend/` must follow.
 4. **ทะเบียนครอบครัว** แพ็กเกจ 1 / 4 / 8 ครั้ง (เหลืออีกกี่ครั้ง) การชำระเงิน (ทีมงานตรวจสลิปและบันทึกเองเหมือนเดิม)
    และเช็กชื่อเข้า–ออก พร้อมดูว่าใครมารับน้องได้บ้าง
 5. **ความปลอดภัยและความยินยอม** ข้อมูลแพ้อาหารสำหรับคลาสทำอาหารกับอังเคิลลีเก็บแยกไว้ต่างหาก
-   ผู้ปกครองต้องติ๊กยินยอมเองโดยชัดแจ้ง ความยินยอมเรื่องรูปและวิดีโอแยกเป็นรายช่องทาง ถอนความยินยอมได้ง่ายทุกเมื่อ
+   ผู้ปกครองต้องติ๊กยินยอมเองโดยชัดแจ้ง ความยินยอมเรื่องรูปและวิดีโอแยกเป็นรายช่องทาง (รวมสิ่งพิมพ์ของสตูดิโอ) ถอนความยินยอมได้ง่ายทุกเมื่อ ข่าวสารถึงผู้ปกครองเป็นทางเลือก ตั้งต้นเป็นไม่รับ และทีมงานติดต่อด้วยตนเองทีละครอบครัวเท่านั้น
 6. **งาน PDPA** หน้านโยบายความเป็นส่วนตัว (ไทย/อังกฤษ) ตัวช่วยติดตามคำขอใช้สิทธิของผู้ปกครองพร้อมนับวันครบกำหนด
    บันทึกเหตุข้อมูลรั่วไหล และระบบลบข้อมูลอัตโนมัติเมื่อครบระยะเวลาเก็บ
 7. **รายงานภาพรวม** เช่น จำนวนคำขอต่อสัปดาห์ ที่นั่งเต็มแค่ไหน รายรับต่อเดือน (แสดงเป็นตัวเลขรวม ไม่มีชื่อ)
@@ -61,7 +63,7 @@ every other file in `docs/backend/` must follow.
 | สร้าง LINE OA ใหม่สำหรับแจ้งเตือนทีมงาน (แพ็กเกจฟรี) จากบัญชี LINE ของสตูดิโอเอง | Provider ของ LINE ผูกแล้วเปลี่ยนไม่ได้ ต้องเป็นของสตูดิโอ |
 | สมัคร Cloudflare Turnstile (ฟรี) เพื่อกันสแปมบนฟอร์ม | บัญชีควรเป็นของสตูดิโอ |
 | ใส่รหัสลับ (secrets) ในหน้า Lovable Cloud เอง | ห้ามส่งรหัสลับในแชตหรือเก็บไว้ในโค้ด |
-| ให้นักกฎหมายด้าน PDPA ช่วยดูนโยบายความเป็นส่วนตัวและข้อความขอความยินยอม | เอกสารนี้ไม่ใช่คำปรึกษาทางกฎหมาย |
+| ให้นักกฎหมายด้าน PDPA ตรวจนโยบายความเป็นส่วนตัวทุกฉบับและข้อความขอความยินยอมทุกข้อ (อนุมัติงบแล้ว) | เอกสารนี้ไม่ใช่คำปรึกษาทางกฎหมาย |
 | กด Publish ใน Lovable หลังจบแต่ละขั้น | งานใหม่ขึ้นเว็บจริงเมื่อกด Publish เท่านั้น |
 
 ### ค่าใช้จ่ายโดยประมาณต่อเดือน
@@ -74,7 +76,7 @@ every other file in `docs/backend/` must follow.
 | Cloudflare Turnstile กันสแปม | 0 บาท |
 | สถิติผู้เข้าชมแบบไม่ใช้คุกกี้ (Umami, ไม่บังคับ) | 0 บาท |
 | ค่านักกฎหมายตรวจเอกสาร (จ่ายครั้งเดียว) | ต้องขอใบเสนอราคา |
-| โดเมนของตัวเอง (ไม่บังคับ) | รายปี ตามผู้ให้บริการ |
+| โดเมน cherryleeandco.com (มีแล้ว) | รายปี ตามผู้ให้บริการ |
 
 **สรุป:** ถ้าใช้งานอยู่ในโควตาฟรี ค่าใช้จ่ายเพิ่มต่อเดือนน่าจะประมาณ 0–500 บาท (ยังเป็นการประมาณ ต้องยืนยันหลังเปิด Cloud)
 
@@ -106,10 +108,13 @@ every other file in `docs/backend/` must follow.
 - Online card payments or a payment gateway. Payments stay PromptPay / bank transfer / cash, verified by staff.
 - Replacing LINE chat, or connecting `@cherryleeandco` to the Messaging API / a webhook.
 - Parent accounts with passwords. Parents use single-use links; LINE Login self-service is optional P7.
-- Storing children's photos or videos. Media is referenced by YouTube id / title only.
-- Marketing broadcasts, email newsletters, or collecting marketing consent.
+- Storing children's photos or videos. No media files are stored: media is referenced by YouTube id or title, and print uses are recorded by reference (media_print, decision 3).
+- Bulk or automated marketing: no broadcasts, no email newsletters, no automated sends. The only marketing is family
+  follow-up for guardians who opted in (`marketing_line`, D31). Staff contact them by hand from the studio's LINE OA
+  chat, one family at a time.
 - Advertising pixels, GA4, cookie banners (we stay cookieless instead).
-- Inventing studio policy: refunds, cancellations, package expiry, make-up sessions, group size, lunch.
+- Inventing studio policy: refunds, deposits, or any rule the owner has not given. Rules the owner has given are recorded
+  in § 13A and D36 only.
 
 ---
 
@@ -187,8 +192,8 @@ every other file in `docs/backend/` must follow.
 | P0 | `user_roles`, `audit_log`, `studio_settings` | — | `/admin/login`, `/admin` |
 | P1 | `booking_requests`, `rate_limit_events`, `staff_notifications` | `/book`, `/privacy` | `/admin/inbox`, `/admin/inbox/$requestId`, `/admin/settings` (owner: staff roles, studio settings) |
 | P2 | `sessions` | open dates on `/book` (+ optional homepage widget) | `/admin/sessions` |
-| P3 | `families`, `guardians`, `children`, `family_contacts`, `package_purchases`, `payments`, `bookings`; bucket `payment-slips` | — | `/admin/families`, `/admin/families/$familyId`, `/admin/sessions/$sessionId` (roster), `/admin/payments` |
-| P4 | `consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets`, `media_asset_children`; bucket `consent-evidence` | `/enrol/$token`, `/my/$token` (moved from P5, D27) | `/admin/media`; health + consent panels on family and roster pages |
+| P3 | `families`, `guardians`, `children`, `family_contacts`, `package_purchases`, `payments`, `bookings`, `guardian_consent_records` (D31); bucket `payment-slips` | — | `/admin/families`, `/admin/families/$familyId`, staff follow-up list (P3-19), `/admin/sessions/$sessionId` (roster), `/admin/payments` |
+| P4 | `consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets`, `media_asset_children`; bucket `consent-evidence` | `/enrol/$token`, `/my/$token` (moved from P5, D27) | `/admin/media`; health + consent panels on family and roster pages; `/admin/families/$familyId/print` (P4-25, D33) |
 | P5 | `dsr_requests`, `breach_incidents`; restriction columns on `families` | — | owner privacy card on the family page (export, erase, restrict) and `/admin/privacy` "files to delete" (core); DSR tracker, breach log, audit viewer and consent-text publishing UI are **parked** (D27) |
 | P6 | report views | (optional `/pay/$token`) | `/admin/reports` |
 | P7 | (optional) `guardians.line_user_id` | LINE Login / LIFF | — |
@@ -231,6 +236,27 @@ Each decision has an id so the other files can point to it.
 | D28 | **Restriction (PDPA s.34) is real data**, not a status trick: `families.processing_restricted_at` + `restriction_note`, set only by the owner through `set_family_restriction()`. While set, the database refuses new bookings, enrol links, granted consents and profile edits (withdrawals still work); the family is never marked inactive or auto-erased. | `families.status` is system-managed and recomputed nightly, so it can't carry a restriction. |
 | D29 | **Consent-change alerts come from the database.** An AFTER INSERT trigger on `consent_records` queues a `consent_withdrawn` staff notification whenever a guardian's or child's decision moves away from `granted` (any channel). Server code then pushes the queued row (`deliverConsentAlert`); unsent rows show in the admin with a resend button. | Every path (web enrol, `/my`, staff recording, a 10+ child's "no") starts the takedown/health runbook. |
 | D30 | **Multi-row writes run in one SQL transaction**: `create_family_from_request`, `submit_enrolment` (locks the link row), `publish_consent_text`, `set_media_asset_children`, `set_primary_guardian` (R-39). Screens that need many rows use one set-returning function: `get_sessions_with_seats`, `consent_matrix`, `media_publishability`. | No half-written families or consent texts; no per-row RPC loops on Workers. |
+| D31 | **Family follow-up and sales only by opt-in (`marketing_line`).** A guardian purpose, never a child purpose. Default **off**: a separate unticked box with the full text above it, asked when a family record is created (P3-04) and in the P3-11 edit sheets; changed on `/my` (P4-13, P4-22) or by staff. Stored in the new append-only table `guardian_consent_records`, not in `consent_records` (which is per child). Staff see a follow-up list of families who said yes (P3-19) and contact them **by hand** from the studio's LINE OA chat, one family at a time. **No bulk or automated sends**; LINE broadcasts stay parked. Restricted families (D28) are never on the list. Text: `sql/0006a_seed_marketing_text.sql` (G4 · 0006a). | Owner wants family records as a customer base for follow-up and sales (answer 19). Opt-in, guardian-only and by-hand contact keep it within PDPA s.19, s.21 and s.32 and within the OA limits (D6, D26). |
+| D32 | **Print is a media channel: `media_print`.** Added to `consent_purpose` in `0005`, with the same rules as `media_social` (child-level, `media_level`, default not granted). Its TH/EN text is in `0006` (lawyer reviewed). A separate control in MediaSection (P4-09) on `/enrol` and `/my`, in the publishability matrix and the admin media screen (P4-21). The five media channels are now five separate boxes: `media_parents_group`, `media_website`, `media_social`, `media_youtube`, `media_print`. | Owner uses print (answer 9). Each channel needs its own consent (s.19), so print is never bundled with the others. |
+| D33 | **Export for signature (card P4-25).** Staff print or save as PDF a family's enrolment and consent record at `/admin/families/$familyId/print` (`ssr: false`, noindex). Browser print with the existing `@media print` rules; no PDF package; nothing stored on the server; signature lines included. Health appears only through the audited health function, and only when staff tick "include health" for that print. Every print is written to `audit_log` (action, family id, date; never the content). | Owner wants paper for signing while staying fully online (answers 7 and 18). Printing keeps health data out of files unless staff choose it, and every print is traceable. |
+| D34 | **Keep Lovable Cloud (= Supabase).** No separate Supabase account. Gates G1 and G2 are unchanged. | Owner: "if already doing it, no need to redo" (answer 20). Lovable Cloud is Supabase underneath, so the plan as written already is the Supabase plan. |
+| D35 | **The LINE OA contact rule stands (D26).** Parents message `@cherryleeandco` first, or add the OA themselves. Staff never add a parent by LINE ID, and no screen asks staff to copy a parent's LINE ID in order to add them (any such copy is removed). Staff reply only in chats the family started. | The OA cannot add or message a user who has not messaged it (platform limit). This overrides the "yes, add friends" answer (16) for adding friends, and keeps family data off personal phones (D6, D7). The owner confirms this reading in one line. |
+| D36 | **Cancellations and make-up.** Packages never expire. Siblings may share a package. A missed day does not deduct a credit (**superseded by D40**). A make-up session needs notice of at least **3 hours before the original session starts**. The setting `studio_settings.cancel_notice_hours` (integer, default 3) is enforced in the make-up booking check. The site may publish this rule only if the owner asks. | Owner's answer 4. A setting lets the owner change the notice without a code change. Nothing is published until the owner asks. |
+| D37 | **Domain: `https://cherryleeandco.com` (live; G13 done).** Used as `PUBLIC_SITE_URL`, as the Turnstile hostname (whether it covers `www.` is UNVERIFIED: check in the Cloudflare console before G7; if not, list `www.cherryleeandco.com` as its own hostname), and as the absolute base for JSON-LD and for the privacy notice's website field. The JSON-LD change is a website task, not part of this plan. | Owner already has the domain (answer 11). One address for alert links, bot checks and the notice. |
+| D38 | **Lawyer review approved (budget).** A Thai PDPA lawyer reviews **every notice version** (v1, v2, v3 and later) and **every consent text** (`0006`, `0006a` and any later text), with the OWNER-APPROVE lines and the D11 rule. G9a and G9b are "owner + lawyer, budget approved". G9b is approved before `G4 · 0006a` (Stage B) and before `G4 · 0006` (Stage C). No Stage C go-live before G9b. The Stage A notice (v1) also goes to the lawyer before P2-08. | Owner: "ได้ ให้ฝ่ายกฎหมายตรวจ" (yes, the legal team reviews). This overrides the "no lawyer budget" answer (12). Stage B now needs the lawyer too, because the marketing text ships in Stage B. |
+| D39 | **Allergen list: the nine FDA major food allergens.** `milk`, `egg`, `peanut`, `tree_nut`, `wheat`, `soy`, `fish`, `shellfish`, `sesame`, plus `other_allergens` (free text) and `foods_to_avoid`. This matches the existing CHECK list on `child_health.allergens` in `0005`, so there is no enum change. Thai labels go into the copy (`30-ui`). The list is not claimed to match a Thai list (none was found). | Owner asked for a general list (answer 8). The owner still confirms "แพ้ทั่ว" (probably ถั่ว) and "แพ้แป้ง" (wheat flour, or another flour?) before the labels are final. |
+| D40 | **Credit rule with notice (round two, item 1).** A booking cancelled **with notice** at or before *session start − `cancel_notice_hours`* keeps its credit: status `cancelled`, no deduction. An **absent** booking (no notice), and a cancellation with notice later than that, use one credit: status `absent` or `cancelled_late`. Staff still record absent or cancelled (D16); a cancellation with late notice is saved as `cancelled_late`. A make-up needs the same notice (D36). A studio cancellation of a whole session is also `cancelled`, with no notice channel and no notice time, and keeps the credit; the reports count it apart (0008 `cancelled_studio`). **Overrides** D36's "a missed day does not deduct a credit" and the D16 balance rule that only `cancelled` bookings are free. | Owner: "ขาดโดยไม่แจ้ง หักเครดิต แจ้งก่อน 3 ชั่วโมงไม่หัก" (no notice, a credit is deducted; notice 3 hours before, no deduction). The 3 hours stay a setting, so the owner can change them without a code change. |
+| D41 | **Notice by LINE (round two, item 2).** The cancellation notice comes by LINE or in person. Staff record it on the booking screen with `cancel_notice_at` = the time the LINE message arrived (taken from the OA chat) and `cancel_notice_channel` = `line` or `in_person`. No paper channel and no web notice form in this scope. **Extends** D36 (the notice record). | Owner: "แจ้งทางไลน์" (notice is given on LINE). The OA chat already shows the arrival time, so staff need no new tool. |
+| D42 | **One health route for export and print (round two, item 3).** The export (`export_family_data`, 0007) and the print sheet (P4-25) read health ONLY through `get_child_health`, with the staff's explicit `includeHealth` choice for that export or print. The plain join in `export_family_data` is removed: there is no second route. The print sheet always shows the **allergen checklist** (large, Thai and English labels) so teachers can use it in class. Other health notes (foods to avoid, care notes) print only when `includeHealth` is true. For an export, `includeHealth` false means no health in the file. Every print is audited (D33). **Refines** D33 and **overrides** D33's rule that health appears only when "include health" is ticked, for the allergen checklist only. | Owner: "ก็เลือกสักวิธี เอาที่อ่านได้แล้ว คนเอาไปใช้งานตอนทำคลาสได้" (choose one method that is readable and that people can use in class). A cooking-class sheet without the allergens would be unsafe (R-07). |
+| D43 | **Follow-up label = "ครอบครัวน้อง" + the child's nickname, staff only (round two, item 4).** The staff follow-up list (P3-19) labels each family "ครอบครัวน้อง" + the child's **nickname** (for example "ครอบครัวน้องมะลิ"); English "Family of <nickname>". Nickname only: never a full name, age or health data. Staff only: never shown publicly and never sent. The notice (§ 3.10) and `0006a` say this truthfully and go to the lawyer under G9b. **Overrides** D31's promise that a child's information is never used, for this one label, and the README golden rule that says the same. | Owner: "ใช้ชื่อเด็ก และเป็น ครอบครัวน้อง" (use the child's name, as "ครอบครัวน้อง..."). The nickname is the least of the child's name that keeps the list readable for staff, and the promise has to match the practice. |
+| D44 | **One follow-up row per granted guardian (round two, item 5).** A family with two guardians who both said yes to `marketing_line` has **two rows** in the follow-up list. Each row shows the family label (D43) and that guardian's name. One guardian's withdrawal removes only that guardian's row. The view `marketing_follow_up_list` (0007) and 20 § 9.5a follow this. **Refines** D31 (the list is per guardian, not per family). | Owner: "สองแถว" (two rows). Each guardian's choice is a guardian purpose (D31), so each row is one guardian's own choice. |
+| D45 | **Class clips consent certified (round two, item 6; G0 Q15 ☑).** On 14 Oct 2026 the owner certified that parents agreed to **all five channels** for the four class clips: website, parents' LINE group, social, YouTube and print. `legacy_consent_purposes` = all five. `legacy_consent_note` = "Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents' LINE group, social, YouTube, print)". The builder still runs the session-setting step at G4 · 0005. The lawyer checks the legacy cover under G9b. **Overrides** R-55's condition that a written source must be recorded before G4. | Owner: "ใช่ รับรองแล้ว ไม่มีปัญหาเลย" (yes, certified, no problem). |
+| D46 | **Allergen `flour`, and the nut group (round two, item 7).** Add `flour` to the allergens check in `0005`, and keep `wheat` as its own key. Labels: `flour` = "แป้ง (ทุกชนิด และผลิตภัณฑ์จากแป้ง)" / "Flour (all kinds, and products made with flour)"; `wheat` = "แป้งสาลี / ข้าวสาลี" / "Wheat". Nuts are one group, "ถั่ว" / "Nuts", with two keys: `peanut` (ถั่วลิสง) and `tree_nut` (ถั่วเปลือกแข็ง). **Overrides** D39's "nine values, no enum change": the check list gets one more value (an additive CHECK change). | Owner: "แพ้ถั่ว ใช่ แป้ง รวมทั้งแป้งสาลี แป้งอย่างอื่น ผลิตภัณฑ์จากแป้งทั้งหมด" (nut allergy yes; flour covers wheat flour, other flours and all products made from flour). The open "แพ้ทั่ว" and "แพ้แป้ง" questions are closed. |
+| D47 | **LINE OA rule kept (round two, item 8).** D26 and D35 stand: parents message `@cherryleeandco` first, or add the OA themselves. No LINE ID copying and no adding by ID. No change. | Owner: "คงไว้" (keep it). This is the one-line confirmation of D35's reading that the owner was asked for. |
+
+**Numbering and overrides (14 Oct 2026).** The owner's decisions use D31–D39. The lawyer decision was first listed as D30, but D30 already means multi-row writes, which many files cite, so the lawyer decision is **D38** (R-59). D1–D29 are not changed. D31 overrides the "no marketing" statements in §§ 1, 5 and 6. D38 overrides the "no lawyer budget" answer. D35 keeps D26 and overrides the owner's answer 16 for adding friends. The clips' legacy seed (R-55) is a review note, not a D-number.
+
+**Round two (14 Oct 2026, the owner's second set of answers): D40–D47.** Each row says what it overrides or refines. In short: **D36** (a missed day no longer free: D40), **D16** (the balance rule: `absent` and `cancelled_late` use a credit: D40), **D31** (the child's information is no longer "never used" for the one follow-up label: D43; the list is per guardian: D44), **D33** (the allergen checklist prints without the include-health tick: D42), **D39** (ten allergen values and the nut group, not nine: D46), **R-55** (the clips' written-source condition: D45). **D26** and **D35** are confirmed, not changed (D47). D1–D29 and the other D30–D38 stand as before.
 
 ---
 
@@ -242,10 +268,10 @@ Lawful bases refer to the Thai PDPA. Retention periods are **proposals the owner
 |---|---|---|---|---|
 | **0. Visiting the site** | — | Nothing stored by us. Browser `localStorage` keeps the language choice. Turnstile runs on `/book` only. YouTube loads after "play". Google Maps iframe contacts Google (parked option, card PK-06: click-to-load). | Not needed (functional) | — |
 | **1. Booking request** (`/book`) | Parent | What to call the parent (`guardian_name`); how they want to talk (`line` = they send the ref code to @cherryleeandco, or `phone` = call back); phone number (required only for `phone`); LINE ID (optional matching hint, D26); for each child (1–3): nickname (optional) and age in years (6–12); package interest (`single`/`four`/`eight`/not sure); preferred day or a session date; optional message (hint: "please don't include health details here"); page language; privacy-notice version. Server adds a reference code. An HMAC of the IP is kept 24 h for rate limiting. | s.24(3) pre-contract | 6 months |
-| **2. Confirmed booking** (staff, admin) | Staff | Family record: guardian name, phone/LINE ID; child nickname and birth month (or age until enrolment); package purchase; payments (amount, method, date, receipt no., optional slip image); seat bookings. | s.24(3) contract; payments also s.24(6) accounting | Profile: 12 months after last activity. Payments/packages: 5 years after the accounting year (accountant to confirm). |
-| **3. Enrolment link** (`/enrol/$token`, before the first session) | Parent | Confirms guardian details and the statement "I have parental responsibility for this child"; child birth month (YYYY-MM); **health (optional, separate unticked explicit-consent box)**: allergen chips, other allergens, foods to avoid (no reason asked), care notes; **media consent per channel** (`media_parents_group`, `media_website`, `media_social`, `media_youtube`) + face visible / face hidden; emergency contacts and authorised pickup persons (name, phone, relationship) with "I've told them and shared the privacy notice". | Profile/contacts: s.24(3)/(5); health: s.26 explicit consent; media: s.19/s.20 consent | Health: deleted on withdrawal or 6 months without a booking. Contacts: with the profile. Consent evidence: life of the consent + 3 years. |
+| **2. Confirmed booking** (staff, admin) | Staff | Family record: guardian name, phone/LINE ID; child nickname and birth month (or age until enrolment); package purchase; payments (amount, method, date, receipt no., optional slip image); seat bookings; the guardian's follow-up choice (`marketing_line`, default off, D31). | s.24(3) contract; payments also s.24(6) accounting; follow-up only by consent (s.19) | Profile: 12 months after last activity. Payments/packages: 5 years after the accounting year (accountant to confirm). |
+| **3. Enrolment link** (`/enrol/$token`, before the first session) | Parent | Confirms guardian details and the statement "I have parental responsibility for this child"; child birth month (YYYY-MM); **health (optional, separate unticked explicit-consent box)**: allergen chips, other allergens, foods to avoid (no reason asked), care notes; **media consent per channel** (`media_parents_group`, `media_website`, `media_social`, `media_youtube`, `media_print`, D32) + face visible / face hidden; emergency contacts and authorised pickup persons (name, phone, relationship) with "I've told them and shared the privacy notice". | Profile/contacts: s.24(3)/(5); health: s.26 explicit consent; media: s.19/s.20 consent | Health: deleted on withdrawal or 6 months without a booking. Contacts: with the profile. Consent evidence: life of the consent + 3 years. |
 | **4. First session** (in person) | Staff | Child's own consent (age 10+) for media and agreement to health info, via a kid-friendly script; guardian identity check if not done; check-in / check-out times and who picked up. | s.20(1); s.24(3)/(5) child safety | Attendance 24 months |
-| **5. Ongoing** | Staff / parent | Attendance, package balance, payments, consent changes (via `/my/$token` or LINE). | As above | As above |
+| **5. Ongoing** | Staff / parent | Attendance, package balance, payments, consent changes (via `/my/$token` or LINE), including the follow-up choice (`marketing_line`). | As above | As above |
 | **6. End** | System / owner | Automatic purge; rights requests (export, erasure) handled by the owner. | s.33, s.37(3) | Rights-request log 3 years |
 
 ### What we deliberately do NOT collect
@@ -257,7 +283,8 @@ Lawful bases refer to the Thai PDPA. Retention periods are **proposals the owner
 - Raw IP addresses, device fingerprints, cookies, advertising IDs, LINE chat content.
 - Payer bank account numbers (slip images only if staff choose to upload one).
 - Photos or videos of children (media is referenced by YouTube id and title only).
-- Marketing consent (there is no marketing channel in scope).
+- Marketing consent other than the guardian opt-in `marketing_line` (D31). Never for children, no bought or shared
+  contact lists, no advertising pixels.
 
 ---
 
@@ -272,6 +299,7 @@ Lawful bases refer to the Thai PDPA. Retention periods are **proposals the owner
 | Packages, bookings, attendance | — | — | read/write | + void | — |
 | `payments` | — | — | read, create, mark paid | + void/refund, delete slip | — |
 | Consent records | — | append for own family | append (paper / in person / child) | + publish consent texts | append |
+| Guardian follow-up choice (`guardian_consent_records`, D31) | — | append own family's choice (`/my`) | append (record a parent's choice); read for the follow-up list (P3-19) | same | append |
 | Media assets | — | — | read/write | same | — |
 | DSR, breach log, audit log, staff roles, settings | — | — | — (settings: read) | read/write | — |
 
@@ -291,9 +319,9 @@ when its acceptance criteria pass on the Lovable preview **and** the owner has p
 
 | Stage | Phases | Ships | Gate before it starts | Gate before it goes live |
 |---|---|---|---|---|
-| **A · MVP** | P0, P1, P2 (P2 screens recommended, can be skipped; `0003` is applied either way because `0004` builds on it) | admin login, `/book`, inbox, LINE staff alerts, `/privacy` (notice `…-v1`), sessions + seats | G0–G3 | G4 per SQL file, G5–G8, **G9a (notice v1)**, G10 |
+| **A · MVP** | P0, P1, P2 (P2 screens recommended, can be skipped; `0003` is applied either way because `0004` builds on it) | admin login, `/book`, inbox, LINE staff alerts, `/privacy` (notice `…-v1`), sessions + seats | G0–G3 | G4 per SQL file, G5–G8, **G9a (notice v1)** (owner + lawyer, D38), G10 |
 | **G-MVP** | — | Owner go/no-go after **≥ 8 weeks** of real use: number of web requests, staff time saved, whether family records are wanted at all. "No" = stop here; Stage A keeps working on its own. | — | — |
-| **B · Records** | P3 + **P5 core** | families, packages, payments, bookings, roster/attendance; retention job v4, export, erase, restriction, files-to-delete; notice `…-v2` with the `[P3]` sections | **G-MVP = go**, G11 noted | 0004, **0005 and 0007 applied** (retention/erase for families live in 0007, which depends on 0005's tables; P4 screens stay off), **G9a (notice v2)**, G10 |
+| **B · Records** | P3 + **P5 core** | families, packages, payments, bookings, roster/attendance; retention job v4, export, erase, restriction, files-to-delete; notice `…-v2` with the `[P3]` sections | **G-MVP = go**, G11 noted | 0004, **0005 and 0007 applied** (retention/erase for families live in 0007, which depends on 0005's tables; P4 screens stay off), **G4 · 0006a** (marketing text, after G9b, D31 and D38), **G9a (notice v2)**, G10 |
 | **C · Consent & safety** | P4 (incl. `/my/$token`, moved from P5 so web consent can be withdrawn on the web from day one) | enrol link, media consents, child 10+ consent, takedown alerts, `/admin/media`; allergy data **only if G-HEALTH = system**; notice `…-v3` with `[P4]`/`[P5]` sections | **G-HEALTH** decided, G0 Q9 + Q15 answered, **G9b** | 0006 (+ 0006b only if G0 Q9 = yes), **G9a (notice v3)**, G10 |
 | **D · Reports** (optional) | P6 core (0008 + `/admin/reports`) | aggregates only | owner asks for it | G4 (0008), G10 |
 | **Parked** | F5-02 DSR tracker / breach log / audit viewer UI, F5-05 consent-text publishing UI, F6-03 Umami, F6-04 PromptPay page, F6-05 Resend, P7 LIFF | — | owner explicitly un-parks one item (**G-PARK**) | its own cards and gates |
@@ -428,12 +456,19 @@ Goal: the studio's day-to-day records in one place.
   authorised pickup person), attended / absent.
 - **F3-07** `/admin/payments`: pending payments to verify, paid this month.
 - **F3-08** Privacy notice `…-v2`: add every `[P3]` section (family records, payments, attendance, contacts, retention
-  rows) before Stage B goes live (G9a).
+  rows, and the guardian follow-up opt-in in § 3.10 of the notice) before Stage B goes live (G9a, lawyer D38).
+- **F3-09** Guardian follow-up opt-in (D31): the unticked `marketing_line` box on the create-from-request screen (P3-04)
+  and in the P3-11 edit sheets, with the full text above it; a staff-only follow-up list of families who said yes
+  (card **P3-19**). Contact only by hand from the LINE OA chat, one family at a time. No bulk or automated sends.
+  Restricted families (D28) are left off the list.
+- **F3-10** Marketing text: apply `sql/0006a_seed_marketing_text.sql` at **G4 · 0006a** (card **P3-20**), after G9b
+  approves the text and before the family create screens go live.
 
 Acceptance: on test data, request → family → 4-session package → payment marked paid → two bookings → check-in/out →
 balance shows 2 left and seats left drops by 2; a `staff` user cannot void payments or delete families (owner can);
 `audit_log` has rows for each write on families/guardians/children/contacts/payments with the staff user id;
-deleting a contact keeps the "picked up by" record; notice `…-v2` live.
+deleting a contact keeps the "picked up by" record; notice `…-v2` live; the marketing box is unticked by default on
+both family screens, the follow-up list shows only granted and unrestricted families, and `0006a` is applied only after G9b.
 
 ### P5 core · Privacy operations needed by Stage B
 
@@ -488,7 +523,13 @@ used; parents can withdraw on the web as easily as they gave consent.
 - **F4-08** `videos.ts`: optional `mediaAssetId` on `Video`; README note on the takedown steps.
 - **F4-09** Parent `/my/$token` "ความยินยอมของฉัน / My consents" (moved from P5): current consents for **every** child of
   the family (inactive ones labelled), withdraw or grant with one click, full text visible; staff create/revoke manage links (90 days).
-- **F4-10** Privacy notice `…-v3`: add every `[P4]` section and the `/my` part of `[P5]` before Stage C goes live (G9a).
+- **F4-10** Privacy notice `…-v3`: add every `[P4]` section and the `/my` part of `[P5]` before Stage C goes live (G9a, lawyer D38).
+  The v3 notice also covers the print channel (§ 3.7) and the `/my` marketing control (§ 3.10).
+- **F4-11** Print channel (D32): the `media_print` box in MediaSection on `/enrol` and `/my` (card **P4-09**), in the
+  publishability matrix and the admin media screen (**P4-21**). Its text is in `0006` (G9b).
+- **F4-12** Export for signature (D33, card **P4-25**): `/admin/families/$familyId/print`, browser print with the existing
+  `@media print` rules, signature lines, nothing stored on the server. Health appears only through the audited health
+  function, only when staff tick "include health" for that print. One `audit_log` row per print (action, family id, date).
 
 Acceptance: inserting into `child_health` without a granted `health_allergy` consent fails in the DB; a withdrawal
 record deletes the health row and queues a staff alert; each health read writes one `audit_log` row; a 10+ child without
@@ -496,7 +537,7 @@ their own media consent shows "not publishable"; an enrol link works once and no
 submits can't both succeed; `consent_texts` rows can't be edited after insert (only `retired_at`); no consent control is
 pre-ticked and every consent control has its full text visible (UI tests); withdrawing a granted media channel on
 `/my` (or by staff) records `withdrawn` and alerts staff, while an unticked box on a re-sent `/enrol` link keeps the
-earlier decision (R-33); a 10+ child's health "no" hides the health box on `/enrol` (R-34); notice `…-v3` live.
+earlier decision (R-33); a 10+ child's health "no" hides the health box on `/enrol` (R-34); notice `…-v3` live; print is its own unticked box and its own matrix column; a print without "include health" shows no health data and writes one audit row.
 
 ### P6 · Reporting (Stage D, optional) and parked extras
 
@@ -531,18 +572,20 @@ session acting only after the user's explicit yes in chat). "Owner" = the studio
 | **G3** | P0 | Builder | One bootstrap prompt in Lovable chat: *"Set up staff login with email and password only. Disable public sign-up. Turn on leaked-password protection. Do not create any tables. Keep errorMiddleware and csrfMiddleware in src/start.ts."* Then `git pull --ff-only` and run F0-06. |
 | **G4** | Each migration | Builder | Paste one `docs/backend/sql/NNNN_*.sql` into Lovable chat: *"Apply this SQL migration exactly as written. Do not change it."* Approve the shown SQL. Then `git pull --ff-only` (gets Lovable's migration file + regenerated `types.ts`). On 0001, record which folder Lovable used and whether the change hit the live DB before Publish. |
 | **G5** | P0 | Owner | Create own user (Cloud → Users → Add user), then run the owner-role SQL template from `40-integrations.md` § 1 in **Cloud → SQL editor** (not Lovable chat, so it never becomes a migration; the email is typed there only, never committed). |
-| **G6** | P1 | Owner | Secrets in Cloud → Secrets: `IP_HASH_SECRET` (generate on your own computer with `openssl rand -hex 32` and paste directly; never in chat or code), `TURNSTILE_SECRET_KEY`, `LINE_ALERT_CHANNEL_ID`, `LINE_ALERT_CHANNEL_SECRET`, `LINE_ALERT_TO`, `PUBLIC_SITE_URL`. |
-| **G7** | P1 | Owner | Cloudflare account (studio-owned) → Turnstile widget with **exact** hostnames: the published `*.lovable.app` host, `id-preview--fa9b86e9-5d99-468e-be51-3be106fa410c.lovable.app`, later the custom domain. **Never** the apex `lovable.app`. Site key → builder puts it in `src/lib/backend/public-config.ts`; secret → G6. |
+| **G6** | P1 | Owner | Secrets in Cloud → Secrets (`PUBLIC_SITE_URL` is plain config, not a secret: set it as a variable, D37): `IP_HASH_SECRET` (generate on your own computer with `openssl rand -hex 32` and paste directly; never in chat or code), `TURNSTILE_SECRET_KEY`, `LINE_ALERT_CHANNEL_ID`, `LINE_ALERT_CHANNEL_SECRET`, `LINE_ALERT_TO` (value `https://cherryleeandco.com`, D37). |
+| **G7** | P1 | Owner | Cloudflare account (studio-owned) → Turnstile widget with **exact** hostnames: `cherryleeandco.com` (the live domain; whether it covers `www.` is UNVERIFIED: check in the console, and add `www.cherryleeandco.com` if not) and the preview host `id-preview--fa9b86e9-5d99-468e-be51-3be106fa410c.lovable.app` for testing (D37). The published `*.lovable.app` host only while it is still used. **Never** the apex `lovable.app`. Site key → builder puts it in `src/lib/backend/public-config.ts`; secret → G6. |
 | **G8** | P1 | Owner | LINE Developers: a provider named "CherryLee & Co." owned by the studio's own LINE account (permanent). New OA "CherryLee Staff Alerts" (Free), Messaging API on, chat / auto-reply / greeting off. Owner adds the OA as a friend; `LINE_ALERT_TO` = owner's user ID from Basic settings (or a group ID via F1-08). |
-| **G9a** | Before **each** stage goes live (A: `…-v1`, B: `…-v2`, C: `…-v3`) | Owner (+ lawyer) | Approve the privacy-notice version that covers everything the stage collects (§ 8.0). Lawyer review strongly recommended. |
-| **G9b** | Before Stage C | Owner + Thai PDPA lawyer | Review consent texts (health, media, children 10+ approach in D11, the `OWNER-APPROVE` lines), then apply `0006_seed_consent_texts.sql` (+ `0006b` only if G0 Q9 = yes). |
+| **G9a** | Before **each** stage goes live (A: `…-v1`, B: `…-v2`, C: `…-v3`) | Owner + lawyer (budget approved, D38) | Approve the privacy-notice version that covers everything the stage collects (§ 8.0). The lawyer reviews **every** version, not only v1. |
+| **G9b** | Before **G4 · 0006a** (Stage B, marketing text) and before Stage C (`0006`) | Owner + Thai PDPA lawyer (budget approved, D38) | Review every consent text: `0006` (health, the five media channels incl. `media_print`, children 10+ approach in D11, the `OWNER-APPROVE` lines) and `0006a` (the `marketing_line` text). Round two (D43): the child-nickname line in `0006a` and in notice § 3.10 is checked too. Round two (D40, D41): the cancellation notice § 3.11 (LINE notice and credit rule) is checked too. Then apply `0006a_seed_marketing_text.sql` in Stage B, and `0006_seed_consent_texts.sql` in Stage C (+ `0006b` only if G0 Q9 = yes). |
 | **G10** | End of each phase | Owner | Publish in Lovable (Publish → Publish changes). Before pressing it: fix any critical RLS findings from the publish security scan; confirm Cloud → Users → Auth settings still shows **sign-up disabled**; confirm the privacy notice covers the stage (§ 8.0); run `rls_smoke.sql` in the SQL editor (no `FAIL`). Checklist: `40-integrations.md` § 13. |
-| **G-MVP** | After ≥ 8 weeks of Stage A in real use | Owner | Go/no-go for Stage B, based on real request volume and whether family records are wanted (D27). Record the decision and date in `90-task-breakdown.md` § 2. |
-| **G-HEALTH** | Before Stage C | Owner (+ lawyer) | Store allergy data in the system (explicit consent, audited) **or** keep the paper allergy form at the studio. The switch (R-29): **system** = builder sets `HEALTH_IN_SYSTEM = true` in `src/lib/backend/public-config.ts` and applies 0006 as reviewed; **paper** = keep `HEALTH_IN_SYSTEM = false` and delete the two `health_allergy` rows from the **unapplied** 0006 draft before G4, so no health consent (and so no health row) can ever exist; `/enrol` and `/my` then show no health section (they only show purposes with a current text) and the roster shows "see the paper allergy form at the studio". The health code is built either way. |
+| **G-MVP** | After ≥ 8 weeks of Stage A in real use | Owner | Go/no-go for Stage B, based on real request volume and whether family records are wanted (D27). Intent noted on 14 Oct 2026: yes, family records as a customer base for follow-up and sales (D31); the decision itself still waits for 8 weeks of use. Record the decision and date in `90-task-breakdown.md` § 2. |
+| **G-HEALTH** | Before Stage C | Owner (+ lawyer) | **Decided 14 Oct 2026: system** (owner's answer 18; Stage C still waits for G9b). The two options were: store allergy data in the system (explicit consent, audited) **or** keep the paper allergy form at the studio. The switch (R-29): **system** = builder sets `HEALTH_IN_SYSTEM = true` in `src/lib/backend/public-config.ts` and applies 0006 as reviewed; **paper** = keep `HEALTH_IN_SYSTEM = false` and delete the two `health_allergy` rows from the **unapplied** 0006 draft before G4, so no health consent (and so no health row) can ever exist; `/enrol` and `/my` then show no health section (they only show purposes with a current text) and the roster shows "see the paper allergy form at the studio". The health code is built either way. |
 | **G-PARK** | Any time | Owner | Un-park one parked item (DSR/breach/audit screens, consent-text publishing UI, Umami, PromptPay, Resend, LIFF); only then its cards may run. |
 | **G11** | P3 | Owner + accountant | Confirm payment record retention (5 years? juristic person or sole proprietor?). |
 | **G12** | P6 | Owner | Check Lovable analytics in DevTools for cookies; optional Umami account; optional Resend; optional PromptPay ID. |
-| **G13** | Any time | Owner | Custom domain (optional): then update Turnstile hostnames, `PUBLIC_SITE_URL`, Umami domains, JSON-LD URLs. |
+| **G13** | Done 14 Oct 2026 | Owner | Domain `https://cherryleeandco.com` (D37). Set the values it drives: `PUBLIC_SITE_URL` and the Turnstile hostname (`40-integrations.md` §§ 4, 6.1, 12). Umami domain if used. JSON-LD is a website task, not part of this plan. |
+| **G4 · 0006a** | Stage B, before the family create screens go live (P3-04, P3-11) | Builder | Paste `sql/0006a_seed_marketing_text.sql` into Lovable chat, as for G4, only after G9b has approved the marketing text (D31, D38). |
+| **G0 Q15** | Before the G4 · 0005 seed of the four class clips | Owner | **☑ 14 Oct 2026 (owner certified, D45):** parents agreed to all five channels (website, parents' LINE group, social, YouTube, print). The legacy note is set in the seed; the session-setting step at G4 · 0005 still runs. |
 
 ---
 
@@ -561,7 +604,7 @@ session acting only after the user's explicit yes in chat). "Owner" = the studio
 
 **Tables:** `user_roles`, `audit_log`, `studio_settings`, `booking_requests`, `rate_limit_events`, `staff_notifications`,
 `sessions`, `families`, `guardians`, `children`, `family_contacts`, `package_purchases`, `payments`, `bookings`,
-`consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets`, `media_asset_children`,
+`consent_texts`, `consent_records`, `guardian_consent_records` (D31), `child_health`, `family_links`, `media_assets`, `media_asset_children`,
 `dsr_requests`, `breach_incidents`. **Views:** `package_balances`, `current_consents`, `report_requests_weekly`,
 `report_session_fill`, `report_attendance_monthly`, `report_revenue_monthly`. **Buckets:** `payment-slips`, `consent-evidence`.
 
@@ -583,8 +626,9 @@ session acting only after the user's explicit yes in chat). "Owner" = the studio
 | `package_purchase_status` | `active`, `closed`, `void` |
 | `payment_method` | `promptpay`, `bank_transfer`, `cash`, `other` |
 | `payment_status` | `pending`, `paid`, `refunded`, `void` |
-| `booking_status` | `held`, `confirmed`, `attended`, `absent`, `cancelled` |
-| `consent_purpose` | `health_allergy`, `media_parents_group`, `media_website`, `media_social`, `media_youtube` |
+| `booking_status` | `held`, `confirmed`, `attended`, `absent`, `cancelled`, `cancelled_late` (round two, D40) |
+| `notice_channel` | `line`, `in_person` (round two, D41; no paper, no web) |
+| `consent_purpose` | `health_allergy`, `media_parents_group`, `media_website`, `media_social`, `media_youtube`, `media_print` (D32), `marketing_line` (guardian purpose, D31; rows only in `guardian_consent_records`, never in `consent_records`) |
 | `consent_decision` | `granted`, `refused`, `withdrawn` |
 | `consent_given_by` | `guardian`, `child` |
 | `consent_channel` | `web`, `line`, `paper`, `in_person` |
@@ -598,7 +642,7 @@ session acting only after the user's explicit yes in chat). "Owner" = the studio
 | `dsr_status` | `received`, `in_review`, `waiting_for_requester`, `extended`, `completed`, `refused` |
 | `breach_risk` | `unlikely`, `risk`, `high` |
 
-Allergen chips (`child_health.allergens text[]`, checked list): `peanut`, `tree_nut`, `milk`, `egg`, `wheat`, `soy`,
+Allergen chips (`child_health.allergens text[]`, checked list; the nine FDA major food allergens, D39, plus `flour`, D46): `milk`, `egg`, `flour`, `wheat`, `peanut` and `tree_nut` (one nut group, D46), `soy`,
 `fish`, `shellfish`, `sesame`; anything else goes in `other_allergens`.
 
 **Database functions:** `has_role(_user_id uuid, _role app_role)`, `is_staff()`, `is_owner()`, `current_app_role()`,
@@ -607,9 +651,9 @@ p_max_per_hour int, p_max_per_day int)`, `purge_expired_records()`, `session_sea
 `get_open_sessions(p_from date, p_to date)`, `generate_weekend_sessions(p_from date, p_weeks int, p_capacity int)`,
 `child_age_years(p_birth_month date, p_on date)`, `has_active_consent(p_child_id uuid, p_purpose consent_purpose)`,
 `consent_status(p_child_id uuid, p_purpose consent_purpose)` → `'granted' | 'needs_child' | 'not_granted'`,
-`can_publish_media(p_asset_id uuid, p_purpose consent_purpose)`, `get_child_health(p_child_id uuid)`,
+`can_publish_media(p_asset_id uuid, p_purpose consent_purpose)`, `get_child_health(p_child_id uuid, p_include_health boolean)` (no default),
 `upsert_child_health(p_child_id uuid, p_allergens text[], p_other_allergens text, p_foods_to_avoid text, p_care_notes text)`,
-`list_session_health_flags(p_session_id uuid)`, `mark_inactive_families()`, `export_family_data(p_family_id uuid)`,
+`list_session_health_flags(p_session_id uuid)`, `mark_inactive_families()`, `export_family_data(p_family_id uuid, p_include_health boolean)`,
 `erase_family(p_family_id uuid)`. Purge/erase bypass for append-only tables: `set local cherrylee.allow_purge = 'on'`.
 Added by the review (§ 15): `get_sessions_with_seats(p_from date, p_to date)`, `create_family_from_request(p_request_id
 uuid, p_display_name text, p_guardian jsonb, p_children jsonb)`, `consent_matrix(p_child_ids uuid[])`,
@@ -624,9 +668,9 @@ uuid, p_restricted boolean, p_note text)`, `set_primary_guardian(p_guardian_id u
 `cherrylee.allow_restriction_change` (only inside `set_family_restriction`).
 
 **SQL files:** `docs/backend/sql/0001_foundation.sql`, `0002_booking_requests.sql`, `0003_sessions.sql`,
-`0004_families.sql`, `0005_consent_health.sql`, `0006_seed_consent_texts.sql`, `0006b_seed_media_parents_group.sql`
+`0004_families.sql`, `0005_consent_health.sql`, `0006a_seed_marketing_text.sql` (D31), `0006_seed_consent_texts.sql`, `0006b_seed_media_parents_group.sql`
 (optional), `0007_privacy_ops.sql`, `0008_reporting.sql`, `sql/tests/rls_smoke.sql`, `sql/seed_dev.sql`.
-**Apply order:** 0001 → 0002 → 0003 → 0004 → 0005 → 0007 → (0006, 0006b at G9b) → 0008. **pg_cron jobs:** `purge-expired-records` (`15 19 * * *`),
+**Apply order:** 0001 → 0002 → 0003 → 0004 → 0005 → 0006a (Stage B, G4 · 0006a) → 0007 → (0006, 0006b after G9b, Stage C) → 0008. **pg_cron jobs:** `purge-expired-records` (`15 19 * * *`),
 `cron-history-cleanup` (`0 20 * * *`).
 
 ### TypeScript files
@@ -699,6 +743,7 @@ React Query keys: `["admin", <area>, …params]`, `["public", "open-sessions"]`.
 | `/admin/inbox`, `/admin/inbox/$requestId` | `src/routes/admin/_staff/inbox/index.tsx`, `…/inbox/$requestId.tsx` |
 | `/admin/sessions`, `/admin/sessions/$sessionId` | `src/routes/admin/_staff/sessions/index.tsx`, `…/sessions/$sessionId.tsx` |
 | `/admin/families`, `/admin/families/$familyId` | `src/routes/admin/_staff/families/index.tsx`, `…/families/$familyId.tsx` |
+| `/admin/families/$familyId/print` (P4-25, D33) | `src/routes/admin/_staff/families/$familyId_.print.tsx` (`ssr: false`, noindex; the trailing `_` keeps it outside the family page layout; `npx vite build` confirms the route id) |
 | `/admin/payments`, `/admin/media`, `/admin/reports` | `src/routes/admin/_staff/payments.tsx`, `media.tsx`, `reports.tsx` |
 | `/admin/privacy`, `/admin/settings` (owner) | `src/routes/admin/_staff/privacy.tsx`, `settings.tsx` |
 
@@ -712,7 +757,7 @@ The `createFileRoute("…")` string is the route **id** (includes `_staff`); cop
 logged, never a shared "unknown" bucket) · Turnstile action `booking_request` · enrol link 14 days, single use · manage link **90 days** ·
 public sessions window 8 weeks · `CHILD_CONSENT_AGE = 10` · children per request 1–3, age 6–12 · `guardian_name` ≤ 80,
 `nickname` ≤ 30, `message` ≤ 500 chars · slip/evidence uploads ≤ 5 MB, `image/jpeg`, `image/png`, `image/webp`,
-`application/pdf` · signed URLs 60 s · admin language `localStorage` key `cherrylee-admin-lang`.
+`application/pdf` · signed URLs 60 s · admin language `localStorage` key `cherrylee-admin-lang` · `studio_settings.cancel_notice_hours` = 3 (integer, default 3, D36; a column on the single-row `studio_settings` table, 10 § 6.3) · domain constant `PUBLIC_SITE_URL` = `https://cherryleeandco.com` (D37).
 
 ---
 
@@ -731,7 +776,7 @@ Never put a value in chat, code, tests or commits. Public keys that are safe to 
 | `LINE_ALERT_CHANNEL_ID` | server secret | Owner | P1 | `line-alert.server.ts` |
 | `LINE_ALERT_CHANNEL_SECRET` | server secret | Owner | P1 | `line-alert.server.ts`, `line-signature.server.ts` |
 | `LINE_ALERT_TO` | server secret (user ID `U…` or group ID `C…`) | Owner | P1 | `staff-notify.server.ts` |
-| `PUBLIC_SITE_URL` | server config (no trailing slash; falls back to the request origin) | Owner | P1 | links in alerts |
+| `PUBLIC_SITE_URL` | server config: `https://cherryleeandco.com` (D37; no trailing slash; plain config, not a secret. The request-origin fallback is for local development and preview only; the live site must set it) | Owner | P1 | links in alerts, the privacy notice, Turnstile host |
 | `PROMPTPAY_ID` | server secret | Owner | P6 (optional) | `/pay/$token` |
 | `RESEND_API_KEY`, `STAFF_NOTIFY_EMAIL` | server secret | Owner | P6 (optional) | email backup alert |
 | `TURNSTILE_SITE_KEY` | public constant in `public-config.ts` | Builder commits | P1 | `TurnstileWidget.tsx` (dev falls back to test key `1x00000000000000000000AA`) |
@@ -754,6 +799,7 @@ with unit tests (fetch and Supabase mocked) and the build; end-to-end checks hap
 | `bookings` (attendance) | 24 months after the session date | `retain_until` |
 | `package_purchases`, `payments`, slips | 5 years after the end of the accounting year (G11) | `retain_until`; anonymised on erase |
 | `consent_records`, evidence files | Life of the consent + 3 years (PDPA s.78 claims period) | purge after family deletion + 3 years |
+| `guardian_consent_records` (`marketing_line`, D31) | Life of the consent + 3 years, as `consent_records` | `retain_until`; purge after family deletion + 3 years (SQL to confirm) |
 | `family_links` | 30 days after expiry | purge |
 | `dsr_requests` | 3 years after response | `retain_until` |
 | `breach_incidents` | 5 years | `retain_until` |
@@ -799,6 +845,98 @@ Technical (builder verifies after enabling Cloud; details in `40-integrations.md
 - Which city "Asia Pacific" is, and whether Lovable's DPA includes SCCs (PDPA s.29).
 - Whether Lovable Cloud exposes Supabase MFA (TOTP) for the owner account.
 
+
+### 13A. Answers from the owner (14 October 2026, in chat)
+
+Recorded as given. "Plan impact" lists what must change in the plan. The last column (added 14 Oct 2026) shows what the
+owner's decisions now settle, with the D-number or R-number. The original answers are unchanged.
+
+| # | Answer | Plan impact | Status after the 14 Oct decisions |
+|---|---|---|---|
+| 1 | Sole proprietor (เจ้าของคนเดียว) | Privacy notice controller = the owner (name needed for the notice) | Open: the owner's name for the notice (G0 Q1, § 11.6) |
+| 2 | Owner account = super admin. **Staff list and LINE-alert recipients: not answered** | Open (ask again) | Still open (not decided on 14 Oct) |
+| 3 | 8 seats per session; show seats left | Capacity 8; "seats left" shown publicly | Decided: 8 seats, seats left shown (D14) |
+| 4 | No package expiry; siblings may share; no credit deducted for a missed day; make-up allowed if notice given **≥ 3 hours** before | No `expires_on`; add a setting `cancel_notice_hours = 3` (not in the plan yet); site may publish the rule (owner's choice) | Decided: **D36**. Setting `studio_settings.cancel_notice_hours` = 3. Site publishing stays off until the owner asks. Its missed-day sentence is **superseded by D40**. **Round two:** item 1 → **D40** (cancellation with notice keeps the credit; absent or late cancellation uses one; overrides the missed-day sentence of D36). Item 2 → **D41** (notice by LINE, `cancel_notice_at`). |
+| 5 | Payment before the class day. Deposits and refunds not answered | Payment timing set; refund rule still open (do not state one) | Payment timing set. Refund and deposit rules still open (not decided) |
+| 6 | Retention in § 12 accepted | Done. The notice wording still needs approval (G9a · v1) | Decided: retention accepted (§ 12). Notice wording goes to the lawyer (**D38**) |
+| 7 | No paper forms; fully online | Enrolment online (`/enrol`). Paper copies only as export (answer 18) | Decided: enrolment online. Signing export only, **D33** |
+| 8 | Allergen checklist, to fill in as a list | Enum in `0005` exists; owner confirms the list | Decided: **D39** (nine FDA allergens, no enum change). **Round two:** the owner's answer is "แพ้ถั่ว" (nut group ถั่ว, with `peanut` and `tree_nut`) and flour. Item 7 → **D46** (`flour` added). Both open confirmations are closed. |
+| 9 | Channels: parents' LINE group, website, Facebook/Instagram/TikTok, YouTube, print | **DECIDE:** `media_print` is **not** in the plan. Other purposes exist (`media_parents_group`, `media_website`, `media_social`, `media_youtube`) | Decided: **D32** (`media_print`, its own unticked box, default off) |
+| 10 | The LINE account is the studio's and owns the provider | Done (G0 Q10) | Done (G0 Q10). No change |
+| 11 | Custom domain: already has one | Domain name needed for `PUBLIC_SITE_URL`, Turnstile hostnames and JSON-LD | Decided: **D37** `https://cherryleeandco.com`. G13 done |
+| 12 | No lawyer budget. Use legally compliant wording; parents must agree before any photo is used | **DECIDE:** conflicts with G9a / G9b (see below) | Decided: **D38**. Budget approved; lawyer sign-off pending. Covers G9a and G9b |
+| 13 | PromptPay later. Wants a QR **and** the bank account number; PromptPay ID left blank for now | PK-07 spec first. Showing an account number publicly needs a deliberate decision | Not decided on 14 Oct. Still needs the PK-07 spec |
+| 14 | Lunch break 1 hour; maximum 8 children per group | Studio facts for the FAQ (owner's approval to publish needed) | Recorded. Publishing on the site still needs the owner's approval |
+| 15 | The four class clips: parents agreed to **all channels** | `legacy_consent_purposes` in `0005` changes from website-only. Keep the source of this agreement as evidence (date, form or chat) | Partly decided: **R-55** (all five channels, legacy note). G0 Q15 stays ◐ until the written source is recorded **Round two:** item 6 → **D45**; G0 Q15 ☑ (owner certified 14 Oct 2026, all five channels). |
+| 16 | **Yes:** the studio's staff LINE accounts may add parents as friends | **DECIDE:** overturns the default in D26 (see below) | Decided: **D35**. D26 stands; the OA limit overrides this answer. Owner confirms in one line **Round two:** item 8 → **D47** (OA rule kept, no change). |
+| 17 | Asked for the list of OWNER-APPROVE lines | List given (§ 13B). Approval pending | List given (§ 13C), with lines added 14 Oct. Approval pending |
+| 18 | **G-HEALTH = system** (online, audited, deleted on withdrawal). Export to paper or PDF for signature | Needs G9b lawyer review before Stage C (see below). Export feature not in the plan | Decided: G-HEALTH = system (§ 9); export **D33**. Stage C waits for G9b (**D38**) **Round two:** item 3 → **D42** (one health route for export and print; allergen checklist on every print). |
+| 19 | **G-MVP intent:** keep family records as a customer base for follow-up and sales | **DECIDE:** marketing is out of scope in the plan (§ 1, 12.5) | Decided: **D31** (opt-in, guardian only, default off, contact by hand, no bulk sends). G-MVP intent recorded **Round two:** items 4 and 5 → **D43** (label: ครอบครัวน้อง + nickname, staff only) and **D44** (one row per granted guardian). |
+| 20 | Prefers "Supabase" | **CLARIFY:** Lovable Cloud already runs on Supabase. Does the owner want a Supabase account of their own, outside Lovable? | Decided: **D34**. Keep Lovable Cloud (= Supabase). No separate account |
+
+### 13B. Decisions needed before the affected stage
+
+1. **Lawyer (answers 12, 18). Decided: D38 (budget approved, 14 Oct 2026).** The options below are kept as the record. The plan requires a Thai PDPA lawyer for the notice and consent texts (G9a / G9b) before
+   Stage C. Options: (a) budget a short one-off review of the consent texts and rule D11 (a 10+ child's health refusal)
+   before Stage C; (b) keep allergy information on paper until that review (G-HEALTH = paper for now). The gate G9a · v1 (notice for Stage A) also lists the lawyer. Skipping it for Stage A
+   is the owner's risk decision and needs a written note in § 2.1. Recommended: (a) for Stage C. Fees must be asked of the
+   lawyer; the plan does not estimate them.
+2. **Sales and follow-up from family records (answer 19). Decided: D31 (opt-in, guardian only, default off, contact by hand).** The original text: the plan had no marketing purpose. Adding one means a new
+   `marketing_line` purpose: a separate opt-in checkbox, default **off**, easy to withdraw, a notice update, and no use of
+   children's data for sales. Superseded by D31 (14 Oct 2026): no PK-09 exists; marketing is core, as a guardian opt-in, default off. The earlier recommendation was to add it as a parked item (PK-09) that starts only after G-MVP.
+3. **Print use of photos and videos (answer 9). Decided: D32 (`media_print`).** Add a `media_print` purpose with its own consent text (OWNER-APPROVE +
+   lawyer), so parents can agree to each channel separately.
+4. **Staff LINE accounts adding parents (answer 16). Decided: D35 (D26 stands; the OA limit overrides answer 16; the owner confirms the reading in one line).** The original text: this changes D26, which keeps family contacts off personal phones.
+   If accepted, the plan needs: device lock and no screenshots of parent chats, a LINE ID stored only with consent, and the
+   `/book` copy about LINE IDs rewritten (it currently says the OA cannot add a user by ID).
+5. **Export for signature (answer 18). Decided: D33 (card P4-25).** A print view that saves to PDF through the browser. This needs a new card under P4
+   (no new packages: use the existing `@media print` rules). Not yet in `90-task-breakdown.md`.
+6. **Which Supabase (answer 20). Decided: D34 (keep Lovable Cloud).** The original options: keep Lovable Cloud (the plan as written), or a Supabase account owned by the studio.
+   The second option changes gates G1 and G2 and needs research on how Lovable connects to an external project.
+7. **Clip consent evidence (answer 15). Partly decided: R-55 (all five channels, legacy note). The written source is still open (G0 Q15 ◐).** On 13 October the same clips were confirmed for the website only. Please confirm
+   the wider "all channels" agreement and where it is recorded, before `0005` is changed. **Round two: decided, D45** (owner certified, 14 Oct 2026).
+
+**Round two (14 Oct 2026, second message): status of the eight items.** Decided, and applied in this plan. The original text above is kept.
+- Item 1, missed day and cancellation: **decided, D40.** Cancellation with notice keeps the credit; absent or late cancellation uses one credit.
+- Item 2, notice channel: **decided, D41.** LINE (`cancel_notice_at` = the time the LINE message arrived); in person also accepted; no web form.
+- Item 3, health route for export and print: **decided, D42.** One route, `get_child_health`; the allergen checklist is on every print; other notes only with include health.
+- Item 4, follow-up label: **decided, D43.** "ครอบครัวน้อง" + nickname, staff only. The lawyer checks the changed promise under G9b.
+- Item 5, follow-up rows: **decided, D44.** One row per granted guardian.
+- Item 6, class clips: **decided, D45.** G0 Q15 ☑; all five channels.
+- Item 7, allergens: **decided, D46.** `flour` added; the nut group "ถั่ว" with `peanut` and `tree_nut`.
+- Item 8, LINE OA rule: **decided, D47.** Kept; no change.
+
+Still open after round two (owner, one line each; the plan stops and reports until answered where a card needs it): (a) a family with two children, or a child without a nickname: which label is used (D43, P3-19); (b) for an export, does `includeHealth` false mean no health at all (D42, the plan says yes); (c) the allergen checklist prints on every sheet without the include-health tick (D42, from the owner's words). The owner's one-line check of the printed sample is a post-build review and does not block P4-25.
+
+### 13C. OWNER-APPROVE lines (answer 17): the text to approve
+
+- **Retention wording in notice v1 (6 months, a proposal):** `30-ui.md` lines ~599 and ~735.
+- **Takedown target of 7 days (R-24):** `50-security-privacy.md` lines ~475 and ~697.
+- **"Tell a teacher before cooking" allergy note:** `50-security-privacy.md` line ~697.
+- **/book wording on full dates and waiting lists (no promise to call when a seat opens):** `30-ui.md` lines ~732 and ~883.
+- **Access log for health data ("every time someone opens the details, the system records it"):** `sql/0006_seed_consent_texts.sql` line ~41.
+- **Child's health refusal (aged 10+, D11):** `30-ui.md` line ~2682. This sentence also needs the lawyer (G9b).
+- **Key-change note on /enrol (an empty box keeps the earlier choice):** `30-ui.md` line ~2714.
+- **Withdrawal wording:** `50-security-privacy.md` lines ~1082–1083.
+
+Added 14 October 2026 (owner decisions; the lawyer reviews each one under D38):
+
+- **Guardian marketing opt-in text (D31):** `sql/0006a_seed_marketing_text.sql`, `50-security-privacy.md` § 12.5 (text) and the
+  notice § 3.10 (TH and EN). The promises to approve: contact is by hand, one family at a time, from the OA chat; no
+  automated or bulk sends. The staff list uses the child's nickname only, for the studio's own follow-up, and no other child information is used (the D43 change; G9b).
+- **Print consent text (D32):** `sql/0006` (`media_print`), `50-security-privacy.md` § 12.6 (draft). The promises to approve:
+  no new prints after a withdrawal; copies already printed and handed out cannot be recalled.
+- **Print channel in the notice (D32):** `50-security-privacy.md` § 11 § 3.7 (TH and EN), including the scope of "printed
+  materials". The owner must list what counts as print (for example brochures, posters, booklets) before this is final.
+- **Print sheet copy (D33, card P4-25):** the "include health" tick text and the signature lines in `30-ui.md`.
+- **Allergen labels (D39, D46):** the Thai and English labels for the allergens, including the flour label and the nut group "ถั่ว".
+- **Make-up notice (D36):** nothing to approve until the owner asks to publish the rule.
+
+Round two changes to the approve lines (14 Oct 2026, second message):
+- **Follow-up label (D43):** the promise "we never use your child's information for this" is replaced by the wording in `50-security-privacy.md` §§ 3.10, 4 and 12.5 (the staff list shows the child's nickname only, for the studio's own follow-up, for staff only, never shown to anyone else). Lawyer under G9b.
+- **Notice by LINE and the credit rule (D40, D41):** `50-security-privacy.md` § 11.7, a DRAFT. Not published on `/privacy` unless the owner asks (D36).
+- **Allergen checklist and flour (D42, D46):** `50-security-privacy.md` § 3.6 and § 11.7. The allergen checklist prints without the include-health tick (D42).
+
 ---
 
 ## 14. Sources
@@ -838,7 +976,7 @@ approach (D11), the cross-border position and the retention schedule before the 
 An independent review (verdict: database layer strong, plan not yet ready for Haiku) raised 2 blockers, 13 major and
 12 minor issues (R-01 … R-27). A finalisation pass while writing the task cards found five more gaps (R-28 … R-32). A
 second verification round (a verifier plus Haiku dry-runs of cards P0-17, P1-06, P1-14, P3-04 and P4-06) added
-R-33 … R-48. This log is **authoritative**: it sits in the top file of the order of authority, so if any lower file
+R-33 … R-48. A third round (the owner's decisions of 14 October 2026) added R-49 … R-59. A fourth round (the owner's second set of answers, 14 October 2026, items 1–8) added R-60 … R-69. This log is **authoritative**: it sits in the top file of the order of authority, so if any lower file
 still says something else, this table wins and the lower file is the one to fix. Every entry is already applied to the
 files named.
 
@@ -892,3 +1030,25 @@ files named.
 | R-46 | `AGENTS.md` says copy lives only in `site.tsx` (minor) | Card P0-13 amends that bullet to `src/content/*` | 90 P0-13 |
 | R-47 | Leftovers of R-09/R-14 (minor) | 50 PDPA row s.34, the DSR deadline row and lawyer question 9 describe the D28 restriction; LINE error codes `line_token_http_<status>` / `line_push_http_<status>` everywhere; the `privacy.tsx` code block keeps one sample section per language, so 50 is the only notice wording | 50 §§ 10, 18.1, 28; 40 §§ 5.8, 14; 20 § 14.1; 30 § 3.4 |
 | R-48 | "0005 tables only in Stage B" read as "functions later" (minor) | G4 · 0005 applies the whole file in Stage B, `submit_enrolment` included; only P4 screens wait | 00 § 8 P4; 10 § 1; 0005 header; 90 § 2, P3-17 |
+| R-49 | Lawyer review not yet budgeted; G9a/G9b unclear for every version and text (owner decision 1, 14 Oct) | Owner approved the budget (**D38**). Lawyer reviews every notice version (v1, v2, v3) and every consent text (`0006`, `0006a`), the OWNER-APPROVE lines and D11. G9b is approved before G4 · 0006a and before Stage C. No Stage C go-live before G9b. The Stage A notice goes to the lawyer before P2-08 | 00 §§ 5, 8.0, 9, 13A, 13B; 50 header and §§ 11.1, 12, 28; 90 gate tracker (cross-file) |
+| R-50 | "No marketing" rules conflict with the owner's family follow-up and sales wish (owner decision 2, 14 Oct) | **D31**: `marketing_line` is a guardian-only opt-in, default off, with its own unticked box (P3-04, P3-11), changed on `/my` (P4-13, P4-22) or by staff, stored in `guardian_consent_records`. Staff follow-up list P3-19; text `0006a` (G4 · 0006a); contact by hand from the OA chat only; no bulk or automated sends; restricted families excluded (D28). The "no marketing" statements in § 1, §§ 5–6 and s.21/s.32 are replaced; 50 § 12.5 moves into the core design | 00 §§ 1, 4, 5, 6, 7, 8, 9, 10, 12, 13B; 50 §§ 10, 11, 12, 12.5, 13, 14, 16, 18.1, 25, 28; 90 P3-04, P3-11, P3-19, P3-20, P4-13, P4-22 (cross-file) |
+| R-51 | Print not a consent channel (owner decision 3, 14 Oct) | **D32**: `media_print` added to `consent_purpose` (same rules as `media_social`, child-level, `media_level`, default not granted); TH/EN text in `0006` (lawyer reviewed); separate control in P4-09 on `/enrol` and `/my`; publishability matrix and admin media (P4-21); five separate channel boxes | 00 §§ 5, 6, 8, 10, 13B; 50 §§ 3.7 (notice), 11.2, 12, 12.1, 12.2, 12.3, 12.6 (new), 13, 17.2, 25; 0005 and 0006 seeds and 20/30 (cross-file) |
+| R-52 | Export for signature not in the plan (owner decision 5, 14 Oct) | **D33**: card P4-25 and route `/admin/families/$familyId/print` (`ssr: false`, noindex); browser print with `@media print`, no PDF package, nothing stored; health only through the audited function when staff tick "include health"; one `audit_log` row per print (action, family id, date, never content); signature lines | 00 §§ 4, 5, 8.0, 8 P4, 10 routes, 13B; 50 §§ 5 (audit row), 15 (rule 4 exception); 20, 30, 90 (cross-file) |
+| R-53 | Supabase question open (owner decision 6, 14 Oct) | **D34**: keep Lovable Cloud (= Supabase). No separate account. G1 and G2 unchanged | 00 §§ 5, 9 (G1, G2 unchanged), 13A, 13B |
+| R-54 | Staff LINE accounts adding parents (owner decision 4, 14 Oct) | **D35**: D26 stands. The OA cannot add or message a user who has not messaged it. No UI copy, button or field asks staff to copy a parent's LINE ID in order to add them (remove any that exists). Staff reply only in chats the family started. The optional LINE ID hint on `/book` (D26) is not removed by these decisions; the owner is asked to confirm | 00 §§ 5, 13A, 13B; 40 § 5.10 (new); 50 § 23 item 8; 20 and 30 UI copy (cross-file) |
+| R-55 | Four class clips: legacy consent seed for all channels (owner decision 7, 14 Oct; no D-number) | `legacy_consent_purposes` = all five media channels (`media_parents_group`, `media_website`, `media_social`, `media_youtube`, `media_print`). `legacy_consent_note` = "Owner statement 14 Oct 2026; written source to be recorded before G4 (G0 Q15)". The 13 Oct answer named the website only, so the written source is the open point. G0 Q15 stays ◐. The `0005` seed of these four clips must not run at G4 until the source is recorded | 00 §§ 9, 13A, 13B; 50 §§ 17.1, 17.2; 0005 seed (cross-file) |
+| R-56 | Allergen list not fixed (owner decision 8, 14 Oct) | **D39**: the nine FDA major food allergens, matching the existing `0005` enum (no enum change), plus `other_allergens` and `foods_to_avoid`. Thai labels in the copy (30-ui). No claim of matching a Thai list. Owner still confirms "แพ้ทั่ว" and "แพ้แป้ง" | 00 §§ 5, 10, 13A; 30-ui and 0005 labels (cross-file); 50 § 15 (no change) |
+| R-57 | Domain not set (owner decision 9, 14 Oct) | **D37**: `PUBLIC_SITE_URL` = `https://cherryleeandco.com`; Turnstile hostname `cherryleeandco.com` (covers `www.`) plus the preview host for testing; the base for JSON-LD and the notice's website field. G13 done. The JSON-LD code change is a website task, not part of this plan | 00 §§ 5, 9, 11, 13A; 40 §§ 4, 6.1, 12; 50 §§ 2, 11.3, 11.4 (website line) |
+| R-58 | Cancellation and make-up rules not in the plan (owner decision 10, 14 Oct) | **D36**: packages never expire; siblings may share; a missed day deducts no credit (**superseded by D40**); make-up needs notice of at least 3 hours before the original session. `studio_settings.cancel_notice_hours` = 3 (integer, default 3), enforced in the make-up booking check (`validate_booking()` or the make-up function, 10 and 20 to confirm). The site publishes the rule only if the owner asks | 00 §§ 5, 10, 13A; 10 (`studio_settings` column, make-up check) and 20/90 (cross-file) |
+| R-59 | Brief numbering collision: D30 already in use (14 Oct) | The lawyer decision is **D38**, not D30: D30 already means multi-row writes, which many files cite. The 14 Oct decisions use D31–D39. Any reference to "D30 lawyer" means D38 | 00 §§ 5, 13A; 50 header; 90 (cross-file) |
+| R-60 | Missed-day rule conflicts with the owner's round-two answer (major) | **D40**: `absent` and `cancelled_late` use a credit; `cancelled` with notice at or before the threshold keeps it. A make-up uses the same notice. D36's missed-day sentence and the D16 balance rule are overridden | 00 §§ 5, 13A, 13B; 50 § 11.7; 10 (booking statuses, `consumes_credit`, balance views); 0004 (`validate_booking`, `package_balances`); 0007 and 0008 (reports, purge counter); 20 § 9.7 and 30 (booking and make-up specs); 90 P3-06 (cross-file) |
+| R-61 | No record of when a cancellation notice was given (minor) | **D41**: `cancel_notice_at` (the time the LINE message arrived, from the OA chat) and `cancel_notice_channel` = `line` or `in_person`, recorded on the booking screen. No paper channel, no web notice form | 00 §§ 5, 13A; 10 (bookings columns), 20 § 9.7, 30 (booking screen), 90 P3-06, P3-04, P3-11; 50 § 11.7 |
+| R-62 | Export has a plain join to `child_health` in 0007: a second health route, blocking G4 · 0007 (major) | **D42**: export and print read health only through `get_child_health` with the explicit `includeHealth`; the plain join is removed; the print sheet shows the allergen checklist always, other notes only with include health; G4 · 0007 is no longer blocked by this route | 00 §§ 5, 13A; 0007 (export function, header); 20 §§ 9.13, 9.16 (print includeHealth rule); 30 (print screen); 50 §§ 15 (rule 4 decided), 28 (Q17); 90 § 2 (G4 · 0007), P4-25 |
+| R-63 | Follow-up label uses a child's nickname while `0006a` and notice § 3.10 say child information is never used (major) | **D43**: label "ครอบครัวน้อง" + nickname, staff only; `0006a` and notice § 3.10 rewritten to say so; lawyer under G9b; the D31 promise and the README rule are overridden for this one label | 00 §§ 5, 13C; 50 §§ 3.10, 11.2, 11.7, 12.5, 28 (Q18); 90 P3-19, P3-20, G9b; README golden rules; `sql/0006a` (cross-file) |
+| R-64 | Follow-up list is per family, so a family with two consenting guardians shows one row (minor) | **D44**: one row per granted guardian, each with the family label; one withdrawal removes only its own row | 00 §§ 5, 13A; 0007 (`marketing_follow_up_list`), 20 § 9.5a, 30 (follow-up screen), 90 P3-19 |
+| R-65 | Written source for the four clips' consent not recorded, G0 Q15 open (minor) | **D45**: owner certified 14 Oct 2026; G0 Q15 ☑; the legacy note is replaced; the lawyer checks the legacy cover under G9b. R-55's written-source condition is overridden | 00 §§ 5, 9, 13A, 13B; 50 § 28 (Q16); 0005 seed (cross-file); 90 § 2 (G0 Q15), P3-17, G9b |
+| R-66 | Allergen check list lacks flour; nuts shown as two unrelated values (major for the cooking class) | **D46**: `flour` added to the check list; `wheat` kept; nut group "ถั่ว" with `peanut` and `tree_nut`; labels in P4-15 and P0-18; the enrol page (P4-08) uses the same labels | 00 §§ 5, 13A; 0005 (check list), `seed_dev` and `rls_smoke` (cross-file), 10 (enum table), 30 (labels); 50 §§ 3.6, 11.7, 15 (rule 1); 90 P0-18, P4-08, P4-15, P4-25 |
+| R-67 | LINE OA rule questioned again in the owner's answer 8 round (minor) | **D47**: D26 and D35 stand; no change; the owner's "คงไว้" confirms D35's reading | 00 §§ 5, 13A; 40 § 5.10; 50 § 23 (item 10); 90 § 2 (G0) |
+| R-68 | Gate tracker, gate notes and notice paragraphs not updated for round two (minor) | G0 Q15 ☑ (14 Oct 2026); a G0 round-two row; G9b covers the `0006a` nickname line; G4 · 0007 route decided; one dated § 2.1 line per item; the notice § 11.7 drafts are marked for the lawyer | 00 § 9; 90 §§ 2, 2.1; 50 § 11.7; README |
+| R-69 | Stale names in the cards and in 90 § 6 (minor): the follow-up route named as a separate file; allergen values counted as nine | 90 § 6 uses `/admin/families?view=follow-up` (no route file, as P3-19 says); the allergen values are ten plus the nut group (D46) | 90 §§ 4, 5, 6; README (D31–D47); 30 (cross-file) |
+| R-70 | Verifier pass on the round-two specs (14 Oct 2026, 30 issues): notice column names split between SQL and spec; `cancelled_at` and `makeup_of_booking_id` missing in SQL; `get_child_health` and `export_family_data` called without the explicit flag; allergen checklist gated by the tick, against D42; follow-up view and spec disagreed on the label columns; export health not on the tick; print audit name split (`print` / `print_record`); G0 round-two row and lawyer wording out of step with the tracker | Fixed in the SQL (0004, 0005, 0007, 0008, seed_dev, rls_smoke, 0006a Thai wording) and in the specs (00, 10, 20, 30, 50, 90, 40, README). Kept SQL column names `cancel_notice_at` / `cancel_notice_channel`. The audit action is `print_record`. The follow-up view returns label columns. Export and print health: one route, explicit flag, allergen checklist always shown. | 00 §§ 5, 9, 13A–13C, 15; 0004; 0005; 0007; 0008; 10 § 6.14; 20 §§ 9.5a, 9.7, 9.10, 9.13, 9.16; 30; 50; 90 |

@@ -10,18 +10,33 @@ delivered in stages (D27): **A** = P0 + P1 + P2 (MVP) → owner go/no-go **G-MVP
 legal review **G9b** → **C** = P4 → **D** = P6 (optional); parked items need **G-PARK**. Do not start any card that needs
 the database before its human gates (`00-overview.md` § 9, tracked in `90-task-breakdown.md` § 2) are done.
 
+**Domain:** `https://cherryleeandco.com` (live; G13 done, D37). The owner's decisions of 14 October 2026 are in
+`00-overview.md` § 5 (D31–D39, and the second set of answers D40–D47) and §§ 13A–13B. New cards from those decisions: **P3-19** (staff follow-up list for families who
+opted in), **P3-20** (apply the marketing text, `0006a`) and **P4-25** (signature print sheet). Card P4-09 gets the print
+
+**Round two (the owner's second set of answers, 14 Oct 2026), by number** (details in `00-overview.md` § 5):
+- **D40** credit rule with notice: cancelled with notice keeps the credit; absent or late cancellation uses one (`absent`, `cancelled_late`).
+- **D41** notice by LINE (`cancel_notice_at` = the time the LINE message arrived) or in person; no paper, no web form.
+- **D42** one health route for export and print: `get_child_health` with includeHealth; the allergen checklist prints on every sheet.
+- **D43** follow-up label "ครอบครัวน้อง" + the child's nickname (EN "Family of <nickname>"), staff only; lawyer checks it (G9b).
+- **D44** one follow-up row per granted guardian.
+- **D45** class clips certified by the owner (G0 Q15 ☑; all five channels).
+- **D46** allergen `flour` added; nuts as one group "ถั่ว" (`peanut`, `tree_nut`).
+- **D47** LINE OA rule kept (D26 and D35, no change).
+checkbox (`media_print`); P3-04 and P3-11 get the marketing checkbox; P4-13 and P4-22 get the marketing control on `/my`.
+
 ## Files
 
 | File | What it holds |
 |---|---|
 | [`00-overview.md`](00-overview.md) | Thai summary for the studio owner; goals, architecture, key decisions, what we collect at each stage, phases P0–P7 with acceptance criteria, human gates, secrets, naming, open questions. **Read first.** |
 | [`10-data-model.md`](10-data-model.md) | Every table, enum, view and database function, with columns, RLS policies, retention rules and an ER sketch. |
-| [`sql/`](sql/) | Draft migrations `0001_foundation.sql` … `0008_reporting.sql` (+ optional `0006b_seed_media_parents_group.sql`), applied **in order** (0001 → 0002 → 0003 → 0004 → 0005 → 0007 → 0006 (+0006b) → 0008), one per G4 gate, through Lovable chat. Additive only. Plus `sql/tests/rls_smoke.sql` (read-only) and `sql/seed_dev.sql` (fake data, ROLLBACK), both run in **Cloud → SQL editor**, never through chat. |
+| [`sql/`](sql/) | Draft migrations `0001_foundation.sql` … `0008_reporting.sql` (+ `0006a_seed_marketing_text.sql` for the guardian marketing text, and optional `0006b_seed_media_parents_group.sql`), applied **in order** (0001 → 0002 → 0003 → 0004 → 0005 → 0006a → 0007 → 0006 (+0006b) → 0008), one per G4 gate, through Lovable chat. Additive only. Plus `sql/tests/rls_smoke.sql` (read-only) and `sql/seed_dev.sql` (fake data, ROLLBACK), both run in **Cloud → SQL editor**, never through chat. |
 | [`20-server-api.md`](20-server-api.md) | Every server function and server route: file, name, zod input, auth, return shape, error codes, plus server-only helper modules. |
 | [`30-ui.md`](30-ui.md) | Public pages (`/book`, `/privacy`, `/enrol/$token`, `/my/$token`) and the Thai-first admin (`/admin/*`): routes, components, states, TH/EN copy keys, accessibility. |
-| [`40-integrations.md`](40-integrations.md) | Lovable Cloud setup and migration workflow, LINE staff alerts, Cloudflare Turnstile, scheduled jobs, analytics, optional PromptPay/Resend, secrets setup steps. |
-| [`50-security-privacy.md`](50-security-privacy.md) | PDPA mapping, ROPA (record of processing), retention schedule, consent rules (incl. children 10+), DSR and breach runbooks, security checklist, logging rules. |
-| [`90-task-breakdown.md`](90-task-breakdown.md) | How to run with Haiku and the dependency graph (§ 1), the **gate tracker** (§ 2), the support agents (§ 3), the card index with batch and status (§ 4) and the **112 task cards** (§ 5): one card = one small, testable change of about 1–4 files, each with `agent_name`, `depends_on`, `human_gate`, `reads`, `creates`, `modifies`, `steps`, `acceptance`. |
+| [`40-integrations.md`](40-integrations.md) | Lovable Cloud setup and migration workflow, LINE staff alerts, Cloudflare Turnstile, scheduled jobs, analytics, optional PromptPay/Resend, the parents' contact rule (D35), secrets setup steps. |
+| [`50-security-privacy.md`](50-security-privacy.md) | PDPA mapping, ROPA (record of processing), retention schedule, consent rules (incl. children 10+), the guardian follow-up opt-in and print consent, DSR and breach runbooks, security checklist, logging rules. |
+| [`90-task-breakdown.md`](90-task-breakdown.md) | How to run with Haiku and the dependency graph (§ 1), the **gate tracker** (§ 2), the support agents (§ 3), the card index with batch and status (§ 4) and the task cards (§ 5, including P3-19, P3-20 and P4-25 from 14 Oct 2026): one card = one small, testable change of about 1–4 files, each with `agent_name`, `depends_on`, `human_gate`, `reads`, `creates`, `modifies`, `steps`, `acceptance`. |
 
 If two files disagree, the order of authority is: `00-overview.md` (decisions and naming; its § 15 review log wins over
 everything) → `10-data-model.md` → `20-server-api.md` → `30-ui.md` → the rest → `90-task-breakdown.md`. Fix the lower file;
@@ -96,7 +111,9 @@ asks Lovable to add it; afterwards use `npm install --no-package-lock` only if t
 - Never `console.log` request bodies, names, phone numbers, LINE IDs, health fields or IP addresses.
   Log only an error code and a row id.
 - Never pre-tick a consent checkbox, and never combine two purposes in one checkbox.
-- Health/allergy data is read only through the audited database functions, never with a plain `select`.
+- Marketing is a guardian-only opt-in, default off (`marketing_line`, D31), contacted by hand only. Never send bulk or
+  automated marketing, and never use a child's information for it, except the nickname as a staff-only label (D43).
+- Health/allergy data is read only through the audited database functions (`get_child_health` for export and print too, D42), never with a plain `select`.
 - No cookies, no tracking pixels, no new third-party scripts unless the task card says so.
 
 **Copy and UI** (from `AGENTS.md`)
@@ -104,6 +121,7 @@ asks Lovable to add it; afterwards use `npm install --no-package-lock` only if t
 - Thai studio voice ends with ค่ะ; warm, non-judgmental, no fear-based wording. Say บอร์ดเกมการเงิน / board games,
   never "money game".
 - Wrap Thai compound words and names in `<Nobr>` (or U+2060 in plain strings); mark English inside Thai with `<En>`.
-- Don't invent facts: no group sizes, lunch arrangements, refund/cancellation/expiry rules, outcomes or guarantees.
+- Don't invent facts: no refund rules, deposits, outcomes or guarantees. Copy may state only facts the owner has approved
+  for publishing (`00-overview.md` § 13A, for example 8 seats per session) or facts from the studio's own Facebook page. Don't publish the make-up or cancellation rule unless the owner asks (D36). The credit rule and the notice-by-LINE wording (D40, D41) are drafts in `50-security-privacy.md` § 3.11 and stay unpublished unless the owner asks.
   Unknown policy → a field staff fill in, or "ask us on LINE".
 - Touch targets ≥ 44 px, visible focus rings, labels on every input, errors announced (`aria-live`), text contrast ≥ 4.5:1.

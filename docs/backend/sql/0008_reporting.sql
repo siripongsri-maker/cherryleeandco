@@ -51,14 +51,18 @@ select
                                                                                     as seats_booked,
   (count(b.id) filter (where b.status = 'attended'::public.booking_status))::integer as attended,
   (count(b.id) filter (where b.status = 'absent'::public.booking_status))::integer   as absent,
-  (count(b.id) filter (where b.status = 'cancelled'::public.booking_status))::integer as cancelled,
+  (count(b.id) filter (where b.status = 'cancelled'::public.booking_status
+                         and b.cancel_notice_channel is not null))::integer as cancelled,
   public.session_seats_left(s.id)                                                   as seats_left,
-  (count(b.id) filter (where b.status = 'cancelled_late'::public.booking_status))::integer as cancelled_late
+  (count(b.id) filter (where b.status = 'cancelled_late'::public.booking_status))::integer as cancelled_late,
+  -- Round two: a cancelled session (studio cancel) has no notice channel and returns its credit. Kept apart from 'cancelled'.
+  (count(b.id) filter (where b.status = 'cancelled'::public.booking_status
+                         and b.cancel_notice_channel is null))::integer as cancelled_studio
 from public.sessions s
 left join public.bookings b on b.session_id = s.id
 group by s.id;
 
-comment on view public.report_session_fill is 'Seats booked / left per session (staff only). seats_booked includes cancelled_late (the seat stays taken). cancelled = notice on time (no credit); cancelled_late = late or no notice (one credit used).';
+comment on view public.report_session_fill is 'Seats booked / left per session (staff only). seats_booked includes cancelled_late (the seat stays taken). cancelled = family cancellation with notice on time (no credit); cancelled_late = late or no notice (one credit used); cancelled_studio = the studio cancelled the session (no notice, credit returned).';
 
 
 -- Attendance per calendar month (non-cancelled sessions).

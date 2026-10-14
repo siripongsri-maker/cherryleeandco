@@ -1,11 +1,11 @@
 # 50 · Security and privacy (PDPA operations)
 
 Planning document, October 2026. **This is not legal advice.** It is a working plan based on the PDPA text
-(PDPC unofficial English translation) and published guidance. A Thai PDPA lawyer must review the privacy notice, the
-consent texts, the children-10+ approach (D11), the cross-border position and the retention schedule before the related
+(PDPC unofficial English translation) and published guidance. A Thai PDPA lawyer must review every privacy-notice version and every consent text (D38), the
+children-10+ approach (D11), the cross-border position and the retention schedule before the related
 phases go live (gates G9a, G9b).
 
-Names (tables, functions, enums, gates G0–G13 + G-MVP/G-HEALTH/G-PARK, decisions D1–D30, secrets) come from
+Names (tables, functions, enums, gates G0–G13 + G-MVP/G-HEALTH/G-PARK, decisions D1–D39, secrets) come from
 [`00-overview.md`](00-overview.md); its § 15 lists the October 2026 review resolutions (R-xx) applied here.
 If this file disagrees with `00-overview.md`, `10-data-model.md` or `20-server-api.md`, those files win; fix this one.
 Setup steps for vendors are in [`40-integrations.md`](40-integrations.md).
@@ -170,8 +170,9 @@ Decision D20. Table `audit_log` (append-only, kept 12 months via `retain_until`)
 
 | Event | How | Fields |
 |---|---|---|
-| Insert/update/delete on `families`, `guardians`, `children`, `family_contacts`, `package_purchases`, `payments`, `bookings`, `child_health`, `consent_records`, `user_roles`, `family_links`, `dsr_requests`, `breach_incidents` | trigger `audit_row_change()` | `at`, `actor_user_id` (`auth.uid()`), `actor_kind` (`staff` or `system`), `action` (`insert`/`update`/`delete`), `table_name`, `row_id`, `details` = changed **column names only** |
+| Insert/update/delete on `families`, `guardians`, `children`, `family_contacts`, `package_purchases`, `payments`, `bookings`, `child_health`, `consent_records`, `guardian_consent_records`, `user_roles`, `family_links`, `dsr_requests`, `breach_incidents` | trigger `audit_row_change()` | `at`, `actor_user_id` (`auth.uid()`), `actor_kind` (`staff` or `system`), `action` (`insert`/`update`/`delete`), `table_name`, `row_id`, `details` = changed **column names only** |
 | Every health read | inside `get_child_health` and `list_session_health_flags` | action `read_health`, child or session id |
+| Every print of the signature sheet (D33, card P4-25) | inside `record_family_print` (0005; `getPrintSheet` calls it first) | action `print_record`, family id, date, and a yes/no flag for "include health"; never the content |
 
 Never any field values: an audit log full of names and allergies would be a second copy of the data we protect.
 
@@ -319,7 +320,7 @@ Section numbers refer to the Personal Data Protection Act B.E. 2562 (2019).
 |---|---|---|---|
 | s.19 | Consent: before/at collection, explicit, separate, plain language, freely given, withdrawable as easily as given | Versioned TH/EN `consent_texts` (sha256, immutable); append-only `consent_records`; one unticked box per purpose; one-click withdrawal on `/my/$token` | D12, F4-01, F4-04, F5-03; § 12, § 13, § 16 |
 | s.20 | Minors: under 10 → parent consents; 10–19 → minor consents, plus parent where the act isn't one the minor can do alone | Guardian consent for every child; child's own consent for media at 10+ (staff, in person); child agreement on health at the first session | D11, `consent_status()`, `child_age_years()`; § 14 |
-| s.21 | Use only for the stated purpose | Purposes per table in the ROPA; no reuse for marketing | § 25 |
+| s.21 | Use only for the stated purpose | Purposes per table in the ROPA. Marketing is a separate opt-in purpose for guardians only (`marketing_line`, default off, D31). Children's information is never used for marketing or sales, except the nickname as a label on the internal follow-up list (D43, round two) | § 25; § 12.5; § 14 |
 | s.22 | Collect only what is necessary | Stage-based collection; birth month not birth date; no ID numbers, school, address, reasons for diets | `00-overview.md` § 6; D9 |
 | s.23 | Privacy notice before/at collection | `/privacy` (TH/EN), linked next to every form; `privacy_notice_version` stored on each request | F1-02, F3-08, F4-10 (cards P1-02, P3-16, P4-20); § 11 |
 | s.24 | Lawful basis for non-consent processing | Booking request = s.24(3) (no checkbox, D8); records = contract; payments = legal obligation; safety = legitimate interest | § 25 |
@@ -329,7 +330,7 @@ Section numbers refer to the Personal Data Protection Act B.E. 2562 (2019).
 | s.28/29 | Cross-border transfers | Asia Pacific region; DPA kept; disclosed in notice and health text | D2; § 21 |
 | s.30 | Access and copy within 30 days | `dsr_requests` (review +15 d, due +30 d); `export_family_data()` / `exportFamilyData` | P5; § 18 |
 | s.31 | Portability | JSON export | § 18 |
-| s.32 | Objection (incl. direct marketing) | No marketing in scope; objection handled as DSR | § 18 |
+| s.32 | Objection (incl. direct marketing) | Withdrawing `marketing_line` at any time (on `/my` or with staff) ends follow-up at once; that is how a direct-marketing objection is met. Any other objection is handled as a DSR | § 12.5; § 16; § 18 |
 | s.33 | Erasure | `erase_family()` / `eraseFamily` within 90 days incl. backups | § 18, § 19 |
 | s.34 | Restriction | `families.processing_restricted_at` set by the owner through `set_family_restriction()` (D28); the database refuses new processing while it is set; see § 18.4 | § 18.4 |
 | s.35/36 | Accuracy, rectification | Staff edit records; parents correct via enrol link or LINE | P3, P4 |
@@ -345,7 +346,7 @@ Section numbers refer to the Personal Data Protection Act B.E. 2562 (2019).
 
 ## 11. Privacy notice: outline, versions and full draft (TH + EN)
 
-⚖️ **LEGAL REVIEW** required (G9a for `…-v1`, again for every later version). Owner fills the `{{…}}` placeholders.
+⚖️ **LEGAL REVIEW** required (D38): the Thai PDPA lawyer reviews **every notice version** (`…-v1`, `…-v2`, `…-v3` and any later one) and **every consent text** (`0006`, `0006a` and any later one), together with the OWNER-APPROVE lines (`00-overview.md` § 13C). Owner fills the `{{…}}` placeholders.
 
 ### 11.1 Versions and the "collect only after you've told them" rule
 
@@ -357,8 +358,8 @@ wording**; `30-ui.md` § 3.4 only shows how `src/content/privacy.tsx` is coded. 
 | `PRIVACY_NOTICE_VERSION` | Ships with | Adds sections (tags below) | Gate |
 |---|---|---|---|
 | `YYYY-MM-v1` | Stage A (card P1-02), before `/book` goes live | all `[P1]` sections, including 3.9 and its two retention rows (the owner's runbook log of rights requests and incidents exists from Stage A, R-28) | G9a |
-| `YYYY-MM-v2` | Stage B (card P3-16), before family records go live | `[P3]`: family records, payments, attendance, contacts, their retention rows | G9a |
-| `YYYY-MM-v3` | Stage C (card P4-20), before `/enrol` and `/my` go live | `[P4]`: health (only if G-HEALTH = system), media, enrolment link, children 10+; the `/my` part of `[P5]` | G9a, G9b |
+| `YYYY-MM-v2` | Stage B (card P3-16), before family records go live | `[P3]`: family records, payments, attendance, contacts, their retention rows, and the guardian follow-up opt-in (§ 3.10) | G9a; G9b for `0006a` |
+| `YYYY-MM-v3` | Stage C (card P4-20), before `/enrol` and `/my` go live | `[P4]`: health (only if G-HEALTH = system), media including print (§ 3.7), enrolment link, children 10+; the `/my` part of `[P5]`, including the `/my` marketing control (§ 3.10) | G9a, G9b |
 | `YYYY-MM-v4` | only if a parked item that sends data somewhere new is switched on (Umami, Resend, PromptPay page) | `[P6]` rows | G9a |
 
 `PRIVACY_NOTICE_VERSION` is exported from `src/content/privacy.tsx` and saved on each booking request. The page shows
@@ -369,11 +370,12 @@ English inside Thai in `<En>` (AGENTS.md).
 ### 11.2 Outline (both languages, same order)
 
 1. About this notice `[P1]`
-2. Who looks after your data (controller, contact) `[P1]`
+2. Who looks after your data (controller, website, contact) `[P1]`
 3. What we collect and why
    3.1 Visiting the website `[P1]` · 3.2 Booking request form `[P1]` · 3.3 Chatting with us `[P1]` ·
-   3.4 Family records `[P3]` · 3.5 Emergency and pickup contacts `[P3]` · 3.6 Allergy and care information `[P4]` ·
-   3.7 Photos and videos `[P4]` · 3.8 Private family links `[P4]` (`/my` part `[P5]`) · 3.9 Rights requests and incident records `[P1]` (R-28)
+   3.4 Family records `[P3]` · 3.5 Emergency and pickup contacts `[P3]` · 3.6 Allergy and care information `[P4]` (flour and nuts, D46; print checklist, D42) ·
+   3.7 Photos, videos and print `[P4]` · 3.8 Private family links `[P4]` (`/my` part `[P5]`) · 3.9 Rights requests and incident records `[P1]` (R-28) ·
+   3.10 Guardian follow-up opt-in `[P3]` (D31; nickname label, D43) · 3.11 Cancelling and missed classes `[P3]` (DRAFT: notice by LINE and the credit rule, D40, D41; publish only if the owner asks, D36)
 4. Children's information `[P1]` (10+ paragraph `[P4]`)
 5. Who we share data with `[P1]` (+ rows per phase)
 6. Data stored outside Thailand `[P1]`
@@ -396,12 +398,13 @@ English inside Thai in `<En>` (AGENTS.md).
 CherryLee & Co. (เชอร์รี่ลีแอนด์โค) ดูแลข้อมูลของทุกครอบครัวด้วยความใส่ใจ เหมือนที่เราดูแลเด็กๆ ในห้องเรียนค่ะ
 ประกาศนี้อธิบายว่าเราเก็บข้อมูลส่วนบุคคลอะไร ใช้ทำอะไร ส่งต่อให้ใคร เก็บไว้นานแค่ไหน และคุณมีสิทธิอะไรบ้าง
 ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562
-หลักของเราคือ เก็บเท่าที่จำเป็นในแต่ละขั้นตอน ไม่ขายข้อมูล และไม่ใช้ข้อมูลเพื่อการโฆษณาค่ะ
+หลักของเราคือ เก็บเท่าที่จำเป็นในแต่ละขั้นตอน ไม่ขายข้อมูล และไม่ส่งข้อมูลให้บริษัทโฆษณาค่ะ
 
 ## 2. ใครดูแลข้อมูลของคุณ [P1]
 
 - ผู้ควบคุมข้อมูลส่วนบุคคล: {{CONTROLLER_NAME_TH}}
 - ที่อยู่: {{FULL_ADDRESS_TH}}
+- เว็บไซต์: https://cherryleeandco.com
 - ติดต่อเรื่องข้อมูลส่วนบุคคล: LINE @cherryleeandco · อีเมล cherryleeandco@gmail.com ·
   มาพบเราที่สตูดิโอ หรือส่งไปรษณีย์ลงทะเบียนมาตามที่อยู่ข้างต้น
 - ผู้ประสานงานด้านความเป็นส่วนตัว: {{PRIVACY_CONTACT_TH}}
@@ -467,10 +470,10 @@ CherryLee & Co. (เชอร์รี่ลีแอนด์โค) ดูแ�
 ข้อมูลนี้เป็นข้อมูลอ่อนไหว เราจึงเก็บ **เฉพาะเมื่อผู้ปกครองให้ความยินยอมโดยชัดแจ้ง**
 ในช่องแยกต่างหากที่ไม่ได้ติ๊กไว้ล่วงหน้า (มาตรา 26)
 
-- **ข้อมูล:** ชนิดอาหารที่แพ้ อาหารที่ต้องหลีกเลี่ยง (ไม่ต้องบอกเหตุผล) และวิธีดูแลเบื้องต้น
+- **ข้อมูล:** ชนิดอาหารที่แพ้ อาหารที่ต้องหลีกเลี่ยง (ไม่ต้องบอกเหตุผล) และวิธีดูแลเบื้องต้น ตัวเลือกชนิดอาหารที่แพ้ได้แก่ นม ไข่ **แป้ง (ทุกชนิด และผลิตภัณฑ์จากแป้ง)** แป้งสาลี/ข้าวสาลี **ถั่ว** (ถั่วลิสง หรือถั่วเปลือกแข็ง เช่น อัลมอนด์ วอลนัท เม็ดมะม่วงหิมพานต์) ถั่วเหลือง ปลา อาหารทะเลเปลือกแข็ง งา และอื่น ๆ ที่คุณเขียนเพิ่มได้ <!-- LEGAL REVIEW (D46, G9b) -->
 - **ใช้เพื่อ:** ให้คุณครูและอังเคิลลีวางแผนกิจกรรมทำอาหารและของว่างให้ปลอดภัยสำหรับน้อง
 - **ใครเห็นได้:** เฉพาะคุณครูและทีมงานของสตูดิโอ รายชื่อในวันเรียนแสดงเพียงป้ายชนิดอาหารที่แพ้
-  การเปิดดูรายละเอียดทุกครั้งมีการบันทึกไว้ และเราไม่ส่งข้อมูลนี้ทาง LINE
+  การเปิดดูรายละเอียดทุกครั้งมีการบันทึกไว้ และเราไม่ส่งข้อมูลนี้ทาง LINE ใบรายชื่อที่พิมพ์สำหรับวันเรียนจะแสดงรายการชนิดอาหารที่แพ้เป็นช่องทำเครื่องหมายให้คุณครูใช้ในชั้นเรียน ส่วนข้อมูลอื่น เช่น อาหารที่ต้องหลีกเลี่ยงและหมายเหตุการดูแล จะพิมพ์เฉพาะเมื่อทีมงานเลือกให้พิมพ์ด้วย และการพิมพ์แต่ละครั้งมีการบันทึกไว้ค่ะ <!-- LEGAL REVIEW (D42, G9b) -->
 - **ไม่บังคับ:** ถ้าไม่ให้ข้อมูล ไม่เป็นไรเลยค่ะ ถ้าน้องแพ้อาหารอะไร บอกคุณครูได้ทุกเมื่อก่อนคลาสทำอาหาร
   <!-- OWNER-APPROVE (R-24) -->
 - **ถอนได้ทุกเมื่อ:** เมื่อถอน เราจะลบข้อมูลนี้ออกจากระบบ
@@ -478,12 +481,15 @@ CherryLee & Co. (เชอร์รี่ลีแอนด์โค) ดูแ�
 
 ในเหตุฉุกเฉินที่น้องต้องได้รับการดูแลทันที เราอาจแจ้งข้อมูลที่จำเป็นแก่บุคลากรทางการแพทย์ (มาตรา 26(1))
 
-### 3.7 รูปภาพและวิดีโอ [P4]
+### 3.7 รูปภาพ วิดีโอ และสิ่งพิมพ์ [P4]
 
-เราขอความยินยอม **แยกตามช่องทาง** ได้แก่ กลุ่มผู้ปกครองแบบปิด เว็บไซต์นี้ Facebook / Instagram / TikTok และ YouTube
+เราขอความยินยอม **แยกตามช่องทาง** ได้แก่ กลุ่มผู้ปกครองแบบปิด เว็บไซต์นี้ Facebook / Instagram / TikTok YouTube
+และสิ่งพิมพ์ของสตูดิโอ <!-- OWNER-APPROVE (D32): owner lists what counts as printed material -->
 และให้คุณเลือกว่าเห็นหน้าน้องได้หรือไม่ ทุกช่องทางตั้งต้นเป็น "ไม่ยินยอม" (มาตรา 19 และ 20)
 
 - เราไม่ใส่ชื่อจริงหรือชื่อเล่นของน้องในคำบรรยาย ชื่อไฟล์ หรือข้อความแทนภาพ
+- สิ่งพิมพ์: เมื่อคุณถอนความยินยอม เราจะไม่พิมพ์ฉบับใหม่ที่มีรูปหรือวิดีโอของน้อง แต่สิ่งพิมพ์ที่พิมพ์และแจกไปแล้วเรียกคืนไม่ได้ค่ะ <!-- OWNER-APPROVE (D32) -->
+
 - ระบบหลังบ้านของเว็บไซต์ไม่เก็บไฟล์รูปหรือวิดีโอของเด็ก เก็บเพียงรายการอ้างอิง (เช่น รหัสวิดีโอ YouTube) และสถานะความยินยอม
 - เมื่อถอนความยินยอม เราจะหยุดใช้ใหม่ทันที และนำออกจากช่องทางของเราโดยเร็ว
   สำเนาที่ผู้อื่นบันทึกหรือแชร์ไปแล้วอาจอยู่นอกการควบคุมของเรา แต่เราจะช่วยติดตามให้เท่าที่ทำได้ค่ะ
@@ -499,9 +505,33 @@ CherryLee & Co. (เชอร์รี่ลีแอนด์โค) ดูแ�
 เราบันทึกคำขอใช้สิทธิและการตอบกลับ (เก็บ 3 ปี) และบันทึกเหตุการณ์ละเมิดข้อมูลส่วนบุคคล (เก็บ 5 ปี)
 เพื่อปฏิบัติตามกฎหมาย (มาตรา 24(6))
 
+### 3.10 ข่าวสารจากทีมงานสำหรับผู้ปกครองที่เลือกรับ [P3]
+
+- **ทางเลือก:** ไม่บังคับค่ะ ช่องนี้ไม่ได้ติ๊กไว้ล่วงหน้า และเราจะแสดงข้อความเต็มไว้เหนือช่องนั้น การเลือกรับหรือไม่รับไม่กระทบการจองหรือการเรียนของน้อง
+- **สำหรับผู้ปกครองเท่านั้น:** การเลือกนี้เป็นเรื่องของผู้ปกครอง ไม่ใช่ข้อมูลของน้อง
+- **ชื่อเล่นของน้องในรายการติดตาม:** ในรายการติดตามที่ใช้ภายในทีมงานเท่านั้น เราจะใช้ป้ายชื่อว่า "ครอบครัวน้อง" กับ **ชื่อเล่น** ของน้องเท่านั้น ไม่มีชื่อจริง อายุ หรือข้อมูลสุขภาพ รายการนี้ใช้เพื่อการติดตามของสตูดิโอเอง ไม่แสดงต่อสาธารณะ และไม่ส่งให้ผู้อื่น ข้อมูลอื่นของน้องไม่ถูกใช้เพื่อการนี้ค่ะ <!-- LEGAL REVIEW (D43, G9b) -->
+- **ข้อมูล:** การเลือกรับหรือไม่รับ ฉบับของข้อความที่คุณเห็น วันที่ และช่องทางที่บันทึกไว้ (ใช้ข้อมูลติดต่อที่มีอยู่แล้วในข้อ 3.4)
+- **ใช้เพื่อ:** แจ้งข่าวสารกิจกรรมและรอบเรียนของสตูดิโอ ทีมงานจะติดต่อคุณด้วยตนเองทางแชต LINE @cherryleeandco
+  ที่ครอบครัวของคุณเคยทักมาแล้วเท่านั้น ทีละครอบครัว เราไม่ส่งข้อความอัตโนมัติ และไม่ส่งข่าวสารถึงคนจำนวนมากพร้อมกันค่ะ
+- **ฐานทางกฎหมาย:** ความยินยอม (มาตรา 19) ซึ่งถอนได้ทุกเมื่อ
+- **ถอนได้ทุกเมื่อ:** ทำได้ที่ลิงก์ "ความยินยอมของฉัน" หรือบอกทีมงานได้เลยค่ะ เราจะหยุดติดต่อทันที
+- **ไม่ส่งต่อให้ผู้อื่น:** เราจะไม่ส่งข้อมูลของคุณให้ผู้อื่นเพื่อการตลาดค่ะ
+- **ระยะเวลาเก็บ:** ตลอดอายุความยินยอม และอีก 3 ปี (หลักฐาน) ข้อมูลติดต่อเก็บตามข้อ 3.4
+<!-- LEGAL REVIEW (D38) --> <!-- OWNER-APPROVE (D31) -->
+
+### 3.11 การแจ้งยกเลิกและการขาดเรียน [P3] (ร่าง: เผยแพร่เฉพาะเมื่อเจ้าของสตูดิโอขอ D36)
+
+- **ช่องทางแจ้ง:** แจ้งทางไลน์ @cherryleeandco ในแชตที่ครอบครัวทักมาแล้ว หรือแจ้งด้วยตนเองที่สตูดิโอ
+- **สิ่งที่เราบันทึก:** เวลาที่ข้อความไลน์ของคุณเข้ามาถึง (ดูจากแชต) และช่องทางที่แจ้ง ใช้เพื่อจัดการการจองของน้องเท่านั้น
+- **เครดิตแบบง่าย ๆ:** ถ้าแจ้งยกเลิกล่วงหน้าอย่างน้อยตามเวลาที่สตูดิโอกำหนด (ปัจจุบัน 3 ชั่วโมงก่อนเวลาเริ่มเรียน) เครดิตของคุณยังอยู่ครบค่ะ ถ้าน้องไม่มาเรียนโดยไม่ได้แจ้ง หรือแจ้งช้ากว่าเวลานั้น ระบบจะหักเครดิตหนึ่งครั้งค่ะ
+- **การนัดเรียนชดเชย:** ใช้เวลาแจ้งเดียวกัน
+- **ฐานทางกฎหมาย:** สัญญาการเรียนที่คุณจองไว้ (มาตรา 24(3)) ข้อมูลนี้เก็บไว้กับรายการจองของน้อง
+- **ระยะเวลาเก็บ:** ตามรายการจองของน้อง (รอเจ้าของสตูดิโอยืนยัน) <!-- LEGAL REVIEW (D40, D41, G9b) -->
+
 ## 4. ข้อมูลของเด็ก [P1]
 
 ผู้ปกครองหรือผู้ใช้อำนาจปกครองเป็นผู้ให้ข้อมูลและให้ความยินยอมแทนน้องค่ะ เราไม่ขอข้อมูลจากเด็กโดยตรงทางออนไลน์
+เราไม่นำข้อมูลของน้องไปใช้เพื่อการตลาดหรือการขายค่ะ ยกเว้นชื่อเล่นของน้องที่ใช้เป็นป้ายในรายการติดตามภายในทีมงานเท่านั้น (ดูข้อ 3.10) <!-- LEGAL REVIEW (D43, G9b) -->
 
 [P4] สำหรับน้องอายุ 10 ปีขึ้นไป คุณครูจะอธิบายด้วยภาษาที่เข้าใจง่าย และถามความเห็นของน้องเองด้วย
 ทั้งเรื่องรูปและวิดีโอ และเรื่องข้อมูลการแพ้อาหาร ถ้าน้องไม่สบายใจ เราจะเคารพการตัดสินใจของน้องและพูดคุยกับครอบครัวค่ะ
@@ -543,6 +573,7 @@ CherryLee & Co. (เชอร์รี่ลีแอนด์โค) ดูแ�
 | [P3] บันทึกการชำระเงินและแพ็กเกจ | 5 ปีหลังสิ้นปีบัญชี ตามกฎหมายบัญชี |
 | [P4] ข้อมูลการแพ้อาหาร | จนกว่าจะถอนความยินยอม หรือ 6 เดือนหลังวันเรียนครั้งล่าสุด |
 | [P4] หลักฐานความยินยอม | ตลอดอายุความยินยอม และอีก 3 ปี |
+| [P3] หลักฐานการเลือกรับข่าวสาร (ข้อ 3.10) | ตลอดอายุความยินยอม และอีก 3 ปี |
 | [P4] ลิงก์ส่วนตัว | 30 วันหลังลิงก์หมดอายุ |
 | คำขอใช้สิทธิ | 3 ปีหลังตอบกลับ |
 | บันทึกเหตุละเมิดข้อมูล | 5 ปี |
@@ -616,12 +647,13 @@ Version {PRIVACY_NOTICE_VERSION} · Effective {{EFFECTIVE_DATE_EN}}
 CherryLee & Co. looks after every family's information with the same care we give the children in our classes.
 This notice explains what personal data we collect, why, who we share it with, how long we keep it and what your
 rights are under Thailand's Personal Data Protection Act B.E. 2562 (2019).
-Our approach: collect only what each step needs, never sell data, and never use it for advertising.
+Our approach: collect only what each step needs, never sell data, and never pass it to advertisers.
 
 ## 2. Who looks after your data [P1]
 
 - Data controller: {{CONTROLLER_NAME_EN}}
 - Address: {{FULL_ADDRESS_EN}}
+- Website: https://cherryleeandco.com
 - Privacy questions: LINE @cherryleeandco · email cherryleeandco@gmail.com · in person at the studio, or by
   registered mail to the address above
 - Privacy contact: {{PRIVACY_CONTACT_EN}}
@@ -689,10 +721,10 @@ Please let these people know, and share this notice with them.
 This is sensitive data, so we keep it **only with a parent's or guardian's explicit consent**, given in its own
 checkbox that is never ticked in advance (section 26).
 
-- **What:** foods your child is allergic to, foods to avoid (no need to tell us why), and first-aid notes.
+- **What:** foods your child is allergic to, foods to avoid (no need to tell us why), and first-aid notes. The allergy choices are: milk, egg, **flour (all kinds, and products made with flour)**, wheat, **nuts** (peanut, or tree nuts such as almond, walnut or cashew), soy, fish, shellfish, sesame, and any other allergy you write in. <!-- LEGAL REVIEW (D46, G9b) -->
 - **Why:** so the teachers and Uncle Lee can plan cooking activities and snacks safely for your child.
 - **Who can see it:** only the studio's teachers and staff. Class lists show allergy labels only; every time someone
-  opens the full notes it is logged. We never send this information over LINE.
+  opens the full notes it is logged. We never send this information over LINE. A printed sheet for class shows the allergy checklist; each print is logged, and other notes are printed only when our team chooses to include them. <!-- LEGAL REVIEW (D42, G9b) -->
 - **Optional:** if you'd rather not share it, that's fine. If your child has a food allergy, you can tell a teacher
   any time before a cooking session. <!-- OWNER-APPROVE (R-24) -->
 - **You can withdraw at any time:** we then delete it from our system.
@@ -701,12 +733,15 @@ checkbox that is never ticked in advance (section 26).
 In an emergency where your child needs care right away, we may tell medical staff what they need to know
 (section 26(1)).
 
-### 3.7 Photos and videos [P4]
+### 3.7 Photos, videos and print [P4]
 
-We ask **separately for each channel**: a private parents' group, this website, Facebook / Instagram / TikTok, and
-YouTube, and whether your child's face may be shown. Every channel starts as "no" (sections 19 and 20).
+We ask **separately for each channel**: a private parents' group, this website, Facebook / Instagram / TikTok,
+YouTube, and the studio's printed materials (print), and whether your child's face may be shown. Every channel starts as "no" (sections 19 and 20).
 
 - We never put children's names or nicknames in captions, file names or image descriptions.
+- Print: if you withdraw, we won't print new copies that show your child. Copies already printed and handed out can't be
+  recalled. <!-- OWNER-APPROVE (D32) -->
+
 - Our website's back office doesn't store children's photos or videos, only a reference (such as a YouTube video ID)
   and the consent status.
 - If you withdraw, we stop any new use straight away and remove the content from our channels as soon as we can.
@@ -723,10 +758,38 @@ store a one-way code of each link, and we can cancel a link straight away if you
 We record rights requests and our replies (kept 3 years) and personal data breach records (kept 5 years) because the
 law requires it (section 24(6)).
 
+### 3.10 News from the studio team for guardians who opt in [P3]
+
+- **Your choice:** optional. The box starts unticked, and the full text is shown above it. Saying yes or no doesn't affect
+  your child's booking or classes.
+- **Guardians only:** this choice is about you, not your child.
+- **Your child's nickname on the staff list:** the team's internal follow-up list labels the family "Family of" plus your child's nickname only. It shows no full name, age or health information. It is for the studio's own follow-up, is seen by staff only, is never shown publicly and is never sent to anyone. We don't use any other information about your child for this. <!-- LEGAL REVIEW (D43, G9b) -->
+- **What:** your yes or no, the version of the text you saw, the date, and the channel we recorded it through (we use the
+  contact details already in section 3.4).
+- **Why:** to share news about the studio's activities and new sessions. A member of our team messages you personally,
+  one family at a time, in the LINE chat you already started with @cherryleeandco. We don't send automatic messages or
+  mass mailings.
+- **Legal basis:** your consent (section 19), which you can withdraw at any time.
+- **Withdrawing:** use your "My consents" link or tell our team. We stop straight away.
+- **Not passed on:** we never pass your details to anyone else for marketing.
+- **How long:** for as long as the consent applies, plus 3 years as evidence. Contact details follow section 3.4.
+<!-- LEGAL REVIEW (D38) --> <!-- OWNER-APPROVE (D31) -->
+
+### 3.11 Cancelling and missed classes [P3] (DRAFT: publish only if the owner asks, D36)
+
+- **How to tell us:** on LINE, in the @cherryleeandco chat your family already started, or in person at the studio.
+- **What we record:** the time your LINE message arrived (from the chat) and how you told us (LINE or in person). We use it only to manage your child's booking.
+- **Credits in plain words:** if you cancel at least the notice time before the class starts (currently 3 hours), your credit stays. If your child doesn't come and you didn't tell us, or you told us later than that, one credit is used.
+- **Make-up classes:** the same notice time applies.
+- **Legal basis:** the contract for the classes you booked (section 24(3)). The record stays with your child's booking.
+- **How long:** with your child's booking record (to be confirmed by the owner). <!-- LEGAL REVIEW (D40, D41, G9b) -->
+
 ## 4. Children's information [P1]
 
 Parents or guardians with parental responsibility give information and consent for their children. We don't collect
 information from children directly online.
+
+We never use your child's information for marketing or sales, except your child's nickname as a label on the team's internal follow-up list (see section 3.10). <!-- LEGAL REVIEW (D43, G9b) -->
 
 [P4] For children aged 10 and over, a teacher also explains things in child-friendly words and asks the child's own
 view about photos and videos and about allergy information. If a child isn't comfortable, we respect that and talk it
@@ -768,6 +831,7 @@ asked for.
 | [P3] Payment and package records | 5 years after the end of the accounting year, as accounting law requires |
 | [P4] Allergy information | until you withdraw, or 6 months after your child's last session |
 | [P4] Consent records | for as long as the consent applies, plus 3 years |
+| [P3] Follow-up opt-in records (section 3.10) | for as long as the consent applies, plus 3 years |
 | [P4] Private links | 30 days after the link expires |
 | Rights requests | 3 years after our reply |
 | Data breach records | 5 years |
@@ -849,14 +913,27 @@ Recommended wording; `src/content/booking.tsx` (`30-ui.md`) is authoritative.
 
 ---
 
+### 11.7 Round-two changes to the notice (14 Oct 2026, the owner's second set of answers)
+
+The changed notice lines (§§ 3.6, 3.10, 3.11 and 4, TH and EN) carry a `LEGAL REVIEW` marker. The consent-text changes (§§ 12.2 R-4 and 12.5) and the other changed rules (§§ 14, 15, 16.1, 23, 25 and 28) are in the same G9b review. The lawyer checks each one before the version that carries it goes live (D38). Nothing here goes onto `/privacy` before that, and § 3.11 is published only if the owner asks (D36).
+
+| Change | Where (TH and EN) | Version | Decision | Status |
+|---|---|---|---|---|
+| Allergy list with flour and the nut group; the print checklist | § 3.6 | `…-v3` [P4] | D46, D42 | DRAFT, G9b |
+| Child's nickname as the staff follow-up label; the "never used" promise replaced | §§ 3.10, 4, 12.5 (and R-4 in § 12.2) | `…-v2` [P3] | D43 | DRAFT, G9b |
+| One follow-up row per granted guardian | § 12.5 (list behaviour, no new sentence for the notice) | `…-v2` [P3] | D44 | no text change |
+| Cancellation notice by LINE or in person; credit rule in plain words | § 3.11 (new), ROPA § 25 row 13 | `…-v2` [P3] | D40, D41 | DRAFT, publish only if the owner asks, G9b |
+
+Open for the owner, one line each (the drafts stay DRAFT until answered): (a) a family with two children, or a child with no nickname: which name the label uses (D43); (b) how long the cancellation record is kept (§ 3.11 says "to be confirmed"); (c) the allergen checklist printed without the include-health tick (D42), which the owner confirms.
+
 ## 12. Consent texts v1 (TH + EN)
 
-⚖️ **LEGAL REVIEW** (G9b) before the seed is applied.
+⚖️ **LEGAL REVIEW** (G9b, D38) before each seed is applied: `0006a` before G4 · 0006a, and `0006` before G4 · 0006.
 
 ### 12.0 Where the wording lives (single source)
 
-The **canonical v1 wording** (title + body, Thai and English, all five purposes) is in
-[`sql/0006_seed_consent_texts.sql`](sql/0006_seed_consent_texts.sql). That file ranks above this one (README order of
+The **canonical wording** (title + body, Thai and English) is in
+[`sql/0006_seed_consent_texts.sql`](sql/0006_seed_consent_texts.sql) for the Stage C purposes (health and the five media channels, `media_print` included), and in [`sql/0006a_seed_marketing_text.sql`](sql/0006a_seed_marketing_text.sql) for the guardian marketing opt-in (Stage B). Those files rank above this one (README order of
 authority), so this section does **not** repeat the full texts. It gives the version ids, a content checklist for the
 lawyer, the review deltas we recommend adding to 0006 **before** it is applied, and the UI-only copy that lives in
 `src/content/*.tsx` rather than in the database. After 0006 is applied, any wording change is a **new version**, never an
@@ -867,21 +944,23 @@ first `health_allergy` text can only come from a reviewed SQL draft (R-35), so t
 **Version id format** (used here, in review notes and in `/admin/settings`): `<consent_purpose>.v<version>.<lang>`,
 e.g. `health_allergy.v1.th`. In the database that is the row `consent_texts(purpose, version, lang)`.
 
-| Version id | Title in 0006 (TH / EN) | `is_explicit` | `requires_child_consent_from_age` | Where asked |
+| Version id | Title in the seed file (TH / EN) | `is_explicit` | `requires_child_consent_from_age` | Where asked |
 |---|---|---|---|---|
 | `health_allergy.v1.th` / `.en` | ข้อมูลการแพ้อาหารและการดูแลของน้อง (ขอความยินยอมโดยชัดแจ้ง) / Your child's food allergies and care notes (explicit consent) | `true` | `10` | `/enrol/$token` health section; staff (paper/in person) |
 | `media_parents_group.v1.th` / `.en` | รูปและวิดีโอในกลุ่มแชตส่วนตัวของผู้ปกครอง / Photos and videos in the private parents' chat group | `false` | `10` | `/enrol/$token` media section; `/my/$token` |
 | `media_website.v1.th` / `.en` | รูปและวิดีโอบนเว็บไซต์ของสตูดิโอ / Photos and videos on the studio's website | `false` | `10` | same |
 | `media_social.v1.th` / `.en` | รูปและวิดีโอบน Facebook, Instagram และ TikTok ของสตูดิโอ / … Facebook, Instagram and TikTok | `false` | `10` | same |
 | `media_youtube.v1.th` / `.en` | วิดีโอบนช่อง YouTube ของสตูดิโอ / Videos on the studio's YouTube channel | `false` | `10` | same |
+| `media_print.v1.th` / `.en` (new, D32) | รูปและวิดีโอในสิ่งพิมพ์ของสตูดิโอ / Photos and videos in the studio's printed materials | `false` | `10` | same (`/enrol/$token`, `/my/$token`, staff in person); draft in § 12.6 |
+| `marketing_line.v1.th` / `.en` (new, D31; in `0006a`) | รับข่าวสารกิจกรรมและรอบเรียนใหม่จากทีมงาน (ไม่บังคับ) / Hear from the studio team about activities and new sessions (optional) | `false` | n/a (guardian only) | create-from-request and P3-11 edit sheets (P3-04, P3-11); `/my/$token` (P4-13, P4-22); draft in § 12.5 |
 
 The task brief's "internal / social / website" media purposes map to `media_parents_group` (internal: the private
-parents' group), `media_social` and `media_website`; YouTube is its own purpose, `media_youtube`.
+parents' group), `media_social` and `media_website`; YouTube is its own purpose, `media_youtube`. Print is `media_print` (D32).
 
 Purposes **not** used, on purpose:
 - **Booking contact consent:** not needed. A booking request relies on PDPA s.24(3) (D8); a consent box there would
   bundle consent where another basis fits (PDPC consent guideline). Use the short notice in § 11.5 instead.
-- **Marketing opt-in:** out of scope for P0–P6 (no marketing channel; `00-overview.md` § 1 non-goals). Parked draft in § 12.5.
+- **Marketing opt-in:** no longer out of scope. It is the guardian purpose `marketing_line` (D31), in the core design from Stage B. Text and rules: § 12.5.
 
 **Rendering rule (for `30-ui.md`):** show `title` as the heading and the whole `body_md` directly above an **unticked**
 checkbox (never behind a "read more" link); 0006 bodies end with the affirmative statement for the box. The checkbox
@@ -908,8 +987,9 @@ Each text must say, in plain words, in both languages. ✓ = present in the 0006
 | Emergency disclosure to medical staff (s.26(1)) | **missing → delta R-1** | n/a |
 | Withdrawal doesn't affect earlier lawful use (s.19) | **missing → delta R-2** | **missing → delta R-2** |
 | Website clips are hosted on YouTube, so both consents are needed | n/a | **missing in `media_website` → delta R-3** |
+| Print: copies already printed and handed out can't be recalled (honest) | n/a | `media_print` only: in the § 12.6 draft, to add to `0006` |
 
-### 12.2 Recommended review deltas for 0006 (add before G4, after G9b approval)
+### 12.2 Recommended review deltas for 0006 and 0006a (add before G4, after G9b approval)
 
 Each delta is a sentence (TH + EN) the lawyer approves; the builder then edits 0006 **before** it is applied.
 
@@ -917,13 +997,17 @@ Each delta is a sentence (TH + EN) the lawyer approves; the builder then edits 0
 - TH: "ในเหตุฉุกเฉินที่น้องต้องได้รับการดูแลทันที เราอาจแจ้งข้อมูลที่จำเป็นแก่บุคลากรทางการแพทย์ค่ะ"
 - EN: "In an emergency where your child needs care right away, we may tell medical staff what they need to know."
 
-**R-2 · all five: effect of withdrawal** (append to the "withdraw at any time" sentence)
+**R-2 · every purpose in 0006 and 0006a: effect of withdrawal** (append to the "withdraw at any time" sentence)
 - TH: "การถอนความยินยอมไม่กระทบสิ่งที่ทำไปแล้วก่อนหน้านั้นค่ะ"
 - EN: "Withdrawing doesn't affect anything done before."
 
 **R-3 · `media_website`: YouTube hosting** (add as a bullet)
 - TH: "วิดีโอบนเว็บไซต์ฝากไว้บน YouTube ด้วย เราจะใช้วิดีโอที่มีน้องบนเว็บไซต์ก็ต่อเมื่อคุณพ่อคุณแม่อนุญาตทั้งข้อเว็บไซต์และข้อ YouTube ค่ะ"
 - EN: "Videos on the website are hosted on YouTube, so we only use a video of your child on the website if you agree to both the website and YouTube."
+
+**R-4 · `marketing_line`: the staff follow-up label (D43, round two)**
+- TH: "ในรายการติดตามภายในทีมงาน เราใช้เฉพาะชื่อเล่นของน้องเป็นป้ายชื่อ ไม่มีชื่อจริง อายุ หรือข้อมูลสุขภาพ และไม่ใช้ข้อมูลอื่นของน้องเพื่อการนี้ค่ะ"
+- EN: "On the team's internal follow-up list we use only your child's nickname as a label. It shows no full name, age or health information, and we don't use any other information about your child for this."
 
 If the lawyer rejects a delta, record why in the G9b notes in `90-task-breakdown.md`.
 
@@ -939,7 +1023,7 @@ earlier info). Notes (OWNER-APPROVE, R-24: an invitation, not a promise of a stu
 - Decline — TH: "รับทราบค่ะ เราจะไม่เก็บข้อมูลการแพ้อาหารของน้อง ถ้าเคยให้ไว้ก่อนหน้านี้ ระบบจะลบออกให้ค่ะ"
   · EN: "Understood. We won't keep allergy information for your child, and anything shared before will be deleted."
 
-**Face-level choice** (stored per media consent row as `media_level`; 0006 asks it within each media purpose, so the UI
+**Face-level choice** (stored per media consent row as `media_level`; 0006 asks it within each media purpose, `media_print` included, so the UI
 shows it per ticked purpose and may offer "ใช้แบบเดียวกันทุกช่องทาง / Same for all channels" as a shortcut; no default
 selection once a box is ticked):
 - Question TH: "ถ้าน้องอยู่ในรูปหรือวิดีโอ เห็นหน้าน้องได้ไหมคะ" · EN: "If your child appears, may their face be shown?"
@@ -952,16 +1036,46 @@ Withdrawal copy and confirmation messages: § 16.3 and § 16.4.
 
 Recorded by staff in person (D11); the kid-friendly TH/EN script is in `30-ui.md`. Principles in § 14.
 
-### 12.5 Parked (not in P0–P6): marketing on LINE
+### 12.5 Guardian marketing opt-in: `marketing_line` (core from Stage B, D31)
 
-Requires a new `consent_purpose` value (proposal `marketing_line`, not in `00-overview.md`), an owner decision, a
-broadcast plan within the `@cherryleeandco` quota and a privacy-notice update. Objection to direct marketing must be
-honoured at any time (s.32). Never pre-ticked, never bundled with enrolment.
+Decided 14 Oct 2026 (owner, decision 2). This replaces the earlier parked draft. It is a **guardian** purpose. Round two (14 Oct 2026): the only child detail it touches is the nickname on the staff follow-up label (D43); otherwise children's information is never used for it. Objection to direct marketing is met at any time by withdrawing it (s.32). Never
+pre-ticked, never bundled with enrolment or with any other purpose.
 
-- TH title: "รับข่าวสารกิจกรรมและรอบเรียนใหม่ทาง LINE (ไม่บังคับ)"
-- TH body: "เราจะส่งข่าวสารเป็นครั้งคราว เฉพาะเรื่องกิจกรรมและรอบเรียนของสตูดิโอ และจะไม่ส่งข้อมูลของคุณให้ผู้อื่นเพื่อการตลาดค่ะ ยกเลิกได้ทุกเมื่อโดยบอกเราทาง LINE หรือผ่านลิงก์ \"ความยินยอมของฉัน\" เมื่อติ๊กช่องนี้ คุณยินยอมให้ CherryLee & Co. ส่งข่าวสารดังกล่าวทาง LINE ค่ะ"
-- EN title: "News about activities and new sessions on LINE (optional)"
-- EN body: "We'll write now and then, only about the studio's activities and sessions, and we never pass your details to anyone for marketing. Stop any time by telling us on LINE or through your \"My consents\" link. By ticking this box, you agree that CherryLee & Co. may send you this news on LINE."
+- **Storage:** the new append-only table `guardian_consent_records` (same RLS and append-only trigger pattern as
+  `consent_records`): guardian_id, purpose (only `marketing_line`), decision (`granted` / `withdrawn`), `consent_text_id`,
+  given_at, recorded_by, channel and evidence fields. Never in `consent_records`, which is per child.
+- **Default off:** a separate unticked box, with the full text above it, asked when a family record is created (P3-04) and
+  in the P3-11 edit sheets. "Not now" means not granted.
+- **Changing it later:** the guardian on `/my/$token` (P4-13, P4-22), or staff recording the parent's choice the same day,
+  with the channel and method recorded.
+- **Withdrawal** is as easy as giving, and it takes effect at once. Earlier lawful use is not affected (R-2, § 12.2).
+- **Contact:** staff only, by hand, from the studio's LINE OA chat, one family at a time, and only in a chat the family
+  started (D26). **No bulk or automated sends.** LINE broadcasts stay parked.
+- **Follow-up list** (card P3-19): staff only; one row per guardian who has `marketing_line` granted (D44); restricted families (D28) are left off. The family label is "ครอบครัวน้อง" + the child's nickname, or "Family of" + the nickname (D43), and nothing else about the child is shown.
+- **Text:** `sql/0006a_seed_marketing_text.sql` (G4 · 0006a, Stage B), after the lawyer's review (G9b, D38). The notice
+  wording is § 11, section 3.10.
+- **Promises for the owner to approve** (OWNER-APPROVE, D31): "by hand, one family at a time", "no automatic messages or
+  mass mailings", and "on the staff list, only the child's nickname as a label (D43); no other child information is used for this".
+
+- TH title: "รับข่าวสารกิจกรรมและรอบเรียนใหม่จากทีมงาน (ไม่บังคับ)"
+- TH body: "เราจะติดต่อข่าวสารเป็นครั้งคราว เฉพาะเรื่องกิจกรรมและรอบเรียนของสตูดิโอ ทีมงานจะส่งข้อความถึงคุณด้วยตนเองทางแชต LINE @cherryleeandco ที่ครอบครัวของคุณเคยทักมาแล้ว ทีละครอบครัว เราไม่ส่งข้อความอัตโนมัติ และไม่ส่งข่าวสารถึงคนจำนวนมากพร้อมกัน ในรายการติดตามภายในทีมงาน เราใช้เฉพาะชื่อเล่นของน้องเป็นป้ายชื่อ และไม่ใช้ข้อมูลอื่นของน้องเพื่อการนี้ และจะไม่ส่งข้อมูลของคุณให้ผู้อื่นเพื่อการตลาดค่ะ การเลือกหรือไม่เลือกไม่กระทบการจองและการเรียนของน้องค่ะ ยกเลิกได้ทุกเมื่อโดยบอกเราทาง LINE หรือผ่านลิงก์ \"ความยินยอมของฉัน\" เมื่อติ๊กช่องนี้ คุณยินยอมให้ CherryLee & Co. ส่งข่าวสารดังกล่าวถึงคุณทาง LINE แบบส่วนตัวค่ะ"
+- EN title: "Hear from the studio team about activities and new sessions on LINE (optional)"
+- EN body: "We'll get in touch now and then, only about the studio's activities and new sessions. A member of our team will message you personally, one family at a time, in the LINE chat you already started with @cherryleeandco. We don't send automatic messages or mass mailings. On the team's internal follow-up list we use only your child's nickname as a label, and we don't use any other information about your child for this. We never pass your details to anyone else for marketing. Whether you say yes or no won't affect your child's booking or classes. Stop any time by telling us on LINE or through your \"My consents\" link. By ticking this box, you agree that CherryLee & Co. may message you personally with this news on LINE."
+
+### 12.6 Draft: `media_print` (new, D32; the text goes into `0006`)
+
+Decided 14 Oct 2026 (owner, decision 3). A child-level media purpose with the same rules as `media_social`: unticked, default
+not granted, asked per child with the face-level choice (§ 12.3), withdrawable on `/my` or with staff. Children aged 10+ are
+asked too (D11, § 14). The lawyer reviews this text first (G9b, D38).
+
+- TH title: "รูปและวิดีโอในสิ่งพิมพ์ของสตูดิโอ (ไม่บังคับ)"
+- TH body: "เราจะใช้รูปหรือวิดีโอของน้องในสิ่งพิมพ์ของสตูดิโอ เฉพาะเมื่อคุณยินยอมไว้เท่านั้นค่ะ ถ้าน้องอยู่ในรูปที่นำไปใช้ เราจะเคารพการเลือกเรื่องการเห็นหน้าที่คุณเลือกไว้ และจะไม่ใส่ชื่อหรือชื่อเล่นของน้องในสิ่งพิมพ์ ถ้าคุณถอนความยินยอม เราจะไม่พิมพ์ฉบับใหม่ที่มีรูปหรือวิดีโอของน้อง แต่สิ่งพิมพ์ที่พิมพ์และแจกไปแล้วเรียกคืนไม่ได้ค่ะ การไม่ยินยอมไม่กระทบการเรียนของน้องค่ะ"
+- EN title: "Photos and videos in the studio's printed materials (optional)"
+- EN body: "We'll use photos or videos of your child in the studio's printed materials only if you agree. If your child appears, we'll respect the face choice you make, and we never put your child's name or nickname in printed material. If you withdraw, we won't print new copies that show your child. Copies already printed and handed out can't be recalled. Saying no won't affect your child's classes."
+- Notes:
+  - The owner lists what counts as printed material (for example brochures, posters, booklets) before this text is final (OWNER-APPROVE, D32).
+  - The R-2 delta (§ 12.2) applies to this text as well.
+  - `media_print` is its own column in the publishability matrix (P4-21). A child who chose `face_hidden` is never shown in a way that makes them recognisable (§ 17.2).
 
 ---
 
@@ -971,8 +1085,8 @@ Based on PDPA s.19 and the PDPC Consent Guideline (7 Sep 2022, https://www.pdpc.
 consent must pass all of these:
 
 - [ ] **Separate:** one checkbox per purpose (`health_allergy`, `media_parents_group`, `media_website`, `media_social`,
-      `media_youtube`). Never one box for several purposes; never inside terms and conditions.
-- [ ] **Unticked:** no checkbox or toggle is on by default. Media toggles default off.
+      `media_youtube`, `media_print`, `marketing_line`). Never one box for several purposes; never inside terms and conditions.
+- [ ] **Unticked:** no checkbox or toggle is on by default. Media toggles, print and the marketing opt-in default off.
 - [ ] **Specific and visible:** the purpose `title` and the **full** text (`body_md`) are shown right above its own
       checkbox, in the page language, never behind a link, a "read more" or a collapsible (R-04). The checkbox label is
       short UI copy ("ยินยอมตามข้อความด้านบน / I agree to the text above"). A UI test checks the text is visible.
@@ -987,6 +1101,8 @@ consent must pass all of these:
       never "call us in office hours".
 - [ ] **Effect of withdrawal explained** next to the withdraw button (§ 16.3).
 - [ ] **Children 10+:** the UI shows when a child's own consent is still needed (`consent_status` = `needs_child`).
+- [ ] **Guardian-only purposes:** `marketing_line` is recorded only in `guardian_consent_records`, never in `consent_records`,
+      and never for a child (D31).
 - [ ] **Tone:** warm, no fear-based wording; Thai ends with ค่ะ where natural; both languages say the same thing.
 - [ ] **Accessibility:** each checkbox has a real `<label>`; touch target ≥ 44 px; focus visible; errors announced.
 
@@ -1021,18 +1137,20 @@ Our rules (D11, ⚖️ lawyer to confirm):
    - the child can change their mind at any time; tell them so.
 6. **Never** ask children for information online, never show children's names publicly, never put names in alt text,
    captions or file names (the existing rule in `src/content/videos.ts`).
+7. **Marketing and sales:** a child's information is never used for marketing or sales, except the nickname as a label on the internal follow-up list (D43, staff only). The marketing opt-in
+   (`marketing_line`, D31) is for guardians only.
 
 ---
 
 ## 15. Health data rules
 
-1. Health and allergy data lives **only** in `child_health` (D10): `allergens` (chips: `peanut`, `tree_nut`, `milk`,
-   `egg`, `wheat`, `soy`, `fish`, `shellfish`, `sesame`), `other_allergens` (≤ 200), `foods_to_avoid` (≤ 300, **no reason
+1. Health and allergy data lives **only** in `child_health` (D10): `allergens` (chips: `milk`,
+   `egg`, `flour`, `wheat`, `peanut` and `tree_nut` (one nut group, D46), `soy`, `fish`, `shellfish`, `sesame`), `other_allergens` (≤ 200), `foods_to_avoid` (≤ 300, **no reason
    asked**: a reason such as halal or vegetarian-for-faith could reveal religion, also s.26 data), `care_notes` (≤ 500).
 2. A database trigger blocks any insert/update unless the child has a current granted guardian `health_allergy` consent.
 3. A refusal or withdrawal record deletes the row (AFTER INSERT trigger on `consent_records`).
 4. Reads only through `get_child_health` (full notes, one `audit_log` row per call) and `list_session_health_flags`
-   (allergen chips for a roster, audited). No plain `select`. No CSV/report export of health fields.
+   (allergen chips for a roster, audited). No plain `select`. No CSV/report export of health fields. **Decided 14 Oct 2026 (round two, item 3, D42):** the export (`export_family_data`, 0007) reads health only through `get_child_health`, with the explicit `includeHealth` choice for that export; with `includeHealth` false the file has no health data. The plain join is removed: there is no second route. The signature print sheet (D33, P4-25) reads health only through the same audited function. Its allergen checklist prints on every sheet, so teachers can use it in class. Other health notes (foods to avoid, care notes) print only when staff tick "include health" for that print. Each print writes one `audit_log` row (action, family id, date, and the include flag; never the content).
 5. The admin shows full notes behind a "ดูข้อมูลสุขภาพ / View health info" button that says the view is logged.
 6. **Never** on LINE: not in alerts, not in chats, not in screenshots of rosters. Parents who start typing allergies in
    LINE get a kind reply with their enrolment link instead (template in § 23).
@@ -1051,9 +1169,10 @@ Our rules (D11, ⚖️ lawyer to confirm):
 |---|---|---|---|
 | `/my/$token` one-click withdraw | P5 | the guardian (`updateMyConsent`) | `decision='withdrawn'`, `given_by='guardian'`, `channel='web'`, `method='checkbox'`, `family_link_id` |
 | LINE chat ("please stop using photos") | P4+ | staff (`recordStaffConsent`), **same day** | `channel='line'`, `method='staff_recorded_verbal'`, `recorded_by` |
-| In person / by phone | P4+ | staff, same day | `channel='in_person'`, `method='staff_recorded_verbal'` |
-| Paper / letter | P4+ | staff, same day; scan to `consent-evidence` if signed | `channel='paper'`, `method='signature'`, `evidence_path` |
+| In person (a phone answer: OPEN, see 20 § 9.5a) | P4+ | staff, same day | `channel='in_person'`, `method='staff_recorded_verbal'` |
+| Paper / letter (general consent: unchanged; `marketing_line`: not accepted, round two 14 Oct 2026, P3-04 and P3-11) | P4+ | staff, same day; scan to `consent-evidence` if signed | `channel='paper'`, `method='signature'`, `evidence_path` |
 | Child (10+) changes their mind | P4+ | staff | `given_by='child'`, `channel='in_person'` |
+| Guardian follow-up choice (`marketing_line`) granted or withdrawn | P3 (staff), P4 (`/my`) | the guardian on `/my`, or staff the same day | `guardian_consent_records` row: `decision='granted'` or `'withdrawn'`, `consent_text_id`, `channel`, `recorded_by` for staff. No `consent_records` row (D31) |
 
 `/my/$token` now ships **with** `/enrol` in Stage C (D27), so consent given on the web can be withdrawn on the web from
 day one; there is no gap. `/enrol` itself withdraws only through the explicit health button "I don't want to share
@@ -1069,8 +1188,9 @@ consent_records insert (decision = withdrawn | refused), any channel, guardian o
   │   → server pushes it (deliverConsentAlert / deliverAlertIds); unsent rows show in the admin with "resend"
   ├─ purpose = health_allergy → trigger deletes child_health row (immediately) and sets
   │                              children.allergy_check_needed_at → roster: "check with the family before cooking"
-  └─ purpose = media_*        → consent_status() no longer 'granted' → can_publish_media() = false
+  ├─ purpose = media_*        → consent_status() no longer 'granted' → can_publish_media() = false
                                → takedown runbook § 17.3
+  └─ marketing_line → a guardian_consent_records row, not this flow (D31) → the family leaves the follow-up list at once; no takedown
 current_consents view shows the new state at once; older rows stay as evidence (append-only, D12)
 ```
 
@@ -1081,6 +1201,8 @@ channels within **7 days**; reply to the guardian when done.
 
 - TH: "เมื่อถอนความยินยอม เราจะหยุดใช้ข้อมูลส่วนนี้ทันที สิ่งที่ทำไปก่อนหน้านี้ยังถูกต้องตามกฎหมาย ถ้าเป็นข้อมูลการแพ้อาหาร ระบบจะลบออก ถ้าน้องแพ้อาหารอะไร บอกคุณครูก่อนคลาสทำอาหารได้เสมอนะคะ ถ้าเป็นรูปหรือวิดีโอ เราจะนำออกจากช่องทางของเราโดยเร็วค่ะ" (OWNER-APPROVE)
 - EN: "When you withdraw, we stop using this straight away; anything done before stays lawful. Allergy information is deleted; you can always tell a teacher about allergies before a cooking class. Photos or videos are removed from our channels as soon as we can." (OWNER-APPROVE)
+
+- Marketing choice (`marketing_line`, D31) — TH: "ถ้าถอน เราจะหยุดส่งข่าวสารทันทีค่ะ และไม่กระทบการจองหรือการเรียนของน้อง" · EN: "If you withdraw, we stop sending news straight away. Your bookings and your child's classes aren't affected." (OWNER-APPROVE)
 
 ### 16.4 Confirmation message to the guardian (LINE, by staff; no health details)
 
@@ -1098,7 +1220,11 @@ channels within **7 days**; reply to the guardian when done.
   `consent: { confirmedOn: "2026-10-13", note: "Studio confirmed parents' permission…" }`; `canShow()` hides any clip
   with `showsChildren: true` and no `consent`. Two clips (`founders`, `threeJars`) show no children.
 - F4-07 seeds `media_assets` with all 6 clips (`kind='youtube'`, `youtube_id`, `shows_children`); the 4 class clips get
-  `legacy_consent_note` = "Studio confirmed parents' permission on 2026-10-13, before this system". Staff then link the
+  `legacy_consent_purposes` = all five media channels (`media_parents_group`, `media_website`, `media_social`,
+  `media_youtube`, `media_print`) and `legacy_consent_note` = "Owner statement 14 Oct 2026; written source to be recorded
+  before G4 (G0 Q15)". The 13 Oct answer named the website only; the 14 Oct statement names all five channels, and the
+  written source is still open (R-55). Until it is recorded, the `0005` seed for these four clips does not run at G4. Print (`media_print`) is in the list only because decision 7 says all five channels; the 13 Oct answer named the website only. The owner confirms print in writing before the setting is switched on (G0 Q15).
+  Staff then link the
   children who appear (`media_asset_children`), where known.
 - F4-08 adds an optional `mediaAssetId` to the `Video` type so each clip can be matched to its `media_assets` row.
 - **Truth about consent** = `consent_records` → `can_publish_media(asset_id, purpose)` shown as a matrix in `/admin/media`.
@@ -1112,7 +1238,7 @@ channels within **7 days**; reply to the guardian when done.
      `kind = 'youtube'` assets (R-11).
    - Pre-system clips with no linked children count only for the channels in `legacy_consent_purposes` (set from the
      owner's G0 Q15 answer); other channels show "check manually" in `/admin/media`.
-   - YouTube only → `media_youtube`. Facebook/Instagram/TikTok → `media_social`. Parents' group → `media_parents_group`.
+   - YouTube only → `media_youtube`. Facebook/Instagram/TikTok → `media_social`. Parents' group → `media_parents_group`. Print → `media_print`.
    - Children aged 10+ need their own consent too (`needs_child` = not publishable).
    - If any child chose `face_hidden`, their face must not be recognisable in that clip.
 3. Only then: add the clip to `videos.ts` with `consent` and `mediaAssetId`, commit, Publish (G10).
@@ -1154,7 +1280,7 @@ days, status, outcome, refusal reason, responded) — no health details, kept 3 
 |---|---|---|---|---|
 | `access` | s.30 | received + 15 days | received + 30 days; one extension of 30 days if complex, telling the requester (`extended_until`) | PDPC access-request notification (Gazette 16 Jul 2026, in force about mid-Sep 2026) |
 | `portability` | s.31 | + 15 days | + 30 days (internal target) | JSON export |
-| `objection` | s.32 | + 15 days | + 30 days (internal target) | no direct marketing in scope |
+| `objection` | s.32 | + 15 days | + 30 days (internal target) | a marketing objection is met at once by withdrawing `marketing_line` (§ 12.5); other objections follow this row |
 | `erasure` | s.33 | + 15 days | **+ 90 days**, including backups | PDPC 2024 erasure notification; restrict use meanwhile if it can't finish in time |
 | `restriction` | s.34 | + 15 days | + 30 days (internal target) | owner sets it with `set_family_restriction()` (D28), see § 18.4 |
 | `rectification` | s.35/36 | + 15 days | + 30 days (internal target; usually same day) | |
@@ -1194,7 +1320,7 @@ The admin shows a countdown; keep every request and reply for 3 years (`retain_u
 | Access / copy / portability | `exportFamilyData` (owner) → one family's JSON (guardians, children, contacts, bookings, packages, payments, consents, health). Check it contains only that family. Deliver per § 18.5. |
 | Rectification | Staff edit via `saveGuardian`, `saveChild`, `saveFamilyContact`; health via `saveChildHealth` (consent still required). |
 | Erasure | Owner: family page → owner card → erase with typed confirmation → `eraseFamily` → `erase_family()`: personal data removed; payment amounts, dates, receipt numbers **and slip files** kept with the anonymised payment rows (accounting, G11); consent evidence rows and their files kept for 3 years without contact details (legal claims, ⚖️). Erasure itself queues no slip file (R-08). If G11 or the lawyer decides slips must go on erasure, a new SQL file makes `erase_family` set `slip_path = null` (the trigger then queues each file) and the owner runs "files to delete" the same day. Revoke the family's links (erasure deletes them). Delete or archive the LINE chat if they ask. Backups expire within ~14 days. |
-| Objection | Stop the processing objected to unless there's a compelling legal reason; record the outcome. |
+| Objection | Stop the processing objected to unless there's a compelling legal reason; record the outcome. Marketing: record `marketing_line` as withdrawn (§ 16); the family leaves the follow-up list at once. |
 | Restriction | See § 18.4. |
 | Withdraw consent | § 16. |
 
@@ -1272,10 +1398,11 @@ Copied from `00-overview.md` § 12, with reasons.
 | `staff_notifications` | 30 days | resend window, debugging | `retain_until` | v1 |
 | `booking_requests` | 6 months after creation | follow-up window for an unconverted enquiry | `retain_until` | v1 |
 | Families, guardians, children, contacts | 12 months after last activity | re-enrolment within a year | `mark_inactive_families()` sets `retain_until` | v4 (0007) |
-| `child_health` | deleted on withdrawal/refusal; else 6 months after the child's last session | s.26 minimisation | trigger + purge | v3 (0005) |
+| `child_health` | deleted on withdrawal/refusal; else 6 months after the child's last session (a `cancelled_late` booking counts as a session here, because it used a credit; owner to confirm) | s.26 minimisation | trigger + purge | v3 (0005) |
 | `bookings` (attendance) | 24 months after the session date | attendance questions, safety history | `retain_until` (trigger) | v2 (0004) |
 | `package_purchases`, `payments`, slips | 5 years after the end of the accounting year | Accounting Act (if a juristic person; G11) | `retain_until`; anonymised on erase | v2 |
 | `consent_records`, consent evidence files | life of the consent + 3 years | s.78 civil claim period (evidence) | `retain_until` | v3 |
+| `guardian_consent_records` (`marketing_line`, D31) | life of the consent + 3 years | s.78 civil claim period (evidence), as for `consent_records` | `retain_until` (set when the consent ends, + 3 years) | ⚠️ version to confirm in the SQL |
 | `family_links` | 30 days after expiry | troubleshooting | purge | v3 |
 | `dsr_requests` | 3 years after response | PDPC 2026 rule needs ≥ 2 years; 3 chosen | `retain_until` | v4 |
 | `breach_incidents` | 5 years | accountability | `retain_until` | v4 |
@@ -1476,6 +1603,10 @@ public notice is allowed (PDPC breach notification).
 7. Staff phones: screen lock on; LINE backups to personal cloud are the staff member's own choice; delete studio photos of
    children from personal phones once posted or no longer needed (owner to set a habit).
 8. LY Corporation is a separate platform operator; LINE user IDs of parents are not stored before P7.
+9. Family follow-up (`marketing_line`, D31) is typed by hand in the studio's OA chat, one family at a time, and only in a chat the
+   family started. No broadcast, push or automated message is used for marketing (LINE broadcasts stay parked).
+10. Staff never add a parent as a friend by LINE ID, and no screen asks for a LINE ID in order to add anyone (D35, D26 stands).
+11. Cancellation notice (D41, round two): a parent tells the studio on LINE, in the chat they started, or in person. Staff record the time the message arrived (`cancel_notice_at`) and the channel (`cancel_notice_channel`: `line` or `in_person`) on the booking screen. Staff never copy a parent's LINE ID to do this.
 
 ---
 
@@ -1488,7 +1619,7 @@ For the privacy notice (§ 11, section 5) and PDPA s.40. "DPA" = data processing
 | Lovable | processor (hosting, database, auth, storage, logs) | everything submitted to the site | Lovable DPA https://lovable.dev/th/data-processing-agreement, saved at G2 | P0 |
 | Supabase | Lovable's sub-processor (database technology) | same | covered by Lovable's DPA (Supabase DPA https://supabase.com/legal/customer-resources/data-processing-addendum) | P0 |
 | Cloudflare | processor (network under Lovable hosting; Turnstile) | IP, browser signals, Turnstile tokens | Cloudflare terms + Turnstile privacy https://www.cloudflare.com/turnstile-privacy-policy/ (studio's own Cloudflare account for Turnstile) | P1 |
-| LY Corporation (LINE) | platform operator; processor for alert pushes | chats with parents; PII-free alerts | LINE OA terms (https://www.lycorp.co.jp/en/privacy-security/privacy/transparency/guideline02_th/) | P1 |
+| LY Corporation (LINE) | platform operator; processor for alert pushes | chats with parents; PII-free alerts; manual follow-up chat (D31) | LINE OA terms (https://www.lycorp.co.jp/en/privacy-security/privacy/transparency/guideline02_th/) | P1 |
 | Google | provider (Fonts, Maps, YouTube, Gmail) | IP; emails; consented videos | Google terms | P1/P4 |
 | Meta | provider (Messenger; Facebook/Instagram posts) | chats; consented media | Meta terms | P1/P4 |
 | TikTok | provider (posts) | consented media | TikTok terms | P4 |
@@ -1525,12 +1656,13 @@ single source for the privacy notice and the retention job.
 | 4 | Emergency and pickup contacts | third parties named by parents | name, phone, relationship, flags, "informed" attestation | emergency contact; safe handover | s.24(5); s.24(2) | with the family profile | staff, owner | Lovable/Supabase | APAC |
 | 5 | Attendance | children | session, check-in/out times, picked up by (guardian/contact), status | safety; package use | s.24(3); s.24(5) | 24 months after session | staff, owner | Lovable/Supabase | APAC |
 | 6 | Packages and payments | parents | package, price snapshot, amount, method, paid_at, receipt no., slip image (opt.) | billing; accounting | s.24(3); s.24(6) | 5 years after accounting year end (G11) | staff (record), owner (void/refund) | Lovable/Supabase; banks; accountant | APAC |
-| 7 | Media consent and media register | parents; children | consent records (purpose, decision, given_by, text version, channel, method, media level, staff id, evidence file), media_assets ↔ children links | lawful publication of class media | s.19/s.20 consent; evidence: s.24(6) / legal claims | consent life + 3 years | staff, owner | Lovable/Supabase; YouTube, Meta, TikTok, parents' group (only consented media) | APAC; platforms global |
+| 7 | Media consent and media register | parents; children | consent records (purpose, decision, given_by, text version, channel, method, media level, staff id, evidence file), media_assets ↔ children links | lawful publication of class media | s.19/s.20 consent; evidence: s.24(6) / legal claims | consent life + 3 years | staff, owner | Lovable/Supabase; YouTube, Meta, TikTok, parents' group, printed materials (only consented media) | APAC; platforms global |
 | 8 | Staff alerts via LINE | (no personal data in text) | ref code, date, child count, purpose label, admin link; notification status | tell staff about new requests | s.24(5) | 30 days (`staff_notifications`) | owner/staff in LINE | LY Corporation | Japan (unconfirmed) |
 | 9 | Staff accounts and audit log | staff | email, role, sign-in data (Auth), audit rows (actor, action, table, row id) | access control; security | s.24(3) (staff arrangement); s.24(5); s.37 | audit 12 months; account until offboarding | owner | Lovable/Supabase | APAC |
 | 10 | Rights requests | parents/requesters | requester name, right, channel, dates, identity-verified date, outcome, refusal reason | comply with PDPA rights | s.24(6) | 3 years after response | owner | Lovable/Supabase; PDPC if complained | APAC |
 | 11 | Breach log | anyone affected | incident facts, categories, counts, risk, notifications, measures | s.37(4) accountability | s.24(6) | 5 years | owner | PDPC; affected families | APAC |
 | 12 | Chats with the studio (LINE/Messenger/email) | parents | message content, account names | answer questions; arrange classes | s.24(3); s.24(5) | per platform; studio habit (owner to set) | staff on studio accounts | LY Corp, Meta, Google | platforms' locations |
+| 13 | Family follow-up opt-in (`marketing_line`) and the staff follow-up list (D31) | guardians who said yes | guardian name and contact details from the family record; the child's nickname as the list label only (D43); decision (`granted` / `withdrawn`), text version, date, channel, recorded_by | news about the studio's activities and new sessions, by hand only (no bulk or automated sends) | s.19 consent (withdrawable at any time) | consent life + 3 years; contact details as the family record | staff, owner | Lovable/Supabase; LY Corporation (manual chat only) | APAC; LINE (Japan) |
 
 **Template row for a new activity**
 
@@ -1588,6 +1720,8 @@ a phone is lost or a message goes to the wrong chat.
 - [ ] Privacy notice version matches the system; recipients list current (§ 24); contacts and address correct.
 - [ ] Retention periods still right (§ 19.1); Jobs ran successfully all year; storage file purge done.
 - [ ] Consent texts: any wording to improve → publish a new version (never edit, D12); retire old ones.
+- [ ] Follow-up opt-in (D31): the follow-up list holds only granted, unrestricted families; spot-check five contacts against
+      the family record; every contact was made by hand.
 - [ ] Media register: legacy clips re-confirmed or retired; takedowns completed; children who turned 10 since their
       consent: ask for their own consent before new media use.
 - [ ] Staff list and roles; Lovable/GitHub/Cloudflare/LINE members; 2-step verification on owner accounts.
@@ -1595,7 +1729,7 @@ a phone is lost or a message goes to the wrong chat.
 - [ ] Vendors: Lovable region/DPA changes, LINE plan/quota, Cloudflare Turnstile hostnames, Umami/Resend if used.
 - [ ] Law changes: PDPA amendment bill (consultation July–August 2026; would make consent one of seven equal bases),
       new PDPC notifications (ROPA guidance, cross-border lists).
-- [ ] Lawyer check if anything material changed.
+- [ ] Lawyer check if anything material changed, and for every new notice version or consent text (D38).
 
 ---
 
@@ -1623,6 +1757,17 @@ For the Thai PDPA lawyer (G9a/G9b):
 10. **DPO (s.41):** confirm not required.
 11. **Staff notice and audit log:** sufficient for staff data (s.23, s.24)?
 12. **Pending PDPA amendment:** anything to prepare now?
+13. **Marketing opt-in (D31):** is a guardian-only opt-in with a separate unticked box, by-hand contact from a LINE chat the
+    family started, and withdrawal on `/my` enough under s.19, s.21 and s.32? Is the wording in § 12.5 and notice § 3.10 sufficient?
+14. **Print (D32):** is a separate `media_print` consent enough for printed materials? Is the statement that copies already
+    handed out cannot be recalled (§ 12.6) clear enough?
+15. **Notice and consent texts (D38):** please review every notice version (v1, v2, v3) and every consent text (`0006`,
+    `0006a`), including the OWNER-APPROVE lines in `00-overview.md` § 13C.
+16. **Legacy clips (G0 Q15, D45):** the owner certified on 14 Oct 2026 that parents agreed to all five media channels for the four class clips. No written form is recorded yet. Is that enough to keep them on these channels, or must parents confirm through the normal consent flow (§ 17.1)?
+17. **Export and print (D33, D42): decided by the owner's round-two answer.** The allergen checklist prints on every signature sheet, and other health notes only when staff tick "include health". For the lawyer (G9b): the § 3.6 draft says the checklist is on the sheet.
+18. **Follow-up label (D43):** is a child's nickname on a staff-only list, for the studio's own follow-up, consistent with s.21 and s.19 once the promises in §§ 3.10, 4 and 12.5 say so? Which label applies when a family has two children, or a child has no nickname (owner decision open)?
+19. **Notice by LINE and the credit rule (D40, D41, § 3.11):** is it fine to record the LINE arrival time with the booking? How long should that record be kept (the booking record, to be confirmed)?
+20. **Allergen labels (D46):** the notice lists the allergens explicitly (§ 3.6, TH and EN), ten values plus the nut group. Ask the studio only whether its own labels for flour and the nut group match what the notice says.
 
 ---
 
