@@ -60,6 +60,7 @@ declare
     'select public.has_role(gen_random_uuid(), ''owner'')',
     'select * from public.get_sessions_with_seats(current_date, current_date)',
     'select public.create_family_from_request(gen_random_uuid(), ''x'', ''{}''::jsonb, ''[]''::jsonb)',
+    'select public.set_primary_guardian(gen_random_uuid())',
     'select * from public.consent_matrix(array[]::uuid[])',
     'select * from public.media_publishability()',
     'select public.set_media_asset_children(gen_random_uuid(), array[]::uuid[])',
@@ -152,6 +153,7 @@ declare
     'select public.has_active_consent(gen_random_uuid(), ''health_allergy'')',
     'select public.session_seats_left(gen_random_uuid())',
     'select public.create_family_from_request(gen_random_uuid(), ''x'', ''{}''::jsonb, ''[]''::jsonb)',
+    'select public.set_primary_guardian(gen_random_uuid())',
     'select * from public.consent_matrix(array[]::uuid[])',
     'select * from public.media_publishability()',
     'select public.set_media_asset_children(gen_random_uuid(), array[]::uuid[])',
@@ -271,7 +273,7 @@ our_functions(f) as (
          ('cancel_bookings_of_cancelled_session'), ('queue_consent_change_alert'), ('consent_matrix'),
          ('media_publishability'), ('set_media_asset_children'), ('publish_consent_text'),
          ('submit_enrolment'), ('guard_family_restriction_columns'), ('block_restricted_family'),
-         ('set_family_restriction')
+         ('set_family_restriction'), ('set_primary_guardian')
 ),
 service_only_functions(f) as (
   values ('check_rate_limit'), ('get_open_sessions'), ('purge_expired_records'), ('log_audit_event'),

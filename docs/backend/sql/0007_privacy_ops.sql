@@ -11,7 +11,10 @@
 --             (R-09); restricted families are never marked inactive or auto-erased; purge v4 keeps used
 --             credits (R-10) and marks children whose allergy info was purged (R-07). Activity for the
 --             12-month rule = bookings, payments, packages, consent records, link use (R-25: wording fixed in
---             the notice instead of counting updated_at, which the system itself bumps).
+--             the notice instead of counting updated_at, which the system itself bumps). Second review: the
+--             restriction guard also covers the family row itself and inactive contacts, and ignores FK set-null
+--             columns (R-36); correcting disputed data = lift → correct → restrict (R-37, 50 § 18.4).
+--             Behaviour checks: seed_dev.sql § 7b.8.
 -- Delivery (review R-12): 0007 must be applied BEFORE family records (P3) go live, because retention,
 --             export, erasure and restriction for families live here. It depends on 0005, so the order is
 --             0004 → 0005 → 0007 → (Stage B publish); 0006/0006b wait for G9b.
@@ -226,8 +229,10 @@ $$;
 -- 4b. Processing restriction (PDPA s.34) — review R-09
 --     families.processing_restricted_at / restriction_note: set ONLY through set_family_restriction()
 --     (owner). While set:
---       * new bookings, new private links, new GRANTED consents, and edits to guardians, children and
---         contacts are refused by the database (23514 'Family processing is restricted');
+--       * new bookings, new private links, new GRANTED consents, and edits to the family row itself
+--         (display_name, preferred_lang, staff_note; R-36), guardians, children and contacts are refused by the
+--         database (23514 'Family processing is restricted');
+--       * to CORRECT disputed data the owner lifts, corrects and restricts again (50 § 18.4, R-37);
 --       * withdrawals and refusals are still allowed (they reduce processing);
 --       * mark_inactive_families() skips the family and the nightly purge never auto-erases it;
 --       * the owner can still export (s.30) or erase (s.33) it.
@@ -267,9 +272,11 @@ begin
 end;
 $$;
 
--- BEFORE INSERT/UPDATE on bookings, family_links, consent_records, guardians, children, family_contacts:
--- refuse new processing for a restricted family. Erasure and the purge run with cherrylee.allow_purge = 'on'
--- and are never blocked.
+-- BEFORE INSERT/UPDATE on bookings, family_links, consent_records, guardians, children, family_contacts,
+-- and BEFORE UPDATE on families (R-36): refuse new processing for a restricted family. Erasure and the purge run
+-- with cherrylee.allow_purge = 'on' and are never blocked. Columns that a foreign key sets to NULL when a staff
+-- user or a booking request is deleted (identity_checked_by, created_by, source_request_id) count as system columns,
+-- so offboarding a staff member or purging an old request never fails on a restricted family.
 create or replace function public.block_restricted_family()
 returns trigger
 language plpgsql
@@ -279,9 +286,24 @@ as $$
 declare
   v_family_id   uuid;
   -- columns the system maintains; changing only these is never "new processing"
-  v_system_cols text[] := array['updated_at', 'last_session_on', 'allergy_check_needed_at', 'pending_link_changes'];
+  v_system_cols text[] := array['updated_at', 'last_session_on', 'allergy_check_needed_at', 'pending_link_changes',
+                                'identity_checked_by', 'created_by'];
+  -- families: system-managed columns (mark_inactive_families, FK set-null) and the restriction columns, which
+  -- families_guard_restriction already limits to set_family_restriction()
+  v_family_system_cols text[] := array['updated_at', 'status', 'last_activity_at', 'retain_until', 'created_by',
+                                       'source_request_id', 'processing_restricted_at', 'restriction_note'];
 begin
   if coalesce(current_setting('cherrylee.allow_purge', true), '') = 'on' then
+    return new;
+  end if;
+  if tg_table_name = 'families' then
+    -- R-36 (D28 "profile edits"): while the restriction stays in force (before AND after this update), only
+    -- system columns may change. Setting or lifting the restriction itself passes (one side is NULL).
+    if (to_jsonb(old) ->> 'processing_restricted_at') is not null
+       and (to_jsonb(new) ->> 'processing_restricted_at') is not null
+       and (to_jsonb(new) - v_family_system_cols) is distinct from (to_jsonb(old) - v_family_system_cols) then
+      raise exception 'Family processing is restricted' using errcode = '23514';
+    end if;
     return new;
   end if;
   if tg_table_name = 'consent_records' and (to_jsonb(new) ->> 'decision') <> 'granted' then
@@ -294,8 +316,12 @@ begin
     if (to_jsonb(new) - v_system_cols) = (to_jsonb(old) - v_system_cols) then
       return new;
     end if;
-    if tg_table_name = 'family_contacts' and (to_jsonb(new) ->> 'is_active') = 'false' then
-      return new; -- removing a contact reduces processing
+    -- removing a contact reduces processing: allowed when ONLY is_active goes true → false (R-36: editing an
+    -- already inactive contact is still an edit and is refused)
+    if tg_table_name = 'family_contacts'
+       and (to_jsonb(old) ->> 'is_active') = 'true' and (to_jsonb(new) ->> 'is_active') = 'false'
+       and (to_jsonb(new) - v_system_cols - 'is_active') = (to_jsonb(old) - v_system_cols - 'is_active') then
+      return new;
     end if;
   end if;
   v_family_id := (to_jsonb(new) ->> 'family_id')::uuid;
@@ -351,6 +377,9 @@ grant execute on function public.set_family_restriction(uuid, boolean, text) to 
 create or replace trigger families_guard_restriction
   before update on public.families
   for each row execute function public.guard_family_restriction_columns();
+create or replace trigger families_block_restricted
+  before update on public.families
+  for each row execute function public.block_restricted_family();
 create or replace trigger bookings_block_restricted
   before insert or update on public.bookings
   for each row execute function public.block_restricted_family();

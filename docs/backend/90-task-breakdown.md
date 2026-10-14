@@ -47,19 +47,19 @@ STAGE A · MVP ─────────────────────�
      → P2-08 STAGE A GO-LIVE [G9a …-v1, G10]
 ═══ G-MVP: owner go/no-go after ≥ 8 weeks (no = stop here; Stage A keeps working) ═══════════════════════════
 STAGE B · Records ──────────────────────────────────────────────────────────────────────────────────────────
-   P3-01 SQL 0004 [G4] ─┬─ P3-02 schema ── P3-03 read ── P3-04 write ──┬─ P3-14 convert request
-                        │                                              └─ P3-10 family page ── P3-11 sheets ── P3-12 packages
-                        ├─ P3-08 copy ── P3-09 families list ──────────────┘                         └─ P3-15 payments screen
-                        ├─ P3-05 payments fns · P3-06 bookings fns · P3-07 roster fn ── P3-13 roster
+   P3-01 SQL 0004 [G4] ─┬─ P3-02 schema (+P3-05) ── P3-03 read ── P3-04 write ──┬─ P3-14 convert request
+                        │                                                        └─ P3-10 family page ── P3-11 sheets ── P3-12 packages
+                        ├─ P3-08 copy ── P3-09 families list ────────────────────────┘                         └─ P3-15 payments screen
+                        ├─ P3-05 payments fns (→ P3-02) · P3-06 bookings fns · P3-07 roster fn ── P3-13 roster
                         ├─ P3-16 notice v2
                         └─ P3-17 SQL 0005 [G4] ── P3-18 SQL 0007 [G4] ── P5-01 privacy fns ─┬─ P5-03 owner card
                                                               P5-02 privacy copy ───────────┴─ P5-04 files tab
    P5-05 retention check (human) → P5-06 STAGE B GO-LIVE [G9a …-v2, G10]
 ═══ G-HEALTH decided · G0 Q9/Q15/Q17 answered · G9b legal review ════════════════════════════════════════════
 STAGE C · Consent and safety ───────────────────────────────────────────────────────────────────────────────
-   P4-01 SQL 0006 (+0006b) [G9b, G4] ─┬─ P4-02 tokens ─────────┬─ P4-05 enrol fns ── P4-06 submit ──┐
-                                      ├─ P4-04 enrol schema ───┤                                   │
-                                      ├─ P4-03 consent alerts ─┴─ P4-13 my fns ── P4-22 /my        │
+   P4-01 SQL 0006 (+0006b) [G9b, G4] ─┬─ P4-02 tokens ─────────────────┬─ P4-05 enrol fns ── P4-06 submit ──┐
+                                      ├─ P4-04 enrol schema (+P4-07) ──┤                                   │
+                                      ├─ P4-03 consent alerts ─────────┴─ P4-13 my fns ── P4-22 /my        │
                                       ├─ P4-07 health fns ── P4-08 enrol copy + health ─┬─ P4-09 media ─┼─ P4-14 /enrol
                                       │                                                 └─ P4-10 sections ┘
                                       ├─ P4-11 consent fns · P4-12 media fns
@@ -146,8 +146,11 @@ Put this text at the top of every card agent file (§ 1.7).
 >
 > **Stop and report (do not improvise) if:** a file outside your card's `creates`/`modifies` would have to change; a ✅
 > block still fails after type-only fixes; a name in your card conflicts with a spec file; a generated file
-> (`src/integrations/supabase/*`, `routeTree.gen.ts`, `.env`, migrations) is missing, different or would need editing;
-> a human gate in your card is not marked done in § 2; a package is missing; a step would put personal data in code,
+> (`src/integrations/supabase/*`, `.env`, migrations) is missing, different or would need editing (a
+> `src/routeTree.gen.ts` rewritten by `npx vite build` is expected: never edit or revert it, just mention it if your card
+> adds no route);
+> a human gate in your card is not marked done in § 2 (or a generated type your card names is missing from
+> `src/integrations/supabase/types.ts`: report "types not regenerated"); a package is missing; a step would put personal data in code,
 > tests, logs, URLs, LINE text or commit messages; copy would state a fact the studio hasn't confirmed (00 § 2, § 13).
 >
 > **Never:** run git commands that change state, install packages, run SQL against any database, call Lovable or
@@ -198,20 +201,20 @@ confirms it in chat; no agent ever marks a gate on its own evidence.
 | G1 | Cloud permissions: Enable Cloud / Modify DB / Configure auth = Ask; backward-incompatible = Never | Owner | P0-15 | ☐ | | | |
 | G2 | Enable Cloud on main, region Asia Pacific (permanent); save the DPA | Owner | P0-15 | ☐ | | | |
 | G3 | Bootstrap auth prompt; sign-up disabled; leaked-password check on | Builder | P0-15 | ☐ | | | |
-| G4 · 0001 | Apply `0001_foundation.sql`; record migration folder and live-DB behaviour (40 § 2 rows 4–5) | Builder | P0-16 | ☐ | | | |
+| G4 · 0001 | Apply `0001_foundation.sql`; record migration folder and live-DB behaviour (40 § 2 rows 4–5); `types.ts` lists `current_app_role` and `app_role` | Builder | P0-16, P0-17 | ☐ | | | |
 | G5 | Owner user + owner role via Cloud → SQL editor | Owner | P0-16 | ☐ | | | |
-| G4 · 0002 | Apply `0002`; pg_cron jobs visible? (40 § 2 row 16) | Builder | P1-03 | ☐ | | | cron refused? → P1-16 |
+| G4 · 0002 | Apply `0002`; pg_cron jobs visible? (40 § 2 row 16); `types.ts` lists `booking_requests`, `studio_settings`, `check_rate_limit` | Builder | P1-03, P1-04, P1-06 | ☐ | | | cron refused? → P1-16 |
 | G6 | Secrets in Cloud → Secrets (`IP_HASH_SECRET`, `TURNSTILE_SECRET_KEY`, `LINE_ALERT_*`, `PUBLIC_SITE_URL`) | Owner | P1-21 | ☐ | | | |
 | G7 | Turnstile widget with exact hostnames; site key committed | Owner + builder | P1-21 | ☐ | | | |
 | G8 | Staff Alerts OA (Free), `LINE_ALERT_TO` | Owner | P1-21 | ☐ | | | |
 | G4 · 0003 | Apply `0003` (also when the P2 screens are skipped) | Builder | P2-02, P3-01 | ☐ | | | |
-| G9a · v1 | Notice `…-v1` approved, placeholders filled, draft banner off | Owner (+ lawyer) | P2-08 go-live | ☐ | | | version: |
+| G9a · v1 | Notice `…-v1` approved, placeholders filled, draft banner off; the `/book` short notice (`bookingContent.notice`, cards P1-13/P1-14) approved with it; retention periods confirmed (G0 Q6) | Owner (+ lawyer) | P2-08 go-live | ☐ | | | version: |
 | G10 · Stage A | Publish; scan fixed; sign-up disabled; `rls_smoke.sql` no FAIL | Owner | end of Stage A | ☐ | | | |
 | **G-MVP** | ≥ 8 weeks of real use → go / no-go for Stage B | Owner | P3-01 | ☐ | | | decision: |
 | G11 | Payment record retention (accountant) | Owner + accountant | P3-01 (may be "pending") | ☐ | | | |
-| G4 · 0004 | Apply `0004` | Builder | P3-02 … | ☐ | | | |
+| G4 · 0004 | Apply `0004`; `types.ts` lists `families`, `create_family_from_request`, `set_primary_guardian` | Builder | P3-02 … | ☐ | | | |
 | G0 Q15 | What the 4 class clips' consent covered → `legacy_consent_purposes` | Owner | P3-17 | ☐ | | | |
-| G4 · 0005 | Apply `0005` (tables only in Stage B) | Builder | P3-18, P4-* | ☐ | | | |
+| G4 · 0005 | Apply the **whole** `0005` file in Stage B (tables and every function, incl. `submit_enrolment`); only the P4 screens wait for Stage C. `types.ts` then lists `consent_records`, `child_health`, `submit_enrolment` | Builder | P3-18, P4-* | ☐ | | | |
 | G4 · 0007 | Apply `0007` | Builder | P5-01 | ☐ | | | |
 | F5-06 | Owner MFA available? (record only) | Builder | P5-05 | ☐ | | | |
 | G9a · v2 | Notice `…-v2` approved | Owner (+ lawyer) | P5-06 go-live | ☐ | | | version: |
@@ -290,7 +293,7 @@ Batch = depth inside its stage (§ 1.4). Status: ☐ open · ☑ done · `skippe
 | P1-03 | 2 | `cl-p1-staff-notify` | staff-notify.server.ts (Stage A version) | P1-01, P0-16, P0-11, P0-08 | ☐ |
 | P1-04 | 2 | `cl-p1-rate-limit` | rate-limit.server.ts (check_rate_limit RPC, fails open) | P1-01, P0-16 | ☐ |
 | P1-05 | 1 | `cl-p1-booking-schema` | booking.schema.ts (D26 contact rule) with tests | P0-04, P0-05, P0-06 | ☐ |
-| P1-06 | 3 | `cl-p1-booking-handler` | booking-request.server.ts (handleBookingRequest) with tests | P1-03, P1-04, P1-05, P0-09, P0-10, P0-02 | ☐ |
+| P1-06 | 3 | `cl-p1-booking-handler` | booking-request.server.ts (handleBookingRequest) with tests | P1-03, P1-04, P1-05, P0-09, P0-10, P0-02, P0-16, P0-03, P0-05 | ☐ |
 | P1-07 | 4 | `cl-p1-booking-function` | submitBookingRequest server function | P1-06 | ☐ |
 | P1-08 | 1 | `cl-p1-site-footer` | site.tsx additions (form links, subpage strings, FAQ, export En) and Footer hrefPrefix | — | ☐ |
 | P1-09 | 2 | `cl-p1-subheader-fielderror` | SubpageHeader and FieldError components | P1-08 | ☐ |
@@ -298,7 +301,7 @@ Batch = depth inside its stage (§ 1.4). Status: ☐ open · ☑ done · `skippe
 | P1-11 | 3 | `cl-p1-inbox-functions` | inbox.schema.ts and inbox.functions.ts (list, get, update, retry) | P1-01, P0-17, P1-03 | ☐ |
 | P1-12 | 1 | `cl-p1-admin-copy-inbox` | Admin copy module: inbox | P0-18 | ☐ |
 | P1-13 | 2 | `cl-p1-booking-copy-turnstile` | booking.tsx copy and TurnstileWidget | P1-08, P0-08 | ☐ |
-| P1-14 | 5 | `cl-p1-booking-form` | BookingForm and BookingThanks components with tests | P1-13, P1-07, P1-09, P1-02 | ☐ |
+| P1-14 | 5 | `cl-p1-booking-form` | BookingForm and BookingThanks components with tests | P1-13, P1-07, P1-09, P1-02, P1-05, P0-02 | ☐ |
 | P1-15 | 2 | `cl-p1-settings-screen` | Admin copy: settings module + /admin/settings (owner) | P1-12, P0-22, P0-19 | ☐ |
 | P1-16 | 2 | `cl-p1-cron-fallback` | FALLBACK ONLY: /api/cron/purge route for a Lovable Job | P1-01 | ☐ |
 | P1-17 | 4 | `cl-p1-inbox-screens` | /admin/inbox list + detail screens, nav tab, dashboard cards | P1-11, P1-12, P1-15 | ☐ |
@@ -315,22 +318,22 @@ Batch = depth inside its stage (§ 1.4). Status: ☐ open · ☑ done · `skippe
 | P2-07 | 4 | `cl-p2-open-dates-strip` | OPTIONAL: homepage 'Open dates' strip | P2-06, P1-08 | ☐ |
 | P2-08 | 4 | `cl-p2-stage-a-golive` | Stage A go-live check (G9a …-v1, G10) | P1-21, P2-04, P2-05, P2-06 | ☐ |
 | P3-01 | 1 | `cl-p3-sql-0004` | Review SQL 0004_families.sql, then G4 | P2-01, P2-08 | ☐ |
-| P3-02 | 2 | `cl-p3-families-schema` | families.schema.ts with view types (§14.4) and boundary tests | P3-01, P0-04, P0-06 | ☐ |
-| P3-03 | 3 | `cl-p3-families-read` | families.functions.ts part 1: listFamilies, getFamily | P3-02, P0-17 | ☐ |
-| P3-04 | 4 | `cl-p3-families-write` | families.functions.ts part 2: create from request, save family/guardian/child/contact, soft delete | P3-03 | ☐ |
+| P3-02 | 3 | `cl-p3-families-schema` | families.schema.ts with view types (§14.4) and boundary tests | P3-01, P0-04, P0-06, P3-05 | ☐ |
+| P3-03 | 4 | `cl-p3-families-read` | families.functions.ts part 1: listFamilies, getFamily | P3-02, P0-17 | ☐ |
+| P3-04 | 5 | `cl-p3-families-write` | families.functions.ts part 2: create from request, save family/guardian/child/contact, soft delete | P3-03 | ☐ |
 | P3-05 | 2 | `cl-p3-payments-functions` | payments.schema.ts + payments.functions.ts (packages, payments, slips) | P3-01, P0-17, P0-06 | ☐ |
 | P3-06 | 2 | `cl-p3-bookings-functions` | bookings.schema.ts + bookings.functions.ts (book, status, cancel) | P3-01, P0-17 | ☐ |
 | P3-07 | 2 | `cl-p3-session-roster-fn` | getSessionRoster (SessionRoster type, three queries) | P3-01, P2-02 | ☐ |
 | P3-08 | 2 | `cl-p3-admin-copy-families-payments` | Admin copy modules: families and payments | P2-03, P3-01 | ☐ |
-| P3-09 | 4 | `cl-p3-families-list` | /admin/families list screen + nav tab | P3-03, P3-08, P2-04 | ☐ |
-| P3-10 | 5 | `cl-p3-family-overview` | /admin/families/$familyId: page, banners and Overview tab (read + staff note) | P3-09, P3-04 | ☐ |
-| P3-11 | 6 | `cl-p3-family-edit-sheets` | Family Overview edit sheets: guardian, child, contact (soft delete) | P3-10 | ☐ |
-| P3-12 | 7 | `cl-p3-family-packages-history` | Family page: Packages & payments tab and Class history tab | P3-11, P3-05, P3-06 | ☐ |
-| P3-13 | 4 | `cl-p3-roster` | Roster /admin/sessions/$sessionId (check-in/out, pickup, add booking) + cancel warning | P3-07, P3-06, P2-04, P3-03 | ☐ |
-| P3-14 | 5 | `cl-p3-convert-request` | Convert an inbox request into a family (one SQL call) | P3-04, P2-05 | ☐ |
-| P3-15 | 8 | `cl-p3-payments-screen` | /admin/payments screen, slip upload, nav tab, dashboard card | P3-12, P3-09 | ☐ |
+| P3-09 | 5 | `cl-p3-families-list` | /admin/families list screen + nav tab | P3-03, P3-08, P2-04 | ☐ |
+| P3-10 | 6 | `cl-p3-family-overview` | /admin/families/$familyId: page, banners and Overview tab (read + staff note) | P3-09, P3-04 | ☐ |
+| P3-11 | 7 | `cl-p3-family-edit-sheets` | Family Overview edit sheets: guardian, child, contact (soft delete) | P3-10 | ☐ |
+| P3-12 | 8 | `cl-p3-family-packages-history` | Family page: Packages & payments tab and Class history tab | P3-11, P3-05, P3-06 | ☐ |
+| P3-13 | 5 | `cl-p3-roster` | Roster /admin/sessions/$sessionId (check-in/out, pickup, add booking) + cancel warning | P3-07, P3-06, P2-04, P3-03 | ☐ |
+| P3-14 | 6 | `cl-p3-convert-request` | Convert an inbox request into a family (one SQL call) | P3-04, P2-05 | ☐ |
+| P3-15 | 9 | `cl-p3-payments-screen` | /admin/payments screen, slip upload, nav tab, dashboard card | P3-12, P3-09 | ☐ |
 | P3-16 | 2 | `cl-p3-privacy-notice-v2` | Privacy notice …-v2: add every [P3] section and row | P1-02, P1-10, P3-01 | ☐ |
-| P3-17 | 2 | `cl-p3-sql-0005` | Review SQL 0005_consent_health.sql, then G4 (tables only in Stage B) | P3-01 | ☐ |
+| P3-17 | 2 | `cl-p3-sql-0005` | Review SQL 0005_consent_health.sql, then G4 (whole file in Stage B, P4 screens later) | P3-01 | ☐ |
 | P3-18 | 3 | `cl-p3-sql-0007` | Review SQL 0007_privacy_ops.sql, then G4 | P3-17 | ☐ |
 | P5-01 | 1 | `cl-p5-privacy-functions` | privacy.schema.ts + privacy.functions.ts core (export, erase, restrict, files to delete) | P3-18, P0-16, P0-17, P0-06 | ☐ |
 | P5-02 | 1 | `cl-p5-admin-copy-privacy` | Admin copy module: privacy (owner card + files to delete) | P3-08 | ☐ |
@@ -341,27 +344,27 @@ Batch = depth inside its stage (§ 1.4). Status: ☐ open · ☑ done · `skippe
 | P4-01 | 1 | `cl-p4-sql-0006` | Review consent wording 0006 (+0006b), then G9b and G4 | P3-18, P5-06 | ☐ |
 | P4-02 | 2 | `cl-p4-link-tokens` | link-tokens.server.ts (32-byte tokens, hash only) with tests | P3-17, P0-09, P0-16, P4-01 | ☐ |
 | P4-03 | 2 | `cl-p4-consent-alerts` | staff-notify: consent_withdrawn branch + deliverAlertIds / deliverConsentAlert | P3-17, P2-05, P4-01 | ☐ |
-| P4-04 | 2 | `cl-p4-enrolment-schema` | enrolment.schema.ts and consent-texts.server.ts with tests | P3-17, P0-04, P0-05, P0-06, P0-16, P4-01 | ☐ |
-| P4-05 | 3 | `cl-p4-enrolment-functions` | enrolment.functions.ts: getEnrolmentForm, createEnrolmentLink, revokeFamilyLink | P4-02, P4-04, P0-17 | ☐ |
-| P4-06 | 4 | `cl-p4-enrolment-submit` | enrolment-submit.server.ts (one SQL call) + submitEnrolment | P4-05, P4-03 | ☐ |
+| P4-04 | 3 | `cl-p4-enrolment-schema` | enrolment.schema.ts and consent-texts.server.ts with tests | P3-17, P0-04, P0-05, P0-06, P0-16, P4-01, P4-07 | ☐ |
+| P4-05 | 4 | `cl-p4-enrolment-functions` | enrolment.functions.ts: getEnrolmentForm, createEnrolmentLink, revokeFamilyLink | P4-02, P4-04, P0-17 | ☐ |
+| P4-06 | 5 | `cl-p4-enrolment-submit` | enrolment-submit.server.ts (one SQL call) + submitEnrolment | P4-05, P4-03, P4-07 | ☐ |
 | P4-07 | 2 | `cl-p4-health-functions` | health.schema.ts + health.functions.ts (audited) + HEALTH_IN_SYSTEM | P3-17, P0-17, P0-08, P4-01 | ☐ |
-| P4-08 | 3 | `cl-p4-enrol-copy-health` | enrol.tsx copy, ConsentTextBody and HealthSection (+ test) | P4-04, P4-07, P1-08 | ☐ |
-| P4-09 | 4 | `cl-p4-media-section` | MediaSection: one block per published purpose, full text visible (+ test) | P4-08 | ☐ |
-| P4-10 | 4 | `cl-p4-enrol-sections` | GuardianSection and ContactsSection for /enrol | P4-08 | ☐ |
+| P4-08 | 4 | `cl-p4-enrol-copy-health` | enrol.tsx copy, ConsentTextBody and HealthSection (+ test) | P4-04, P4-07, P1-08 | ☐ |
+| P4-09 | 5 | `cl-p4-media-section` | MediaSection: one block per published purpose, full text visible (+ test) | P4-08 | ☐ |
+| P4-10 | 5 | `cl-p4-enrol-sections` | GuardianSection and ContactsSection for /enrol | P4-08 | ☐ |
 | P4-11 | 3 | `cl-p4-consent-functions` | consent.schema.ts + consent.functions.ts (staff consent recording, evidence) | P3-17, P4-03, P3-02, P0-06 | ☐ |
 | P4-12 | 2 | `cl-p4-media-functions` | media.schema.ts + media.functions.ts (publishability matrix, takedown) | P3-17, P0-17, P4-01 | ☐ |
-| P4-13 | 3 | `cl-p4-my-functions` | my.schema.ts + my.functions.ts (getMyConsents, updateMyConsent, createManageLink) | P4-02, P4-03, P4-04, P0-17 | ☐ |
-| P4-14 | 5 | `cl-p4-enrol-page` | EnrolPage and the /enrol/$token route (noindex, no-referrer) | P4-05, P4-06, P4-09, P4-10 | ☐ |
+| P4-13 | 4 | `cl-p4-my-functions` | my.schema.ts + my.functions.ts (getMyConsents, updateMyConsent, createManageLink) | P4-02, P4-03, P4-04, P0-17 | ☐ |
+| P4-14 | 6 | `cl-p4-enrol-page` | EnrolPage and the /enrol/$token route (noindex, no-referrer) | P4-05, P4-06, P4-09, P4-10 | ☐ |
 | P4-15 | 2 | `cl-p4-admin-copy-consent` | Admin copy modules: health, consents (+ child script), media | P5-02, P4-01 | ☐ |
 | P4-16 | 3 | `cl-p4-roster-health` | Roster: allergy cell (three states), audited health dialog, photo badge | P4-07, P4-15, P3-13, P3-07 | ☐ |
-| P4-17 | 4 | `cl-p4-family-links` | Family page: parent links tab and consent chips (getFamily P4 fields) | P4-05, P4-11, P4-13, P4-15, P5-03 | ☐ |
-| P4-18 | 5 | `cl-p4-family-consents` | Family page: Consents tab, record dialog, child script | P4-17 | ☐ |
+| P4-17 | 5 | `cl-p4-family-links` | Family page: parent links tab and consent chips (getFamily P4 fields) | P4-05, P4-11, P4-13, P4-15, P5-03 | ☐ |
+| P4-18 | 6 | `cl-p4-family-consents` | Family page: Consents tab, record dialog, child script | P4-17 | ☐ |
 | P4-19 | 3 | `cl-p4-pending-alerts` | Unsent enrolment/consent alerts: listPendingStaffAlerts + dashboard list | P4-03, P4-15, P5-04, P2-05, P3-14 | ☐ |
 | P4-20 | 2 | `cl-p4-privacy-notice-v3` | Privacy notice …-v3: [P4] sections and the /my sentence | P3-16, P4-01 | ☐ |
 | P4-21 | 4 | `cl-p4-media-screen` | /admin/media screen, nav item, dashboard takedown card | P4-12, P4-15, P4-19 | ☐ |
-| P4-22 | 4 | `cl-p4-my-page` | my-consents.tsx copy, MyConsentsPage and the /my/$token route | P4-13, P4-08 | ☐ |
+| P4-22 | 5 | `cl-p4-my-page` | my-consents.tsx copy, MyConsentsPage and the /my/$token route | P4-13, P4-08 | ☐ |
 | P4-23 | 5 | `cl-p4-videos-link` | videos.ts: optional mediaAssetId + takedown note in README | P4-21, P0-13 | ☐ |
-| P4-24 | 6 | `cl-p4-stage-c-golive` | Stage C go-live check (G-HEALTH switch, G9a …-v3, G10) | P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23 | ☐ |
+| P4-24 | 7 | `cl-p4-stage-c-golive` | Stage C go-live check (G-HEALTH switch, G9a …-v3, G10) | P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23 | ☐ |
 | P6-01 | 1 | `cl-p6-sql-0008` | Review SQL 0008_reporting.sql, then G4 (Stage D, optional) | P3-18 | ☐ |
 | P6-02 | 2 | `cl-p6-reports-functions` | reports.schema.ts + getReports (aggregates only) | P6-01, P0-17 | ☐ |
 | P6-03 | 3 | `cl-p6-reports-screen` | Admin copy: reports module + /admin/reports screen with CSV | P6-02, P4-15, P4-21 | ☐ |
@@ -565,7 +568,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **creates:** `src/server/turnstile.server.ts`, `src/server/turnstile.server.test.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ block and its test block from 20 §7.4 exactly (fetch is stubbed with vi.stubGlobal; secrets with vi.stubEnv('TURNSTILE_SECRET_KEY', 'obviously-fake')).
+  1. Copy the ✅ block and its test block from 20 §7.4 exactly (fetch is stubbed with vi.stubGlobal; the secret is stubbed with vi.stubEnv('TURNSTILE_SECRET_KEY', '1x0000000000000000000000000000000AA'), Cloudflare's published dummy test secret, a public test value; keep it as written).
   2. afterEach: vi.unstubAllGlobals(); vi.unstubAllEnvs().
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -628,7 +631,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **steps:**
   1. AGENTS.md: after the existing 'CherryLee & Co. project notes' bullets (outside the LOVABLE:BEGIN/END block, never inside it) add a short '## Backend' section: plan in docs/backend/ (start with docs/backend/README.md); server-only code in src/server/*.server.ts with the server-only marker; server functions in src/lib/backend/*.functions.ts; SQL only as drafts in docs/backend/sql applied by a human through Lovable; never edit src/integrations/supabase/*; no personal data in code, tests, logs or URLs; children's health data only through the audited SQL functions.
   2. README.md: add a 2–4 line '## Backend (planned)' section before '## Content sources' pointing to docs/backend/README.md and saying nothing is live until the owner enables Lovable Cloud.
-  3. Keep both files' existing wording unchanged otherwise.
+  3. AGENTS.md, first 'CherryLee & Co. project notes' bullet (R-46): change only its bold part from 'Copy lives in `src/content/site.tsx`' to 'Copy lives in `src/content/*`' and add after its first sentence: '(homepage: `site.tsx`; backend pages: `booking.tsx`, `privacy.tsx`, `enrol.tsx`, `my-consents.tsx`, `admin/*`)'. Keep the rest of that bullet as it is.
+  4. Keep both files' existing wording unchanged otherwise.
 - **acceptance:**
   - npx prettier --check AGENTS.md README.md exits 0 (or run --write first)
   - git diff shows changes only outside <!-- LOVABLE:BEGIN --> … <!-- LOVABLE:END -->
@@ -667,10 +671,11 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   1. Run the read-only commands a–f from 40 §1 'Post-pull verification'. Never print the contents of .env.
   2. Check src/start.ts lists functionMiddleware [attachSupabaseAuth] AND requestMiddleware [errorMiddleware, csrfMiddleware]. If either of ours is missing: stop and report (the builder asks Lovable to restore them).
   3. Check the generated exports exist: supabaseAdmin in src/integrations/supabase/client.server.ts, requireSupabaseAuth in auth-middleware.ts, supabase in client.ts. Note whether cron-auth.ts exists.
-  4. Run npx vite build, npx tsc --noEmit and npx vitest run to prove the generated code builds; write results and the answers to rows 4, 6, 7 into the 40 §2 table (date + 'cl-p0-verify-bootstrap').
+  3b. Record the import lines of src/integrations/supabase/auth-middleware.ts (`grep -n "^import" src/integrations/supabase/auth-middleware.ts`, module names only), the exported middleware name and its context members in 40 §2 row 18 (R-40). If it imports client.server, @tanstack/react-start/server-only or reads SUPABASE_SERVICE_ROLE_KEY: stop and report (card P0-17 would pull it into browser-bundled code).
+  4. Run npx vite build, npx tsc --noEmit and npx vitest run to prove the generated code builds; write results and the answers to rows 4, 6, 7, 18 into the 40 §2 table (date + 'cl-p0-verify-bootstrap').
   5. Do not edit any generated file.
 - **acceptance:**
-  - 40 §2 rows 4, 6, 7 filled
+  - 40 §2 rows 4, 6, 7, 18 filled
   - npx vite build ✓ built; npx tsc --noEmit exit 0; npx vitest run all pass
   - Report lists every generated file name found
 
@@ -695,18 +700,22 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 - **agent_name:** `cl-p0-auth-middleware` · **phase:** P0b · **batch:** 4
 - **depends_on:** P0-16, P0-02
-- **human_gate:** —
+- **human_gate:** BEFORE: G1–G3, G4 · 0001 and G5 marked done in 90 §2 (G4 · 0001 regenerates src/integrations/supabase/types.ts with current_app_role and app_role), and 40 §2 row 18 filled by P0-15.
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
-  - docs/backend/20-server-api.md §6 (✅ auth.middleware.ts + caller table)
+  - docs/backend/20-server-api.md §2 (the three clients; how the staff token travels)
+  - docs/backend/20-server-api.md §6 (✅ auth.middleware.ts, caller table, 'What must exist before this block type-checks', 'How a thrown code reaches the admin UI', 📝 auth.middleware.test.ts)
+  - docs/backend/40-integrations.md §2 row 18 (imports of the generated auth-middleware.ts)
   - docs/backend/sql/0001_foundation.sql §3 (current_app_role)
-- **creates:** `src/lib/backend/auth.middleware.ts`
+- **creates:** `src/lib/backend/auth.middleware.ts`, `src/lib/backend/auth.middleware.test.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ block from 20 §6 exactly.
-  2. If the generated requireSupabaseAuth has a different export name or context shape than 20 §2 describes, stop and report; do not edit generated files.
+  1. Read-only checks first; on any difference stop and report (do not edit generated files): (a) `requireSupabaseAuth` is exported from `@/integrations/supabase/auth-middleware` (the import path the ✅ block uses); (b) its server context has `supabase`, `userId` and `claims` (20 §6, from 20 §2); (c) `grep -n "current_app_role" src/integrations/supabase/types.ts` and `grep -n "app_role:" src/integrations/supabase/types.ts` each print at least one line (the function and the enum; 0001 §3: `current_app_role()` takes no arguments, returns `app_role` = owner | staff | NULL, granted to authenticated); a miss = "types not regenerated", not a type-only fix; (d) 40 §2 row 18 shows no client.server, server-only or service-role import.
+  2. Copy the ✅ block from 20 §6 exactly.
+  3. Copy the 📝 auth.middleware.test.ts block from 20 §6 (it mocks the generated middleware and calls each `.server` callback directly: owner and staff pass, no role → forbidden, failed lookup → server_error, staff on requireOwner → forbidden). No token → `Unauthorized: …` is the generated middleware's job and is checked on the preview in P0-22.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
+  - npx vitest run src/lib/backend/auth.middleware.test.ts: all pass
 
 #### P0-18 · Admin copy: core module and the index that assembles adminContent
 
@@ -716,7 +725,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §5 module table + pattern + index.ts block
-  - docs/backend/30-ui.md §5 reference block, members meta … labels (type L4305–4418; th L4859–5042; en L5666–5854) and errors (type L4855–4856; th L5646–5663; en L6463–6480); find them by key name if lines moved
+  - docs/backend/30-ui.md §5 reference block, members meta … labels (type L4149–4262; th L4708–4891; en L5519–5707) and errors (type L4704–4705; th L5499–5516; en L6320–6337); find them by key name if lines moved
   - docs/backend/30-ui.md §5.1 rows marked core (family_restricted error, dashboard.consentAlerts, dashboard.filesToDelete)
 - **creates:** `src/content/admin/core.tsx`, `src/content/admin/index.ts`
 - **modifies:** —
@@ -865,7 +874,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **steps:**
   1. Start from the ✅ code pattern in 30 §3.4 (types incl. PrivacySection.phase, PRIVACY_NOTICE_VERSION, CONTROLLER_LEGAL_NAME, PrivacyContent, meta, summary, draftBanner).
   2. Set PRIVACY_NOTICE_VERSION to '`<YYYY-MM>`-v1' where YYYY-MM is the current month in Bangkok; make the `updated` lines name the same month (Thai month + Buddhist year in th).
-  3. Build th.sections and en.sections from 50 §11.3 and §11.4: exactly the rows of the 30 §3.4 id/phase table whose phase is P1 and whose card is P1-02 (15 sections, in table order, each with phase: "P1"). Leave out every row or paragraph tagged [P3], [P4], [P5] or [P6] inside them.
+  3. Build th.sections and en.sections from 50 §11.3 and §11.4: exactly the rows of the 30 §3.4 id/phase table whose phase is P1 and whose card is P1-02 (15 sections, in table order, each with phase: "P1"). The code block holds ONE sample section per language (`controller`) only to show the JSX style: replace it with the full array (R-47). Leave out every row or paragraph tagged [P3], [P4], [P5] or [P6] inside them.
   4. Text inside a section: keep the 50 wording; `<p>`/`<ul>`; the sharing and retention sections as `<div className="overflow-x-auto"><table>` with `<caption className="sr-only">`; Thai compound words and names in `<Nobr>`, English inside Thai in `<En>`; {{…}} placeholders → CONTROLLER_LEGAL_NAME / EMAIL / LINE_ID where they fit, else the visible text '[owner to fill: …]'.
   5. Stop and report if a 50 sentence states a business fact not in 00-overview §2 (do not invent or delete facts).
 - **acceptance:**
@@ -887,7 +896,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **creates:** `src/server/staff-notify.server.ts`, `src/server/staff-notify.server.test.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ notifyStaff block from 20 §7.8 (types NotificationKind, NotifyOutcome, loadAlertInput, notifyStaff).
+  1. Copy the ✅ (rev) notifyStaff block from 20 §7.8 (types NotificationKind, NotifyOutcome, loadAlertInput, notifyStaff), including `childrenCount: data.children_count ?? 0` (the generated column is typed number | null). If tsc still fails on a generated type, make a type-only fix and report it.
   2. Stage A rule from the phase notes: in loadAlertInput keep the booking_request and enrolment_submitted branches; for consent_withdrawn write `throw new Error("kind_not_ready");` (card P4-03 replaces it). Do not add deliverAlertIds / deliverConsentAlert yet.
   3. Write the tests listed under 'Tests to write' except the two marked (P4-03): mock ./supabase-admin.server and ./line-alert.server; vi.stubEnv for LINE names.
   4. Alert text comes only from buildStaffAlertText; never put a name, phone or LINE ID in it or in logs.
@@ -936,18 +945,25 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 #### P1-06 · booking-request.server.ts (handleBookingRequest) with tests
 
 - **agent_name:** `cl-p1-booking-handler` · **phase:** P1 · **batch:** 3
-- **depends_on:** P1-03, P1-04, P1-05, P0-09, P0-10, P0-02
-- **human_gate:** —
+- **depends_on:** P1-03, P1-04, P1-05, P0-09, P0-10, P0-02, P0-16, P0-03, P0-05
+- **human_gate:** BEFORE (inherited through P1-03/P1-04 → P1-01): G1–G3 and G4 · 0002 marked done in 90 §2, so src/integrations/supabase/types.ts exists with the 0002 objects.
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
-  - docs/backend/20-server-api.md §7.10 (✅ handler + ✅ tests)
+  - docs/backend/20-server-api.md §4 (ok, fail, PublicResult, PublicErrorCode)
+  - docs/backend/20-server-api.md §§7.1–7.4 and §7.8 (signatures: getClientIp; hashIp is async; checkRateLimit takes four arguments; verifyTurnstile(token, action, ip: string | null); notifyStaff returns NotifyOutcome and owns the 4 s budget)
+  - docs/backend/20-server-api.md §7.10 (✅ (rev) handler + ✅ (rev) tests)
+  - docs/backend/20-server-api.md §9.1 (BookingRequestInput / BookingRequestRaw from P1-05; the 9-step logic list)
+  - docs/backend/10-data-model.md §§6.3, 6.4, 15 (booking_requests columns and enums, generated types)
+  - docs/backend/00-overview.md D7, D18
   - docs/backend/50-security-privacy.md §4 (check order, missing IP = skip limit)
 - **creates:** `src/server/booking-request.server.ts`, `src/server/booking-request.server.test.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ handler and test blocks from 20 §7.10.
-  2. Order of checks exactly as 50 §4: zod → honeypot (fake success, nothing stored) → too fast → Turnstile → rate limit (skipped with '[booking] no_client_ip' when getClientIp() is null) → booking_form_open → insert → notify (awaited, 4 s budget) → ok(refCode).
-  3. Never log the request body, names, phones, LINE IDs or IPs.
+  1. Read-only check: src/integrations/supabase/types.ts lists booking_requests, studio_settings, the enum booking_request_status and the function check_rate_limit; if any is missing, stop and report "types not regenerated" (10 §15).
+  2. Copy the ✅ (rev) handler and test blocks from 20 §7.10 (the handler has `status: "new" as const`; the tests import from "vitest" and include form_closed via the `vi.hoisted` holder). Keep the relative `./supabase-admin.server` import inside src/server (it is the README's service-role door).
+  3. Order of checks exactly as 50 §4: zod → honeypot (fake success, nothing stored) → too fast → Turnstile → rate limit (skipped with '[booking] no_client_ip' when getClientIp() is null) → booking_form_open → insert → `await notifyStaff(...)` (no timeout in the handler: the 4 s budget lives inside notifyStaff, on the LINE call only) → ok(refCode).
+  4. Never log the request body, names, phones, LINE IDs or IPs.
+  5. If tsc fails inside src/server/staff-notify.server.ts (P1-03's file), stop and report it against P1-03; do not edit that file.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/server/booking-request.server.test.ts: all pass (honeypot, too_fast, bot_check_failed, rate_limited, invalid_input, form_closed, success)
@@ -968,7 +984,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   2. Export nothing but submitBookingRequest.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
-  - Leak grep extended with handleBookingRequest prints nothing
+  - The README leak grep, run unchanged (it already lists handleBookingRequest), prints nothing
 
 #### P1-08 · site.tsx additions (form links, subpage strings, FAQ, export En) and Footer hrefPrefix
 
@@ -1061,7 +1077,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §5 module table + pattern
-  - docs/backend/30-ui.md §5 reference block members inbox and request (type L4419–4483; th L5043–5135; en L5855–5947)
+  - docs/backend/30-ui.md §5 reference block members inbox and request (type L4263–4332; th L4892–4988; en L5708–5804)
   - docs/backend/30-ui.md §5.1 rows 'inbox · request.lineHowTo(ref)' and 'request.lineHint'
 - **creates:** `src/content/admin/inbox.tsx`
 - **modifies:** `src/content/admin/index.ts`
@@ -1077,7 +1093,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 - **agent_name:** `cl-p1-booking-copy-turnstile` · **phase:** P1 · **batch:** 2
 - **depends_on:** P1-08, P0-08
-- **human_gate:** —
+- **human_gate:** AFTER (before go-live, card P2-08): the `notice` text is privacy-notice wording with the PROPOSED 6-month retention (00 §12); the owner confirms the retention periods (G0 Q6) and approves the notice together with the …-v1 notice (G9a · v1).
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §3.2 (✅ (rev) src/content/booking.tsx)
@@ -1087,9 +1103,9 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **creates:** `src/content/booking.tsx`, `src/components/booking/TurnstileWidget.tsx`
 - **modifies:** —
 - **steps:**
-  1. Copy both ✅ blocks. The short notice next to the submit button must match 50 §11.5 in meaning; if it differs, 50 wins and you report it.
+  1. Copy both ✅ blocks (booking.tsx includes `honeypotLabel`, R-45). The short notice next to the submit button must match 50 §11.5 in meaning; if it differs, 50 wins and you report it.
   2. No consent checkbox on /book (D8). No promise of a private link, a call-back time or a free seat (R-24).
-  3. The waitlistNote and any 'what happens next' line are OWNER-APPROVE (G0 Q17): keep the planned wording and list them in your report.
+  3. The waitlistNote, the `notice` (6-month retention, G9a · v1 + G0 Q6) and any 'what happens next' line are OWNER-APPROVE: copy the planned wording unchanged and list them in your report. They are approved by the AFTER gate above, so they are not an "unconfirmed fact" stop.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - cl-i18n-checker: TH/EN parity; never the words 'money game'
@@ -1097,22 +1113,26 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 #### P1-14 · BookingForm and BookingThanks components with tests
 
 - **agent_name:** `cl-p1-booking-form` · **phase:** P1 · **batch:** 5
-- **depends_on:** P1-13, P1-07, P1-09, P1-02
-- **human_gate:** —
+- **depends_on:** P1-13, P1-07, P1-09, P1-02, P1-05, P0-02
+- **human_gate:** AFTER: the `notice` it renders is approved with G9a · v1 before go-live (see P1-13).
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
-  - docs/backend/30-ui.md §3.2 (field table, states, ✅ BookingForm.tsx, ✅ BookingThanks.tsx)
+  - docs/backend/30-ui.md §3.2 (field table, states, the ✅ (rev) BookingContent type in booking.tsx for key names, ✅ (rev) BookingForm.tsx, ✅ BookingThanks.tsx, 📝 tests)
+  - docs/backend/30-ui.md §2.2 (FieldError props) and §2.5 (TurnstileWidget props and the window.turnstile API the tests fake)
   - docs/backend/30-ui.md §1.2–1.3 (components, form pattern)
-  - docs/backend/30-ui.md §6 (BookingForm tests)
-- **creates:** `src/components/booking/BookingForm.tsx`, `src/components/booking/BookingThanks.tsx`, `src/components/booking/BookingForm.test.tsx`
+  - docs/backend/30-ui.md §6 (checklist and test list)
+  - docs/backend/20-server-api.md §9.1 (BookingFormFields, BookingFormSchema, BookingFormValues, contactRule) and §4 (PublicErrorCode)
+  - src/i18n/LanguageProvider.tsx (tests render inside it)
+- **creates:** `src/components/booking/BookingForm.tsx`, `src/components/booking/BookingThanks.tsx`, `src/components/booking/BookingForm.test.tsx`, `src/components/booking/BookingThanks.test.tsx`
 - **modifies:** —
 - **steps:**
-  1. Copy both ✅ blocks from 30 §3.2. Keep the F2-04 comment where SessionPicker will go.
-  2. Write BookingForm.test.tsx (mock TurnstileWidget and the server function): the honeypot input has tabIndex -1 inside an aria-hidden wrapper; the age select has no default; submit is disabled without a Turnstile token; the notice links to /privacy; choosing 'phone' with no number shows the preferred_missing message.
-  3. The thank-you screen's main action is 'send my code on LINE' (lineMessageUrl with the ref code only, no personal data).
+  1. Copy exactly two ✅ fences from 30 §3.2: `src/components/booking/BookingForm.tsx` (✅ (rev): `aria-labelledby` on the three RadioGroups, honeypot label from `c.honeypotLabel`) and `src/components/booking/BookingThanks.tsx`. Do NOT copy the `src/content/booking.tsx` fence (card P1-13) or the `src/routes/book.tsx` fence (card P1-18). Keep the F2-04 comment where SessionPicker will go.
+  2. Copy the two 📝 test blocks under BookingThanks in 30 §3.2 into BookingForm.test.tsx and BookingThanks.test.tsx. They use `fireEvent` only (user-event is not installed; never add packages), render inside `<LanguageProvider initialLang="th">` (so the notice link is "/privacy"), fake `window.turnstile` per test (`fakeTurnstile(true)` gives a token, `false` never does), stub `ResizeObserver` in the test file (never edit src/test/setup.ts), mock `useServerFn` to return the mocked submitBookingRequest (no router warning), and choose an age before testing preferred_missing. Use only the fake values in the blocks.
+  3. The thank-you screen's main action is 'send my code on LINE' (lineMessageUrl with the ref code only, no personal data); BookingThanks.test.tsx checks it and the focus on the heading.
+  4. Known behaviour, report it but do not change it: with an empty age, the preferred_missing message appears only after an age is chosen (zod stops early).
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
-  - npx vitest run src/components/booking/BookingForm.test.tsx: all pass
+  - npx vitest run src/components/booking/BookingForm.test.tsx src/components/booking/BookingThanks.test.tsx: all pass (incl. 'gives every radio group an accessible name')
 
 #### P1-15 · Admin copy: settings module + /admin/settings (owner)
 
@@ -1122,7 +1142,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §4.3 '/admin/settings' (staff accounts + studio settings only; consent texts are parked)
-  - docs/backend/30-ui.md §5 reference member settings (type L4818–4854; th L5590–5645; en L6406–6462)
+  - docs/backend/30-ui.md §5 reference member settings (type L4667–4703; th L5443–5498; en L6263–6319)
   - docs/backend/30-ui.md §4.1 (add the nav item in the same task)
   - docs/backend/20-server-api.md §11 (query keys)
 - **creates:** `src/content/admin/settings.tsx`, `src/routes/admin/_staff/settings.tsx`
@@ -1153,7 +1173,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   2. Write the route from 20 §10.2 with dynamic imports inside the handler; never hand-roll a secret comparison; log only '[cron] purge_failed' with the error code.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
-  - Leak grep extended with purge_expired_records prints nothing
+  - The README leak grep, run unchanged (it already lists purge_expired_records), prints nothing
 
 #### P1-17 · /admin/inbox list + detail screens, nav tab, dashboard cards
 
@@ -1306,7 +1326,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §5 module table + pattern
-  - docs/backend/30-ui.md §5 reference members sessions and roster (type L4484–4555; th L5136–5245; en L5948–6061)
+  - docs/backend/30-ui.md §5 reference members sessions and roster (type L4333–4404; th L4989–5098; en L5805–5918)
   - docs/backend/30-ui.md §5.1 row 'sessions · sessions.cancelWarning(n)'
 - **creates:** `src/content/admin/sessions.tsx`
 - **modifies:** `src/content/admin/index.ts`
@@ -1415,7 +1435,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** —
 - **steps:**
   1. Run the standard acceptance on main and cl-privacy-checker on everything added in Stage A.
-  2. Check privacy.tsx: version '`<YYYY-MM>`-v1', 15 P1 sections, CONTROLLER_LEGAL_NAME set, draftBanner null; list anything still '[owner to fill: …]'.
+  2. Check privacy.tsx: version '`<YYYY-MM>`-v1', 15 P1 sections, CONTROLLER_LEGAL_NAME set, draftBanner null; list anything still '[owner to fill: …]'. Check 90 §2 shows G0 Q6 (retention periods) answered and the G9a · v1 row says the /book short notice (`bookingContent.notice`) was approved with it.
   3. Produce the 40 §13 checklist for the owner with each line marked done/open from evidence; never mark a human gate yourself.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -1428,34 +1448,35 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 - **agent_name:** `cl-p3-sql-0004` · **phase:** P3 · **batch:** 1
 - **depends_on:** P2-01, P2-08
-- **human_gate:** BEFORE: owner records G-MVP = go (90 §2) and G11 (payment retention) answered or noted pending. AFTER review: builder G4 applies 0004, git pull --ff-only, types.ts contains 'families' and 'package_balances', rls_smoke.sql no FAIL. Real family data stays out until Stage B is published (00 §8.0).
+- **human_gate:** BEFORE: owner records G-MVP = go (90 §2) and G11 (payment retention) answered or noted pending. AFTER review: builder G4 applies 0004, git pull --ff-only, types.ts contains 'families', 'package_balances', 'create_family_from_request' and 'set_primary_guardian', rls_smoke.sql no FAIL. Real family data stays out until Stage B is published (00 §8.0).
 - **reads:**
   - docs/backend/10-data-model.md §§6.8–6.15, 7, 9, 10, 13
   - docs/backend/sql/0004_families.sql
   - docs/backend/sql/tests/rls_smoke.sql
-  - docs/backend/00-overview.md D16, D17, R-10, R-15, R-21, R-22, R-23
+  - docs/backend/00-overview.md D16, D17, R-10, R-15, R-21, R-22, R-23, R-39
 - **creates:** —
 - **modifies:** —
 - **steps:**
-  1. Run the cl-sql-reviewer checklist on 0004. Also check: create_family_from_request runs in one transaction and maps each child's age_years; package_balances subtracts sessions_used_purged; the session-cancel trigger cancels held/confirmed bookings; family_contacts has is_active (soft delete); payment-slips bucket is private with staff-only storage policies; purge v2 is a full re-declaration.
+  1. Run the cl-sql-reviewer checklist on 0004. Also check: create_family_from_request runs in one transaction and maps each child's age_years; set_primary_guardian (R-39) clears the other primary before setting the new one, in one function, SECURITY INVOKER, granted to authenticated only; package_balances subtracts sessions_used_purged; the session-cancel trigger cancels held/confirmed bookings; family_contacts has is_active (soft delete) and only the owner may hard-delete it (policy family_contacts_owner_delete); payment-slips bucket is private with staff-only storage policies; purge v2 is a full re-declaration.
   2. Check rls_smoke.sql covers every new table, the view and the bucket policies; list gaps. Do not edit files.
 - **acceptance:**
   - Read-only review report: one line per check (additive only, RLS on every new table, anon has no grants, every SECURITY DEFINER function has set search_path = '' and explicit revoke/grant, names match 10-data-model.md, safe to run twice, depends-on order) marked PASS or FAIL with file:line; no file changed
 
 #### P3-02 · families.schema.ts with view types (§14.4) and boundary tests
 
-- **agent_name:** `cl-p3-families-schema` · **phase:** P3 · **batch:** 2
-- **depends_on:** P3-01, P0-04, P0-06
+- **agent_name:** `cl-p3-families-schema` · **phase:** P3 · **batch:** 3
+- **depends_on:** P3-01, P0-04, P0-06, P3-05
 - **human_gate:** —
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
-  - docs/backend/20-server-api.md §9.5 (✅ (rev) families.schema.ts)
+  - docs/backend/20-server-api.md §9.5 (✅ (rev) families.schema.ts, incl. `type ConsentPurpose` from ./common.schema and `type PaymentRow` from ./payments.schema)
   - docs/backend/20-server-api.md §14.4 (FamilyListRow, GuardianView, ChildView, ContactView, PackageView, BookingHistoryRow, LinkView, ConsentCell, FamilyDetail + mapping tables)
+  - docs/backend/20-server-api.md §14.5 (PaymentRow, created by P3-05 in payments.schema.ts)
   - docs/backend/10-data-model.md §4.1
 - **creates:** `src/lib/backend/families.schema.ts`, `src/lib/backend/families.schema.test.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ (rev) block from 20 §9.5, then add every §14.4 type exactly as written (one ConsentCell definition here; consent.schema.ts imports it later).
+  1. Copy the ✅ (rev) block from 20 §9.5 (its imports include `type ConsentPurpose` from ./common.schema and `type PaymentRow` from ./payments.schema), then add every §14.4 type exactly as written (one ConsentCell definition here; consent.schema.ts imports it later). Never define PaymentRow or ConsentPurpose a second time.
   2. Tests: SaveFamilyInput.id is optional; SaveGuardianInput accepts confirmLinkChanges and confirmsParentalResponsibility; boundary tests for personName, nickname, relationship, email, staffNoteLong against DB_LIMITS.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -1463,42 +1484,52 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-03 · families.functions.ts part 1: listFamilies, getFamily
 
-- **agent_name:** `cl-p3-families-read` · **phase:** P3 · **batch:** 3
+- **agent_name:** `cl-p3-families-read` · **phase:** P3 · **batch:** 4
 - **depends_on:** P3-02, P0-17
 - **human_gate:** —
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
   - docs/backend/20-server-api.md §9.5 table rows listFamilies, getFamily
   - docs/backend/20-server-api.md §14.4 listFamilies skeleton and getFamily skeleton
-  - docs/backend/20-server-api.md §9.0 (paging, errors)
+  - docs/backend/20-server-api.md §14.5 (PaymentRow and its mapping: getFamily maps payments the same way)
+  - docs/backend/20-server-api.md §9.0 (paging, errors, strict-TS rules)
 - **creates:** `src/lib/backend/families.functions.ts`
 - **modifies:** —
 - **steps:**
   1. Implement listFamilies exactly as the §14.4 skeleton (no q: one paged query; with q: three id queries, de-duplicated, then the page; children and primary guardian in two more queries; PAGE_SIZE 30).
   2. Implement getFamily per the skeleton: restriction fields null (P5-03 fills them), links [] and consent cells [] (P4-17 fills them); contacts only is_active = true; payments expose hasSlip, never slip_path; never select token_hash.
-  3. Export nothing but the two createServerFn results.
+  3. Export only createServerFn results (this card: listFamilies and getFamily; P3-04 adds six more to the same file).
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
 
 #### P3-04 · families.functions.ts part 2: create from request, save family/guardian/child/contact, soft delete
 
-- **agent_name:** `cl-p3-families-write` · **phase:** P3 · **batch:** 4
+- **agent_name:** `cl-p3-families-write` · **phase:** P3 · **batch:** 5
 - **depends_on:** P3-03
-- **human_gate:** —
+- **human_gate:** BEFORE (inherited through P3-03 → P3-02 → P3-01): G-MVP = go and G4 · 0004 marked done in 90 §2 with types regenerated. Read-only check first: src/integrations/supabase/types.ts lists families, guardians, children, family_contacts, create_family_from_request and set_primary_guardian; if not, stop and report "types not regenerated".
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
-  - docs/backend/20-server-api.md §9.5 table rows createFamilyFromRequest … deleteFamilyContact
-  - docs/backend/20-server-api.md §14.4 (createFamilyFromRequest input: ageYears per child)
-  - docs/backend/00-overview.md D13, R-21, R-22, D28
+  - docs/backend/20-server-api.md §4 (adminError, adminErrorFromDb, AdminErrorCode incl. family_restricted)
+  - docs/backend/20-server-api.md §6 (requireStaff; context.supabase, context.userId)
+  - docs/backend/20-server-api.md §9.0 (conventions and the strict-TS write rules)
+  - docs/backend/20-server-api.md §9.5 (✅ (rev) families.schema.ts block for the input schema names: CreateFamilyFromRequestInput (children[].ageYears), SaveFamilyInput, SaveGuardianInput, SaveChildInput, SaveFamilyContactInput, DeleteFamilyContactInput; and the table rows createFamilyFromRequest … deleteFamilyContact with the paragraph under them)
+  - docs/backend/sql/0004_families.sql §14b create_family_from_request and §14c set_primary_guardian (return value and errors)
+  - docs/backend/00-overview.md D13, D28, R-21, R-22, R-36, R-39
 - **creates:** —
 - **modifies:** `src/lib/backend/families.functions.ts`
 - **steps:**
-  1. Add the six functions exactly as the §9.5 rows say. createFamilyFromRequest makes ONE rpc call (create_family_from_request) with each child's age_years taken from the input, not matched by index.
-  2. saveFamily never writes status, last_activity_at or retain_until. saveGuardian: only staff set identity fields; confirmLinkChanges sets pending_link_changes = null.
-  3. deleteFamilyContact = update is_active = false (never .delete()); not_found when no row changed.
-  4. Map 23514 'processing is restricted' through adminErrorFromDb (→ family_restricted).
+  1. Imports: the six input schemas from ./families.schema, adminError and adminErrorFromDb from ./result, requireStaff from ./auth.middleware. Add and export six `createServerFn` results named exactly createFamilyFromRequest, saveFamily, saveGuardian, saveChild, saveFamilyContact, deleteFamilyContact (00 §10), each `.middleware([requireStaff]).validator(<Name>Input)`, method POST, client `context.supabase`.
+  2. createFamilyFromRequest: ONE rpc('create_family_from_request', …) with each child's age_years taken from the input (never matched by index); the RPC returns the bare uuid → return `{ familyId: data }`; on error `throw adminErrorFromDb(error)` (P0002 → not_found, 23514 already converted → invalid_state, 23505 → conflict).
+  3. saveFamily: insert sets created_by = context.userId; never writes status, last_activity_at or retain_until.
+  4. saveGuardian, two steps in this order (R-39): write the plain fields (insert with is_primary false; update never touches is_primary); then, only when isPrimary and the row is not primary yet, ONE rpc('set_primary_guardian', { p_guardian_id }). isPrimary false never un-sets the current primary. Identity columns only when markIdentityChecked (identity_check_method, identity_checked_by = context.userId, identity_checked_at = now); has_parental_responsibility = true and responsibility_attested_at = now only when confirmsParentalResponsibility (never set back to false); confirmLinkChanges sets pending_link_changes = null.
+  5. saveFamilyContact: insert sets guardian_attests_informed_at = now; update reads name, phone first and sets guardian_attests_informed_at = now only when one of them changed (R-39).
+  6. deleteFamilyContact = update is_active = false with .select('id') (never .delete()); empty result → not_found; an already inactive contact still returns { deleted: true }.
+  7. Every update by id chains .select('id') and throws not_found when nothing came back; build payloads without undefined-valued keys (conditional spread); guard array access (20 §9.0).
+  8. Errors: saveFamily, saveGuardian, saveChild and saveFamilyContact pass DB errors through adminErrorFromDb, so 23514 'processing is restricted' becomes family_restricted (the database refuses edits of a restricted family, incl. the family row itself, R-36). deleteFamilyContact is allowed for a restricted family.
+  9. No unit-test file: createServerFn handlers are not unit-tested in this plan (20 §7.10 note). The behaviour is checked by cl-reviewer against the §9.5 rows and on the preview in P3-11 and P5-05; say so in your report.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
+  - grep -n "\.delete()" src/lib/backend/families.functions.ts prints nothing
 
 #### P3-05 · payments.schema.ts + payments.functions.ts (packages, payments, slips)
 
@@ -1564,7 +1595,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §5 module table + pattern
-  - docs/backend/30-ui.md §5 reference members families and family (type L4570–4638; th L5260–5357; en L6076–6176) and payments (type L4639–4661; th L5358–5394; en L6177–6213)
+  - docs/backend/30-ui.md §5 reference members families and family (type L4419–4487; th L5113–5210; en L5933–6033) and payments (type L4488–4510; th L5211–5247; en L6034–6070)
   - docs/backend/30-ui.md §5.1 rows for family.* banners, family.packages.close/void/expiry, family.allergyRemoved, payments.deleteSlipConfirm
 - **creates:** `src/content/admin/families.tsx`, `src/content/admin/payments.tsx`
 - **modifies:** `src/content/admin/index.ts`
@@ -1577,7 +1608,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-09 · /admin/families list screen + nav tab
 
-- **agent_name:** `cl-p3-families-list` · **phase:** P3 · **batch:** 4
+- **agent_name:** `cl-p3-families-list` · **phase:** P3 · **batch:** 5
 - **depends_on:** P3-03, P3-08, P2-04
 - **human_gate:** —
 - **reads:**
@@ -1595,7 +1626,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-10 · /admin/families/$familyId: page, banners and Overview tab (read + staff note)
 
-- **agent_name:** `cl-p3-family-overview` · **phase:** P3 · **batch:** 5
+- **agent_name:** `cl-p3-family-overview` · **phase:** P3 · **batch:** 6
 - **depends_on:** P3-09, P3-04
 - **human_gate:** —
 - **reads:**
@@ -1616,7 +1647,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-11 · Family Overview edit sheets: guardian, child, contact (soft delete)
 
-- **agent_name:** `cl-p3-family-edit-sheets` · **phase:** P3 · **batch:** 6
+- **agent_name:** `cl-p3-family-edit-sheets` · **phase:** P3 · **batch:** 7
 - **depends_on:** P3-10
 - **human_gate:** —
 - **reads:**
@@ -1629,13 +1660,14 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **steps:**
   1. Three Sheet forms with react-hook-form + zodResolver using the families.schema inputs; FieldError for messages; Checkbox rows min-h-11, never pre-ticked (responsibility, informed).
   2. ContactSheet remove → AlertDialog deleteContactConfirm → deleteFamilyContact (soft delete, pickup history stays).
+  2b. GuardianSheet: the isPrimary checkbox is ticked and disabled on the current primary guardian and starts unticked on the others (30 §4.3 Overview, R-39).
   3. Wire the edit/add buttons in FamilyOverviewTab; invalidate ['admin','family',familyId]; family_restricted shows t.errors.family_restricted.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
 
 #### P3-12 · Family page: Packages & payments tab and Class history tab
 
-- **agent_name:** `cl-p3-family-packages-history` · **phase:** P3 · **batch:** 7
+- **agent_name:** `cl-p3-family-packages-history` · **phase:** P3 · **batch:** 8
 - **depends_on:** P3-11, P3-05, P3-06
 - **human_gate:** —
 - **reads:**
@@ -1655,7 +1687,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-13 · Roster /admin/sessions/$sessionId (check-in/out, pickup, add booking) + cancel warning
 
-- **agent_name:** `cl-p3-roster` · **phase:** P3 · **batch:** 4
+- **agent_name:** `cl-p3-roster` · **phase:** P3 · **batch:** 5
 - **depends_on:** P3-07, P3-06, P2-04, P3-03
 - **human_gate:** —
 - **reads:**
@@ -1676,26 +1708,27 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P3-14 · Convert an inbox request into a family (one SQL call)
 
-- **agent_name:** `cl-p3-convert-request` · **phase:** P3 · **batch:** 5
+- **agent_name:** `cl-p3-convert-request` · **phase:** P3 · **batch:** 6
 - **depends_on:** P3-04, P2-05
 - **human_gate:** —
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §4.3 '/admin/inbox/$requestId' P3 bullet (convertDialog)
   - docs/backend/20-server-api.md §14.1 (convertedFamilyId)
-  - docs/backend/20-server-api.md §9.5 row createFamilyFromRequest
+  - docs/backend/20-server-api.md §9.5 CreateFamilyFromRequestInput (guardian phone/lineId with contact_required) and row createFamilyFromRequest
+  - docs/backend/30-ui.md §5 reference block member request.convertDialog (incl. guardianPhone, guardianLineId, contactNeeded; card P1-12 already created these keys)
 - **creates:** `src/components/admin/inbox/ConvertDialog.tsx`
 - **modifies:** `src/routes/admin/_staff/inbox/$requestId.tsx`, `src/lib/backend/inbox.functions.ts`
 - **steps:**
   1. inbox.functions.ts getBookingRequest: fill convertedFamilyId from booking_requests.converted_family_id.
-  2. ConvertDialog: prefilled family name (guardian name) and each child's nickname (required here) and ageYears from the request; staff confirm → createFamilyFromRequest → invalidate inbox + families → navigate to the family page.
+  2. ConvertDialog: prefilled family name (guardian name), guardian phone and LINE ID (editable) and each child's nickname (required here) and ageYears from the request. When the request has neither a phone nor a LINE ID (a LINE-path request, D26), show convertDialog.contactNeeded above the two fields; zod contact_required keeps the dialog from submitting until one is filled (R-38). Staff confirm → createFamilyFromRequest → invalidate inbox + families → navigate to the family page.
   3. Detail page: show the convert button when not converted; when converted show the convertedTo link instead.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
 
 #### P3-15 · /admin/payments screen, slip upload, nav tab, dashboard card
 
-- **agent_name:** `cl-p3-payments-screen` · **phase:** P3 · **batch:** 8
+- **agent_name:** `cl-p3-payments-screen` · **phase:** P3 · **batch:** 9
 - **depends_on:** P3-12, P3-09
 - **human_gate:** —
 - **reads:**
@@ -1732,20 +1765,21 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - cl-privacy-checker: every [P3] item of 50 §11.3 present, nothing [P4]
   - grep -c 'phase: "P3"' src/content/privacy.tsx = 4
 
-#### P3-17 · Review SQL 0005_consent_health.sql, then G4 (tables only in Stage B)
+#### P3-17 · Review SQL 0005_consent_health.sql, then G4 (whole file in Stage B, P4 screens later)
 
 - **agent_name:** `cl-p3-sql-0005` · **phase:** P3 · **batch:** 2
 - **depends_on:** P3-01
-- **human_gate:** BEFORE: owner answers G0 Q15 (what the 4 class clips' consent covered) so media_assets.legacy_consent_purposes in the seed is right; the builder edits only that seed line in the UNAPPLIED draft if needed. AFTER review: builder G4 applies 0005, git pull, types.ts contains consent_records and child_health, rls_smoke.sql no FAIL. P4 screens stay off.
+- **human_gate:** BEFORE: owner answers G0 Q15 (what the 4 class clips' consent covered) so media_assets.legacy_consent_purposes in the seed is right; the builder edits only that seed line in the UNAPPLIED draft if needed. AFTER review: builder G4 applies the WHOLE 0005 file (tables and every function, incl. submit_enrolment), git pull, types.ts contains consent_records, child_health and submit_enrolment (args p_link_id, p), rls_smoke.sql no FAIL. Only the P4 screens stay off until Stage C.
 - **reads:**
   - docs/backend/10-data-model.md §§6.16–6.20, 7–11, 13
   - docs/backend/sql/0005_consent_health.sql
   - docs/backend/sql/tests/rls_smoke.sql
-  - docs/backend/00-overview.md D10–D13, D29, D30, R-05, R-06, R-07, R-11, R-15, R-18, R-20
+  - docs/backend/00-overview.md D10–D13, D29, D30, R-05, R-06, R-07, R-11, R-15, R-18, R-20, R-33, R-34, R-35
+  - docs/backend/sql/seed_dev.sql § 6 (R-35 check) and § 7b (behaviour checks for this file)
 - **creates:** —
 - **modifies:** —
 - **steps:**
-  1. Run the cl-sql-reviewer checklist on 0005. Also check: consent_records append-only except inside purge/erase; child_health has no table grants to authenticated and is read only via get_child_health / list_session_health_flags (both audit); the health trigger blocks writes without a current guardian health_allergy grant; queue_consent_change_alert fires for any move away from granted (guardian or child, any channel); submit_enrolment locks family_links FOR UPDATE and is service-role only; has_active_consent is not executable by authenticated; can_publish_media for a youtube asset on media_website also needs media_youtube; legacy-only assets are never 'needs takedown'.
+  1. Run the cl-sql-reviewer checklist on 0005. Also check: consent_records append-only except inside purge/erase; child_health has no table grants to authenticated and is read only via get_child_health / list_session_health_flags (both audit); the health trigger blocks writes without a current guardian health_allergy grant; queue_consent_change_alert fires for any move away from granted (guardian or child, any channel); submit_enrolment locks family_links FOR UPDATE and is service-role only; in submit_enrolment an unticked media box records 'refused' only when the guardian has no earlier decision, else nothing (R-33), and a health 'granted' after the child's own latest health 'no' raises 23514 before any write (R-34); publish_consent_text refuses the first health_allergy text (R-35); has_active_consent is not executable by authenticated; can_publish_media for a youtube asset on media_website also needs media_youtube; legacy-only assets are never 'needs takedown'; seed_dev.sql § 7b has a check for each of these.
   2. Check rls_smoke.sql covers the new tables, bucket and functions; list gaps. Do not edit files.
 - **acceptance:**
   - Read-only review report: one line per check (additive only, RLS on every new table, anon has no grants, every SECURITY DEFINER function has set search_path = '' and explicit revoke/grant, names match 10-data-model.md, safe to run twice, depends-on order) marked PASS or FAIL with file:line; no file changed
@@ -1759,12 +1793,12 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
   - docs/backend/10-data-model.md §§6.21–6.22, 8, 13
   - docs/backend/sql/0007_privacy_ops.sql
   - docs/backend/sql/tests/rls_smoke.sql
-  - docs/backend/00-overview.md D28, R-09, R-10, R-25
+  - docs/backend/00-overview.md D28, R-09, R-10, R-25, R-36, R-37
   - docs/backend/50-security-privacy.md §§18.3–18.4, 19
 - **creates:** —
 - **modifies:** —
 - **steps:**
-  1. Run the cl-sql-reviewer checklist on 0007. Also check: set_family_restriction is the only way to change restriction columns; restricted families are blocked from new bookings, links, granted consents and profile edits but withdrawals still work; mark_inactive_families skips restricted families; erase_family keeps anonymised payments and does not queue slips/evidence; purge v4 increments sessions_used_purged before deleting credit bookings.
+  1. Run the cl-sql-reviewer checklist on 0007. Also check: set_family_restriction is the only way to change restriction columns; restricted families are blocked from new bookings, links, granted consents and profile edits, including the family row itself (families_block_restricted, R-36) and edits of inactive contacts, but withdrawals and a plain contact removal (is_active true → false) still work; FK set-null columns (identity_checked_by, created_by, source_request_id) never block staff offboarding or the purge; mark_inactive_families skips restricted families; erase_family keeps anonymised payments and does not queue slips/evidence; purge v4 increments sessions_used_purged before deleting credit bookings; seed_dev.sql § 7b.8 checks the restriction rules and the R-37 lift → correct → restrict sequence.
   2. Check rls_smoke.sql covers the new tables and functions; list gaps. Do not edit files.
 - **acceptance:**
   - Read-only review report: one line per check (additive only, RLS on every new table, anon has no grants, every SECURITY DEFINER function has set search_path = '' and explicit revoke/grant, names match 10-data-model.md, safe to run twice, depends-on order) marked PASS or FAIL with file:line; no file changed
@@ -1799,7 +1833,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §5 module table + pattern
-  - docs/backend/30-ui.md §5 reference member privacy (type L4745–4817; th L5491–5589; en L6312–6405)
+  - docs/backend/30-ui.md §5 reference member privacy (type L4594–4666; th L5344–5442; en L6169–6262)
   - docs/backend/30-ui.md §5.1 rows 'privacy · …'
 - **creates:** `src/content/admin/privacy.tsx`
 - **modifies:** `src/content/admin/index.ts`
@@ -1861,7 +1895,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** —
 - **steps:**
   1. Give the builder the step list from 50 §19.5 and 00 §8 P5 acceptance as a checklist; collect results. Include running sql/seed_dev.sql in the SQL editor (it ends in ROLLBACK) and reading its NOTICE lines.
-  2. Check: export returns one family only; erase keeps anonymised payment amounts and dates; a restricted family can't get a booking or link and is skipped by mark_inactive_families; used credits stay used after the purge removes old bookings (sessions_used_purged).
+  2. Check: export returns one family only; erase keeps anonymised payment amounts and dates; a restricted family can't get a booking or link, can't be edited (incl. its name and staff note, R-36) and is skipped by mark_inactive_families; the owner can correct disputed data with lift → correct → restrict again (50 §18.4, R-37; seed_dev.sql § 7b.8); used credits stay used after the purge removes old bookings (sessions_used_purged).
   3. Do not run SQL yourself.
 - **acceptance:**
   - Every P5 core acceptance line in 00 §8 is checked by the human or listed as open
@@ -1945,8 +1979,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-04 · enrolment.schema.ts and consent-texts.server.ts with tests
 
-- **agent_name:** `cl-p4-enrolment-schema` · **phase:** P4 · **batch:** 2
-- **depends_on:** P3-17, P0-04, P0-05, P0-06, P0-16, P4-01
+- **agent_name:** `cl-p4-enrolment-schema` · **phase:** P4 · **batch:** 3
+- **depends_on:** P3-17, P0-04, P0-05, P0-06, P0-16, P4-01, P4-07
 - **human_gate:** —
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
@@ -1956,9 +1990,9 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **creates:** `src/lib/backend/enrolment.schema.ts`, `src/lib/backend/enrolment.schema.test.ts`, `src/server/consent-texts.server.ts`, `src/server/consent-texts.server.test.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ (rev) enrolment.schema.ts block (media is a list of only the purposes shown; health decision skipped | refused | granted).
+  1. Copy the ✅ (rev) enrolment.schema.ts block (media is a list of only the purposes shown; health decision skipped | refused | granted; EnrolmentForm children carry currentMedia and childRefusedHealth, type CurrentMediaDecision, R-33/R-34). It imports ALLERGENS from ./health.schema, created by P4-07 (a dependency).
   2. Copy the ✅ consent-texts.server.ts block.
-  3. enrolment.schema.test.ts: only media_website + media_youtube entries pass; a media switch on without mediaLevel fails; toSubmitEnrolmentPayload maps skipped health to { decision: 'skipped' }; boundary tests for otherAllergens, foodsToAvoid, careNotes vs DB_LIMITS.
+  3. enrolment.schema.test.ts (this card owns it; P4-06 does not): only media_website + media_youtube entries pass; a media switch on without mediaLevel fails; toSubmitEnrolmentPayload maps skipped health to { decision: 'skipped' }; boundary tests for otherAllergens, foodsToAvoid, careNotes vs DB_LIMITS.
   4. consent-texts.server.test.ts (mock ./supabase-admin.server): loadCurrentConsentTexts returns null for a purpose with no row and the highest version otherwise; areCurrentConsentTexts is false for a retired id.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -1966,42 +2000,49 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-05 · enrolment.functions.ts: getEnrolmentForm, createEnrolmentLink, revokeFamilyLink
 
-- **agent_name:** `cl-p4-enrolment-functions` · **phase:** P4 · **batch:** 3
+- **agent_name:** `cl-p4-enrolment-functions` · **phase:** P4 · **batch:** 4
 - **depends_on:** P4-02, P4-04, P0-17
 - **human_gate:** —
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
   - docs/backend/20-server-api.md §9.8 (✅ (rev) enrolment.functions.ts block and the bullets under it)
-  - docs/backend/00-overview.md D13, D28
+  - docs/backend/20-server-api.md §7.7 (resolveLinkToken, newLinkToken) and §4 (adminErrorFromDb)
+  - docs/backend/sql/0005_consent_health.sql consent_matrix (columns it returns)
+  - docs/backend/00-overview.md D13, D28, R-33, R-34
 - **creates:** `src/lib/backend/enrolment.functions.ts`
 - **modifies:** —
 - **steps:**
-  1. Copy the ✅ (rev) block but leave out the submitEnrolment export and the handleSubmitEnrolment import (card P4-06 adds them).
-  2. Token functions are POST with the token in the body, return PublicResult, and query only rows of the resolved family. createEnrolmentLink returns the URL once; a restricted family → family_restricted.
+  1. Copy the ✅ (rev) block but leave out the submitEnrolment export and the handleSubmitEnrolment import (card P4-06 adds them). Keep the `type SubmitEnrolmentRaw` import from ./enrolment.schema (unused until P4-06; noUnusedLocals is off).
+  2. Token functions are POST with the token in the body, return PublicResult, and query only rows of the resolved family. getEnrolmentForm makes ONE rpc('consent_matrix') for the family's children and fills currentMedia and childRefusedHealth (R-33/R-34). createEnrolmentLink returns the URL once; its insert error goes through adminErrorFromDb, so a restricted family → family_restricted.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
-  - Leak grep extended with resolveLinkToken prints nothing
+  - The README leak grep, run unchanged (it already lists resolveLinkToken), prints nothing
 
 #### P4-06 · enrolment-submit.server.ts (one SQL call) + submitEnrolment
 
-- **agent_name:** `cl-p4-enrolment-submit` · **phase:** P4 · **batch:** 4
-- **depends_on:** P4-05, P4-03
-- **human_gate:** —
+- **agent_name:** `cl-p4-enrolment-submit` · **phase:** P4 · **batch:** 5
+- **depends_on:** P4-05, P4-03, P4-07
+- **human_gate:** BEFORE: G4 · 0005 marked done in 90 §2 (the whole 0005 file applied exactly as written, then git pull --ff-only), and the Stage C gates P4-01 needs (G-HEALTH, G9b, G4 · 0006) are recorded. Read-only check first: src/integrations/supabase/types.ts lists the function submit_enrolment with args p_link_id and p; if not, stop and report "types not regenerated".
 - **reads:**
   - docs/backend/README.md (golden rules, acceptance commands, leak grep)
-  - docs/backend/20-server-api.md §9.8 (✅ (rev) enrolment-submit.server.ts, bullets, 'Tests to write')
+  - docs/backend/20-server-api.md §4 (PublicErrorCode, fail, ok)
+  - docs/backend/20-server-api.md §7.7 (resolveLinkToken and its LinkResolution shape), §7.8 (deliverAlertIds, notifyStaff, NotifyOutcome), §7.9 (areCurrentConsentTexts)
+  - docs/backend/20-server-api.md §8.8 (PersonName, Uuid, IsoMonth, ThaiPhoneSchema limits for the fixture)
+  - docs/backend/20-server-api.md §9.0 (errors: 22023/23514 → invalid_input; strict-TS test rules)
+  - docs/backend/20-server-api.md §9.8 (✅ (rev) enrolment-submit.server.ts, the enrolment.functions.ts block, 'Key behaviours', 'Tests to write' first bullet incl. the fixture)
   - docs/backend/sql/0005_consent_health.sql submit_enrolment
-  - docs/backend/00-overview.md D30, R-05, R-21
+  - docs/backend/00-overview.md D30, R-05, R-21, R-33, R-34
 - **creates:** `src/server/enrolment-submit.server.ts`, `src/server/enrolment-submit.server.test.ts`
 - **modifies:** `src/lib/backend/enrolment.functions.ts`
 - **steps:**
   1. Copy the ✅ (rev) handler block: resolve token → check texts are current → ONE rpc('submit_enrolment', { p_link_id, p }) → deliverAlertIds(returned alert ids) → notifyStaff('enrolment_submitted', familyId).
-  2. Add the submitEnrolment export and the handleSubmitEnrolment import to enrolment.functions.ts exactly as in the ✅ block.
-  3. Write every test listed in 'Tests to write' for enrolment-submit.server.test.ts.
+  2. Add the submitEnrolment export and the handleSubmitEnrolment import to enrolment.functions.ts exactly as in the ✅ block; make sure `type SubmitEnrolmentRaw` is imported from ./enrolment.schema there (the validator uses it).
+  3. Write the handler tests only (20 §9.8 'Tests to write', first bullet): expired link → link_expired and no RPC; SQL link_used → link_used; SQL 22023 → invalid_input; SQL 23514 → invalid_input; success → deliverAlertIds with the returned ids, then notifyStaff('enrolment_submitted', familyId); text not current → invalid_input and no RPC. Use the fixture given there (fake values only). The enrolment.schema tests belong to P4-04: do not write them here.
+  4. Under noUncheckedIndexedAccess read mock calls as `mock.calls.at(0)?.[0]`; under exactOptionalPropertyTypes never write `key: undefined` in fixtures.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/server/enrolment-submit.server.test.ts: all pass
-  - Leak grep extended with handleSubmitEnrolment prints nothing
+  - The README leak grep, run unchanged (it already lists handleSubmitEnrolment), prints nothing
 
 #### P4-07 · health.schema.ts + health.functions.ts (audited) + HEALTH_IN_SYSTEM
 
@@ -2027,7 +2068,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-08 · enrol.tsx copy, ConsentTextBody and HealthSection (+ test)
 
-- **agent_name:** `cl-p4-enrol-copy-health` · **phase:** P4 · **batch:** 3
+- **agent_name:** `cl-p4-enrol-copy-health` · **phase:** P4 · **batch:** 4
 - **depends_on:** P4-04, P4-07, P1-08
 - **human_gate:** —
 - **reads:**
@@ -2037,8 +2078,9 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **creates:** `src/content/enrol.tsx`, `src/components/enrol/ConsentTextBody.tsx`, `src/components/enrol/HealthSection.tsx`, `src/components/enrol/HealthSection.test.tsx`
 - **modifies:** —
 - **steps:**
-  1. Copy the four ✅ blocks from 30 §3.5. ConsentTextBody renders stored wording as text, never as HTML.
-  2. HealthSection: the checkbox label is the consent text title and the full body is shown directly above it; never pre-ticked; 'Not now' records nothing (skipped); 'I don't want to share this' records refused with the declineNote.
+  1. Copy the four ✅ blocks from 30 §3.5 (enrol.tsx incl. health.childRefusedNote and media.currentGranted / currentNotGranted / keepNote, R-33/R-34; HealthSection with the optional childRefused prop; its test incl. the R-34 case). ConsentTextBody renders stored wording as text, never as HTML.
+  2. HealthSection: the checkbox label is the consent text title and the full body is shown directly above it; never pre-ticked; 'Not now' records nothing (skipped); 'I don't want to share this' records refused with the declineNote; childRefused shows only childRefusedNote (no box).
+  3. The new copy lines marked OWNER-APPROVE (childRefusedNote, keepNote) are approved at G9b/G0 Q17 with the rest of the enrol page: copy them unchanged and list them in your report.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/components/enrol/HealthSection.test.tsx: all pass
@@ -2046,26 +2088,28 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-09 · MediaSection: one block per published purpose, full text visible (+ test)
 
-- **agent_name:** `cl-p4-media-section` · **phase:** P4 · **batch:** 4
+- **agent_name:** `cl-p4-media-section` · **phase:** P4 · **batch:** 5
 - **depends_on:** P4-08
 - **human_gate:** —
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §3.5 Media bullet and 📝 MediaSection spec
   - docs/backend/30-ui.md §6 (consent controls checklist)
-  - docs/backend/00-overview.md R-04, R-06
+  - docs/backend/00-overview.md R-04, R-06, R-33
+  - docs/backend/20-server-api.md §9.8 (CurrentMediaDecision, EnrolmentForm.children[].currentMedia)
+  - docs/backend/20-server-api.md §8.5 (formatDateTime)
 - **creates:** `src/components/enrol/MediaSection.tsx`, `src/components/enrol/MediaSection.test.tsx`
 - **modifies:** —
 - **steps:**
-  1. Build MediaSection exactly as the 📝 spec: for each purpose in MEDIA_PURPOSES that has a text: bordered block, `<h4>`{title}`</h4>`, `<ConsentTextBody/>`, then an unticked Checkbox labelled media.agree (checked={value.on[p] === true}, never defaultChecked). No Collapsible, no 'read more'. Face-level RadioGroup (no default) only when a box is ticked.
-  2. Tests: every checkbox starts unchecked; every published purpose's body is visible (toBeVisible); a purpose without a text renders nothing; ticking one shows the face question with nothing selected.
+  1. Build MediaSection exactly as the 📝 spec: for each purpose in MEDIA_PURPOSES that has a text: bordered block, `<h4>`{title}`</h4>`, `<ConsentTextBody/>`, the current-decision line when `current[p]` exists, then an unticked Checkbox labelled media.agree (checked={value.on[p] === true}, never defaultChecked, never pre-ticked from `current`), then media.keepNote when `current[p]` exists (R-33). No Collapsible, no 'read more'. Face-level RadioGroup (no default) only when a box is ticked.
+  2. Tests: every checkbox starts unchecked, also when current says granted; every published purpose's body is visible (toBeVisible); a purpose without a text renders nothing; ticking one shows the face question with nothing selected; a decided purpose shows its status line and keepNote.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
   - npx vitest run src/components/enrol/MediaSection.test.tsx: all pass
 
 #### P4-10 · GuardianSection and ContactsSection for /enrol
 
-- **agent_name:** `cl-p4-enrol-sections` · **phase:** P4 · **batch:** 4
+- **agent_name:** `cl-p4-enrol-sections` · **phase:** P4 · **batch:** 5
 - **depends_on:** P4-08
 - **human_gate:** —
 - **reads:**
@@ -2126,7 +2170,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-13 · my.schema.ts + my.functions.ts (getMyConsents, updateMyConsent, createManageLink)
 
-- **agent_name:** `cl-p4-my-functions` · **phase:** P4 · **batch:** 3
+- **agent_name:** `cl-p4-my-functions` · **phase:** P4 · **batch:** 4
 - **depends_on:** P4-02, P4-03, P4-04, P0-17
 - **human_gate:** —
 - **reads:**
@@ -2144,7 +2188,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-14 · EnrolPage and the /enrol/$token route (noindex, no-referrer)
 
-- **agent_name:** `cl-p4-enrol-page` · **phase:** P4 · **batch:** 5
+- **agent_name:** `cl-p4-enrol-page` · **phase:** P4 · **batch:** 6
 - **depends_on:** P4-05, P4-06, P4-09, P4-10
 - **human_gate:** —
 - **reads:**
@@ -2156,8 +2200,8 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** —
 - **steps:**
   1. Route: copy the ✅ part (ssr false, robots noindex nofollow, referrer no-referrer, ?lang); component wraps `<LanguageProvider initialLang={lang}><EnrolPage token={token} /></LanguageProvider>`.
-  2. EnrolPage: getEnrolmentForm on mount into component state (not React Query); refetch on language change; states loading → link problem card (with LINE button) → form → submitting → done (focus heading, no data shown back). Steps: GuardianSection; per child birth month/year selects + HealthSection (only when a health text exists) + MediaSection; ContactsSection; review & send with /privacy link. Submit mapping exactly as 30 §3.5.
-  3. EnrolPage.test.tsx (mock the server functions): no checkbox is checked on first render; every consent text body returned by the mock is visible; with no health text the health section is absent.
+  2. EnrolPage: getEnrolmentForm on mount into component state (not React Query); refetch on language change; states loading → link problem card (with LINE button) → form → submitting → done (focus heading, no data shown back). Steps: GuardianSection; per child birth month/year selects + HealthSection (only when a health text exists; pass childRefused={child.childRefusedHealth}, R-34) + MediaSection (pass current={child.currentMedia}, R-33); ContactsSection; review & send with /privacy link. Submit mapping exactly as 30 §3.5.
+  3. EnrolPage.test.tsx (mock the server functions): no checkbox is checked on first render, also for a child whose mock currentMedia says granted; every consent text body returned by the mock is visible; with no health text the health section is absent; with childRefusedHealth true that child has no health checkbox.
   4. Run npx vite build before tsc.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -2172,7 +2216,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §5 module table + pattern
-  - docs/backend/30-ui.md §5 reference members health (type L4556–4569; th L5246–5259; en L6062–6075), consents and childScript (type L4662–4699; th L5395–5438; en L6214–6259), media (type L4700–4730; th L5439–5476; en L6260–6297)
+  - docs/backend/30-ui.md §5 reference members health (type L4405–4418; th L5099–5112; en L5919–5932), consents and childScript (type L4511–4548; th L5248–5291; en L6071–6116), media (type L4549–4579; th L5292–5329; en L6117–6154)
   - docs/backend/30-ui.md §5.1 rows 'health · …'
   - docs/backend/30-ui.md §4.4 (child consent script)
 - **creates:** `src/content/admin/health.tsx`, `src/content/admin/consents.tsx`, `src/content/admin/media.tsx`
@@ -2209,7 +2253,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-17 · Family page: parent links tab and consent chips (getFamily P4 fields)
 
-- **agent_name:** `cl-p4-family-links` · **phase:** P4 · **batch:** 4
+- **agent_name:** `cl-p4-family-links` · **phase:** P4 · **batch:** 5
 - **depends_on:** P4-05, P4-11, P4-13, P4-15, P5-03
 - **human_gate:** —
 - **reads:**
@@ -2228,7 +2272,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-18 · Family page: Consents tab, record dialog, child script
 
-- **agent_name:** `cl-p4-family-consents` · **phase:** P4 · **batch:** 5
+- **agent_name:** `cl-p4-family-consents` · **phase:** P4 · **batch:** 6
 - **depends_on:** P4-17
 - **human_gate:** —
 - **reads:**
@@ -2306,7 +2350,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-22 · my-consents.tsx copy, MyConsentsPage and the /my/$token route
 
-- **agent_name:** `cl-p4-my-page` · **phase:** P4 · **batch:** 4
+- **agent_name:** `cl-p4-my-page` · **phase:** P4 · **batch:** 5
 - **depends_on:** P4-13, P4-08
 - **human_gate:** —
 - **reads:**
@@ -2348,9 +2392,9 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 
 #### P4-24 · Stage C go-live check (G-HEALTH switch, G9a …-v3, G10)
 
-- **agent_name:** `cl-p4-stage-c-golive` · **phase:** P4 · **batch:** 6
+- **agent_name:** `cl-p4-stage-c-golive` · **phase:** P4 · **batch:** 7
 - **depends_on:** P4-01, P4-14, P4-16, P4-18, P4-20, P4-22, P4-23
-- **human_gate:** Human: HEALTH_IN_SYSTEM matches G-HEALTH; owner approves …-v3 (G9a); sign-up disabled; rls_smoke.sql no FAIL; seed_dev.sql run in the SQL editor shows the consent/health behaviour checks; publish-scan findings fixed; Publish (G10).
+- **human_gate:** Human: HEALTH_IN_SYSTEM matches G-HEALTH; owner approves …-v3 (G9a); sign-up disabled; rls_smoke.sql no FAIL; seed_dev.sql run in the SQL editor ends with its success row (§§ 6, 7 and 7b PASS lines: health needs consent, withdrawal deletes and alerts, child 10+ rules, R-33 re-enrol keeps media decisions, R-34 child's health "no", R-35 first health text, submit_enrolment scope/link_used); publish-scan findings fixed; Publish (G10).
 - **reads:**
   - docs/backend/00-overview.md §8 P4 acceptance, §8.0 Stage C row
   - docs/backend/40-integrations.md §13
@@ -2359,7 +2403,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **modifies:** —
 - **steps:**
   1. Run the standard acceptance and cl-privacy-checker over every Stage C file: no consent control pre-ticked, every consent control's full text visible, health only via audited functions, no health on LINE, /enrol and /my noindex + no-referrer.
-  2. Give the builder the P4 acceptance list from 00 §8 (DB rejects health without consent; withdrawal deletes the health row and queues an alert; a 10+ child without own media consent is not publishable; an enrol link works once; two concurrent submits can't both succeed; consent_texts can't be edited) and collect results.
+  2. Give the builder the P4 acceptance list from 00 §8 (DB rejects health without consent; withdrawal deletes the health row and queues an alert; a 10+ child without own media consent is not publishable; an enrol link works once; two concurrent submits can't both succeed; consent_texts can't be edited; an unticked box on a re-sent enrol link keeps the earlier media decision; a child's own health "no" hides the health box) and collect results, pointing to the matching seed_dev.sql PASS lines.
   3. Produce the 40 §13 checklist with each line done/open.
 - **acceptance:**
   - Standard acceptance (docs/backend/README.md): npx prettier --write `<changed files>`; npx vite build ends with '✓ built'; npx tsc --noEmit exits 0 with no output; npx eslint `<changed files>` exits 0; npx vitest run: all pass; the leak grep prints nothing
@@ -2409,7 +2453,7 @@ Each card is self-contained together with the shared preamble (§ 1.6). `SA` lin
 - **reads:**
   - AGENTS.md (house rules: TH/EN, `<Nobr>`/`<En>`, tone, accessibility)
   - docs/backend/30-ui.md §4.3 '/admin/reports'
-  - docs/backend/30-ui.md §5 reference member reports (type L4731–4744; th L5477–5490; en L6298–6311)
+  - docs/backend/30-ui.md §5 reference member reports (type L4580–4593; th L5330–5343; en L6155–6168)
   - docs/backend/30-ui.md §1.2 (shadcn chart or tables)
 - **creates:** `src/content/admin/reports.tsx`, `src/routes/admin/_staff/reports.tsx`
 - **modifies:** `src/content/admin/index.ts`, `src/components/admin/AdminShell.tsx`
@@ -2605,6 +2649,8 @@ Use them exactly. Names introduced by the spec files are listed in `20-server-ap
 | `DsrTab`, `BreachTab`, `AuditTab` | `src/components/admin/privacy/` | PK-02 (parked) |
 | `sendBackupEmail` | `src/server/email-alert.server.ts` | PK-05 (parked) |
 | Query key `["admin", "alerts"]` | dashboard alerts list | P4-19 |
+| `auth.middleware.test.ts` | `src/lib/backend/` | P0-17 (R-40) |
+| `BookingThanks.test.tsx` | `src/components/booking/` | P1-14 (R-45) |
 
 ---
 

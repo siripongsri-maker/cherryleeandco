@@ -45,8 +45,8 @@ Apply **in this order**, one file per G4 gate. Each file says at the top what it
 | 1 | `sql/0001_foundation.sql` | P0 · F0-05 | enums `app_role`, `site_lang`; tables `user_roles`, `audit_log`, `studio_settings` (1 row); functions `has_role`, `is_staff`, `is_owner`, `current_app_role`, `require_staff_or_server`, `require_owner_or_server`, `set_updated_at`, `prevent_update_delete`, `log_audit_event`, `audit_row_change`, `prevent_last_owner_removal` | G1–G3 done → **G4** → G5 |
 | 2 | `sql/0002_booking_requests.sql` | P1 · F1-01 | 6 enums; `booking_requests` (D26 contact rule), `rate_limit_events`, `staff_notifications`; `is_valid_request_children`, `check_rate_limit`, `purge_expired_records` v1; pg_cron jobs `purge-expired-records`, `cron-history-cleanup` (fallback route if refused, R-19) | **G4** |
 | 3 | `sql/0003_sessions.sql` | P2 · F2-01 | `session_status`; `sessions`; `booking_requests.session_id`; `session_seats_left` v1 (staff/server only), `get_sessions_with_seats` v1, `get_open_sessions`, `generate_weekend_sessions` | **G4** |
-| 4 | `sql/0004_families.sql` | P3 · F3-01 | 6 enums; `families`, `guardians` (+`pending_link_changes`), `children` (+`allergy_check_needed_at`), `family_contacts` (+`is_active`), `package_purchases` (+`sessions_used_purged`), `payments`, `bookings`, `storage_cleanup_queue`; view `package_balances`; `booking_requests.converted_family_id`; `session_seats_left` v2, `get_sessions_with_seats` v2, `create_family_from_request`; triggers `guard_package_purge_counter`, `cancel_bookings_of_cancelled_session`; bucket `payment-slips`; `purge_expired_records` v2 | **G4**, G11 |
-| 5 | `sql/0005_consent_health.sql` | P4 · F4-01 (applied in **Stage B** as tables only, 00 § 8.0) | 9 enums; `consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets` (+`legacy_consent_purposes`), `media_asset_children`; view `current_consents`; consent + health functions; `queue_consent_change_alert` trigger; `consent_matrix`, `media_publishability`, `set_media_asset_children`, `publish_consent_text`, `submit_enrolment`; bucket `consent-evidence`; seed of the 6 homepage clips into `media_assets`; `purge_expired_records` v3 | **G4** |
+| 4 | `sql/0004_families.sql` | P3 · F3-01 | 6 enums; `families`, `guardians` (+`pending_link_changes`), `children` (+`allergy_check_needed_at`), `family_contacts` (+`is_active`), `package_purchases` (+`sessions_used_purged`), `payments`, `bookings`, `storage_cleanup_queue`; view `package_balances`; `booking_requests.converted_family_id`; `session_seats_left` v2, `get_sessions_with_seats` v2, `create_family_from_request`, `set_primary_guardian`; triggers `guard_package_purge_counter`, `cancel_bookings_of_cancelled_session`; bucket `payment-slips`; `purge_expired_records` v2 | **G4**, G11 |
+| 5 | `sql/0005_consent_health.sql` | P4 · F4-01 (the **whole file** is applied in **Stage B**, functions included; only the P4 screens wait, 00 § 8.0) | 9 enums; `consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets` (+`legacy_consent_purposes`), `media_asset_children`; view `current_consents`; consent + health functions; `queue_consent_change_alert` trigger; `consent_matrix`, `media_publishability`, `set_media_asset_children`, `publish_consent_text`, `submit_enrolment`; bucket `consent-evidence`; seed of the 6 homepage clips into `media_assets`; `purge_expired_records` v3 | **G4** |
 | 6 | `sql/0006_seed_consent_texts.sql` | P4 · F4-02 | v1 consent wording, TH + EN, 4 purposes (health, website, social, YouTube; data only) | **G9b first**, then **G4** |
 | 6b | `sql/0006b_seed_media_parents_group.sql` | P4 · F4-02 (optional) | v1 wording for `media_parents_group`, only if G0 Q9 confirms the private parents' group | G0 Q9 = yes, **G9b**, **G4** |
 | 7 | `sql/0007_privacy_ops.sql` | P5 · F5-01 (applied in **Stage B**, after 0005) | 4 enums; `dsr_requests`, `breach_incidents`; restriction columns + `set_family_restriction`, `guard_family_restriction_columns`, `block_restricted_family`; `mark_inactive_families`, `export_family_data`, `erase_family`; `purge_expired_records` v4 (complete) | **G4** |
@@ -747,6 +747,7 @@ underlying tables decides what comes back).
 | `session_seats_left(p_session_id uuid)` | integer \| NULL | definer (plpgsql) | staff, server, views | NULL when capacity unset; never below 0; refuses no-role users (R-20) |
 | `get_sessions_with_seats(p_from date, p_to date)` | table `(session_id, session_date, starts_at, ends_at, capacity, seats_held_offline, status, public_note_th, public_note_en, staff_note, seats_left, booked)` | **invoker** | staff (`listSessions`) | one call per month list (R-18); `booked` = held/confirmed/attended/absent bookings (0 before 0004) |
 | `create_family_from_request(p_request_id uuid, p_display_name text, p_guardian jsonb, p_children jsonb)` | uuid | **invoker** | staff (`createFamilyFromRequest`) | one transaction (R-15): family + primary guardian + children (`age_years` per child → `reported_age_years`) + request `converted`; `23514` if already converted, `P0002` if missing |
+| `set_primary_guardian(p_guardian_id uuid)` | void | **invoker** | staff (`saveGuardian`) | (0004, R-39) clears the family's other primary and sets this guardian, one transaction; never leaves a family without a primary; `P0002` if missing; restricted family → `23514` |
 | `get_open_sessions(p_from date, p_to date)` | table `(session_id uuid, session_date date, starts_at time, ends_at time, seats_left int, public_note_th text, public_note_en text)` | definer | **service role only** (`getOpenSessions`) | open sessions from max(p_from, today) to min(p_to, today + 70 days); **never capacity** |
 | `generate_weekend_sessions(p_from date, p_weeks int, p_capacity int)` | integer (created) | **invoker** | staff (`generateWeekendSessions`) | Sat + Sun, 09:00–15:00, status `open`, from the first Saturday on/after `p_from`; `p_weeks` 1–26; NULL capacity → studio default; skips existing dates |
 | `child_age_years(p_birth_month date, p_on date)` | integer | immutable | anyone signed in, server | during the birth month the child counts as the new age (errs towards asking the child) |
@@ -785,7 +786,7 @@ and `cron-history-cleanup` at `0 20 * * *` → deletes `cron.job_run_details` ol
 | `studio_settings` | `set_updated_at` | audit (update) |
 | `booking_requests`, `staff_notifications`, `media_assets` | `set_updated_at` | — |
 | `sessions` | `set_updated_at` | `cancel_bookings_of_cancelled_session` (update of status) |
-| `families` | `set_updated_at`; `guard_family_restriction_columns` (0007) | audit |
+| `families` | `set_updated_at`; `guard_family_restriction_columns` (0007); `block_restricted_family` (0007, update: only system columns may change while restricted, R-36) | audit |
 | `guardians`, `children`, `family_contacts` | `set_updated_at`; `block_restricted_family` (0007) | audit |
 | `package_purchases` | `set_updated_at`; `set_accounting_retain_until` (insert, update of `purchased_on`); `guard_package_purge_counter` | audit |
 | `payments` | `set_updated_at`; `set_accounting_retain_until` (insert, update of `paid_at`) | audit; `queue_storage_cleanup` (update of `slip_path`, delete) |
@@ -831,7 +832,7 @@ the named functions. `service_role` bypasses RLS and has all privileges on every
 | `families` | — | — | S I U | S I U D | D blocked by consent FK from P4 → `erase_family` |
 | `guardians` | — | — | S I U | S I U D | |
 | `children` | — | — | S I U | S I U D | |
-| `family_contacts` | — | — | S I U D | S I U D | |
+| `family_contacts` | — | — | S I U | S I U D | staff remove = U `is_active = false` (R-22); hard delete owner only (R-39) |
 | `package_purchases` | — | — | S; I U while active/closed | S I U D | void = owner |
 | `payments` | — | — | S; I U while pending/paid | S I U D | refund/void = owner |
 | `bookings` | — | — | S I U | S I U D | cancel = U status |
@@ -962,7 +963,8 @@ Everything below is a deliberate change or addition; other files must use these 
 - Functions: `require_staff_or_server`, `require_owner_or_server`, `log_audit_event`, `prevent_last_owner_removal`,
   `is_valid_request_children`, `set_accounting_retain_until`, `validate_booking`, `sync_child_last_session`,
   `queue_storage_cleanup`, `consent_texts_guard`, `validate_consent_record`, `apply_consent_withdrawal`,
-  `enforce_health_consent`, `set_dsr_deadlines`, `set_breach_deadlines`.
+  `enforce_health_consent`, `set_dsr_deadlines`, `set_breach_deadlines`; second review: `set_primary_guardian`
+  (0004, R-39). Policy renamed: `family_contacts_owner_delete` (was `family_contacts_staff_delete`, R-39).
 - Columns: `children.reported_age_years`, `children.reported_age_on`; `consent_records.guardian_name_snapshot`,
   `consent_records.child_nickname_snapshot`; `media_assets.shows_faces`, `media_assets.on_parents_group`;
   `dsr_requests.requester_contact`, `dsr_requests.details`, `dsr_requests.identity_verified_by`,
@@ -980,7 +982,9 @@ Everything below is a deliberate change or addition; other files must use these 
 - A guardian needs `has_parental_responsibility = true` (+ `responsibility_attested_at`) **before** their `granted` consent.
 - Enrolment: `submitEnrolment` makes **one** call, `supabaseAdmin.rpc("submit_enrolment", { p_link_id, p })` (R-15). The SQL
   function does the guardian update (no identity marking, `pending_link_changes` for changed fields), birth months,
-  consent records (`withdrawn` when a granted purpose is switched off), health via `upsert_child_health`, contacts
+  consent records (media: ticked = `granted`; unticked = `refused` only when there is no earlier guardian decision,
+  otherwise nothing, R-33; health decline after a grant = `withdrawn`; health grant refused with `23514` when the
+  child's own latest health decision is a "no", R-34), health via `upsert_child_health`, contacts
   (soft delete), `used_at`, and returns the queued alert ids. Then the server pushes those alerts and calls
   `notifyStaff('enrolment_submitted', familyId)`.
 - Restricted families (0007): writes listed in D28 fail with `23514` "Family processing is restricted" → staff error
@@ -1050,7 +1054,10 @@ friendly thrown error (staff). Never show the raw message to parents; never log 
 - **`sql/seed_dev.sql`** (builder, ends in `ROLLBACK`): fake family/guardian/children, sessions at 07:00 so they never
   clash with real ones, and ~40 behaviour checks: children JSON validation, rate limit, seats/credits, pickup rules,
   consent immutability, health needs consent, audited reads, withdrawal deletes health, 10+ child consent, face level,
-  DSR/breach deadlines, export scope, erase, purge. Prefer a local Supabase; on the Lovable database only with the
+  DSR/breach deadlines, export scope, erase, purge; plus § 7b for the review SQL (R-05 alert queue, R-07 marker, R-11
+  legacy/YouTube rule, R-15 `create_family_from_request` / `set_media_asset_children` / `publish_consent_text` /
+  `submit_enrolment`, R-21/R-22/R-33/R-34 enrolment rules, R-35, R-36/R-37 restriction, R-39 primary guardian).
+  The row lock in `submit_enrolment` needs two sessions and is checked by reading the SQL. Prefer a local Supabase; on the Lovable database only with the
   owner's OK, never as a migration, and never without the final `ROLLBACK`.
 - These SQL files were **not executed** while planning (no database is enabled yet). The first G4 is also the first
   real syntax check: if Lovable reports an error, fix the draft before anything else (§ 2.2 step 4).

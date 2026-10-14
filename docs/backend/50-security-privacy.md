@@ -331,7 +331,7 @@ Section numbers refer to the Personal Data Protection Act B.E. 2562 (2019).
 | s.31 | Portability | JSON export | § 18 |
 | s.32 | Objection (incl. direct marketing) | No marketing in scope; objection handled as DSR | § 18 |
 | s.33 | Erasure | `erase_family()` / `eraseFamily` within 90 days incl. backups | § 18, § 19 |
-| s.34 | Restriction | Handled manually (family set `inactive` + staff note); see § 18.4 | § 18 |
+| s.34 | Restriction | `families.processing_restricted_at` set by the owner through `set_family_restriction()` (D28); the database refuses new processing while it is set; see § 18.4 | § 18.4 |
 | s.35/36 | Accuracy, rectification | Staff edit records; parents correct via enrol link or LINE | P3, P4 |
 | s.37(1) | Security measures | RLS, roles, audit log, private buckets, MFA if available, logging rules | Part A |
 | s.37(3) | System to delete at end of retention or on request | `purge_expired_records()` daily via pg_cron | D19; § 19 |
@@ -859,8 +859,10 @@ The **canonical v1 wording** (title + body, Thai and English, all five purposes)
 [`sql/0006_seed_consent_texts.sql`](sql/0006_seed_consent_texts.sql). That file ranks above this one (README order of
 authority), so this section does **not** repeat the full texts. It gives the version ids, a content checklist for the
 lawyer, the review deltas we recommend adding to 0006 **before** it is applied, and the UI-only copy that lives in
-`src/content/*.tsx` rather than in the database. After 0006 is applied, any wording change is a **new version** published
-by the owner in `/admin/settings` (`publishConsentText`), never an edit (D12).
+`src/content/*.tsx` rather than in the database. After 0006 is applied, any wording change is a **new version**, never an
+edit (D12): a new reviewed SQL draft (G9b + G4), or the owner runs `publish_consent_text()` in Cloud → SQL editor
+(`00-overview.md` § 8.0). The `/admin/settings` publishing screen (`publishConsentText`) is parked (card PK-03). The
+first `health_allergy` text can only come from a reviewed SQL draft (R-35), so the G-HEALTH = paper choice holds.
 
 **Version id format** (used here, in review notes and in `/admin/settings`): `<consent_purpose>.v<version>.<lang>`,
 e.g. `health_allergy.v1.th`. In the database that is the row `consent_texts(purpose, version, lang)`.
@@ -1054,7 +1056,9 @@ Our rules (D11, ⚖️ lawyer to confirm):
 | Child (10+) changes their mind | P4+ | staff | `given_by='child'`, `channel='in_person'` |
 
 `/my/$token` now ships **with** `/enrol` in Stage C (D27), so consent given on the web can be withdrawn on the web from
-day one; there is no gap.
+day one; there is no gap. `/enrol` itself withdraws only through the explicit health button "I don't want to share
+this"; an unticked media box on a re-sent enrol link keeps the earlier decision (R-33), so withdrawing media consent
+is `/my` or staff.
 
 ### 16.2 What happens next
 
@@ -1152,7 +1156,7 @@ days, status, outcome, refusal reason, responded) — no health details, kept 3 
 | `portability` | s.31 | + 15 days | + 30 days (internal target) | JSON export |
 | `objection` | s.32 | + 15 days | + 30 days (internal target) | no direct marketing in scope |
 | `erasure` | s.33 | + 15 days | **+ 90 days**, including backups | PDPC 2024 erasure notification; restrict use meanwhile if it can't finish in time |
-| `restriction` | s.34 | + 15 days | + 30 days (internal target) | manual, see § 18.4 |
+| `restriction` | s.34 | + 15 days | + 30 days (internal target) | owner sets it with `set_family_restriction()` (D28), see § 18.4 |
 | `rectification` | s.35/36 | + 15 days | + 30 days (internal target; usually same day) | |
 | `withdraw_consent` | s.19 | — | same day (§ 16) | tracked here only if it arrives as a formal request |
 
@@ -1199,12 +1203,27 @@ The admin shows a countdown; keep every request and reply for 3 years (`retain_u
 Restriction is real data, not a status trick (`families.status` is recomputed every night). The owner opens the
 family page → owner card → **"ระงับการใช้ข้อมูล / Restrict data use"**, types a short reason (e.g. "ระงับตามคำขอ
 2026-11-02", no other detail) → `setFamilyRestriction` → SQL `set_family_restriction()`. While restricted:
-1. the database refuses new bookings, new enrol links, new **granted** consents and edits to guardians, children and
-   contacts (`family_restricted` in the admin); check-in/out of existing bookings, withdrawals and refusals still work;
+1. the database refuses new bookings, new enrol links, new **granted** consents and edits to the family's own name,
+   language and staff note (R-36), guardians, children and contacts (`family_restricted` in the admin); check-in/out of
+   existing bookings, removing a contact, withdrawals and refusals still work;
 2. unused enrol links are revoked automatically; the manage link stays so the parent can still withdraw;
 3. the family is never marked inactive and never auto-erased; the owner can still export or erase on request;
 4. record the request and the outcome in the private DSR spreadsheet (§ 18).
 Lift it with the same button ("ยกเลิกการระงับ / Lift restriction").
+
+**Correcting data while a family is restricted (R-37).** Restriction is often asked for while the parent disputes
+whether data is accurate (s.34 together with s.36), and the fix is to correct the data. The database refuses every edit while
+the restriction is set (including the family's own name, language and staff note), so the owner corrects in one
+sitting, in this order:
+1. owner lifts the restriction (same button; reason not needed);
+2. owner (or staff, with the owner present) makes **only** the correction the parent asked for (`saveGuardian`,
+   `saveChild`, `saveFamilyContact`, `saveFamily`);
+3. owner restricts again if the parent still wants it, with the same short reason (e.g. "ระงับตามคำขอ 2026-11-02
+   (หลังแก้ไข)");
+4. one line in the private DSR spreadsheet: date, "lifted → corrected → restricted again", which field group changed
+   (never the old or new value).
+The audit log already records each step (`families` update × 2 by the owner, then the guardian/child/contact update,
+actor and time, no values; D20), so the sequence can be shown later. Nothing else may be changed during step 2.
 
 ### 18.5 Delivering a copy safely
 
@@ -1598,7 +1617,9 @@ For the Thai PDPA lawyer (G9a/G9b):
 7. **Erasure vs evidence:** may we keep consent evidence (without contact details) for 3 years after an erasure request
    (legal-claims exception)? Keep or delete slip images on erasure?
 8. **Withdrawal gap:** web consents from `/enrol` (P4) before `/my` exists (P5): is "tell us on LINE" acceptable meanwhile?
-9. **Restriction (s.34):** is the manual approach (§ 18.4) acceptable for a small studio?
+9. **Restriction (s.34):** is the database restriction (D28, § 18.4: new bookings, links, granted consents and profile
+   edits refused; withdrawals and check-out still work) enough, and is "lift → correct → restrict again" (§ 18.4) the right
+   way to fix data whose accuracy is disputed?
 10. **DPO (s.41):** confirm not required.
 11. **Staff notice and audit log:** sufficient for staff data (s.23, s.24)?
 12. **Pending PDPA amendment:** anything to prepare now?

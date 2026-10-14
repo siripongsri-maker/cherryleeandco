@@ -11,11 +11,13 @@
 --             Review fixes (00-overview § 15): sessions_used_purged (R-10), family_contacts.is_active (R-22),
 --             guardians.pending_link_changes (R-21), children.allergy_check_needed_at (R-07),
 --             create_family_from_request() in one transaction (R-15), cancelling a session cancels its
---             held/confirmed bookings (R-23).
+--             held/confirmed bookings (R-23); second review: set_primary_guardian() swaps the primary
+--             guardian in one transaction (R-39). Behaviour checks: seed_dev.sql § 7b.
 -- Depends on: 0001, 0002, 0003
 -- Apply via Lovable chat:
 --   "Apply this SQL migration exactly as written. Do not change it."
--- After applying: git pull --ff-only; types.ts must contain "families", "bookings", "package_balances".
+-- After applying: git pull --ff-only; types.ts must contain "families", "bookings", "package_balances",
+--   "create_family_from_request", "set_primary_guardian".
 --   G11: the owner + accountant must confirm the 5-year payment retention used below.
 -- Rules: additive only. Safe to run twice.
 -- Not collected (D9, 00-overview § 6): national ID numbers, full birth dates, school, full legal
@@ -876,6 +878,48 @@ grant execute on function public.create_family_from_request(uuid, text, jsonb, j
 
 
 -- -----------------------------------------------------------------------------
+-- 14c. set_primary_guardian(p_guardian_id) — make one guardian the family's primary in ONE transaction (R-39).
+--      saveGuardian first writes the guardian's plain fields (a new guardian with is_primary = false), then calls
+--      this. If this call fails, the old primary stays, so a family is never left without a primary guardian
+--      (submit_enrolment in 0005 needs one). Two UPDATE statements, because the partial unique index
+--      guardians_one_primary_per_family is checked row by row. SECURITY INVOKER: RLS, the audit trigger and the
+--      restriction guard (0007) apply as for any staff write. Raises P0002 'Guardian not found'.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.set_primary_guardian(p_guardian_id uuid)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $$
+declare
+  v_family_id uuid;
+begin
+  perform public.require_staff_or_server();
+  select g.family_id into v_family_id
+    from public.guardians g
+   where g.id = p_guardian_id;
+  if v_family_id is null then
+    raise exception 'Guardian not found' using errcode = 'P0002';
+  end if;
+  update public.guardians g
+     set is_primary = false
+   where g.family_id = v_family_id
+     and g.is_primary
+     and g.id <> p_guardian_id;
+  update public.guardians g
+     set is_primary = true
+   where g.id = p_guardian_id
+     and not g.is_primary;
+end;
+$$;
+
+revoke execute on function public.set_primary_guardian(uuid) from public, anon;
+grant execute on function public.set_primary_guardian(uuid) to authenticated;
+
+
+-- -----------------------------------------------------------------------------
 -- 15. RLS: families, guardians, children, family_contacts, package_purchases, payments, bookings
 -- -----------------------------------------------------------------------------
 
@@ -930,9 +974,11 @@ begin
     create policy "children_owner_delete" on public.children
       for delete to authenticated using ((select public.is_owner()));
   end if;
-  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'family_contacts' and policyname = 'family_contacts_staff_delete') then
-    create policy "family_contacts_staff_delete" on public.family_contacts
-      for delete to authenticated using ((select public.is_staff()));
+  -- R-39: staff never hard-delete a contact (soft delete keeps who collected a child, R-22); like the other
+  -- family tables only the owner may delete, and erase_family runs as SECURITY DEFINER anyway.
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'family_contacts' and policyname = 'family_contacts_owner_delete') then
+    create policy "family_contacts_owner_delete" on public.family_contacts
+      for delete to authenticated using ((select public.is_owner()));
   end if;
 
   -- package_purchases: staff work with active/closed; only the owner can void or delete.

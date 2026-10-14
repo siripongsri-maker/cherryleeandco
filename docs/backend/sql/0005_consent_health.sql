@@ -12,12 +12,16 @@
 --             allergy_check_needed_at upkeep + richer roster flags (R-07), legacy media purposes and
 --             website-on-YouTube rule (R-11), one-transaction functions submit_enrolment (R-15),
 --             publish_consent_text (R-15), set_media_asset_children (R-15), one-call screen functions
---             consent_matrix and media_publishability (R-18), has_active_consent closed to authenticated (R-20).
+--             consent_matrix and media_publishability (R-18), has_active_consent closed to authenticated (R-20);
+--             second review: an unticked /enrol box never withdraws an earlier decision (R-33), a 10+ child's
+--             health "no" blocks a guardian grant with 23514 (R-34), the first health_allergy text only from a
+--             reviewed SQL draft (R-35). Behaviour checks: seed_dev.sql § 7b.
 -- Depends on: 0001–0004
 -- Apply via Lovable chat:
 --   "Apply this SQL migration exactly as written. Do not change it."
 -- After applying: git pull --ff-only; types.ts must contain "consent_records", "child_health",
---   "get_child_health". Consent WORDING is seeded separately in 0006 after legal review (G9b).
+--   "get_child_health", "submit_enrolment" (the WHOLE file is applied at G4 · 0005 in Stage B, including
+--   submit_enrolment; only the P4 screens wait for Stage C). Consent WORDING is seeded separately in 0006 after legal review (G9b).
 -- Rules: additive only. Safe to run twice.
 -- Not legal advice: the children-10+ approach (D11) and the consent wording need a Thai PDPA lawyer.
 -- =============================================================================
@@ -1149,6 +1153,10 @@ $$;
 -- publish_consent_text(...) — owner publishes version N+1 in TH and EN and retires older versions of that
 -- purpose, all in one transaction (no moment where TH vN sits next to EN vN-1). SECURITY INVOKER: the
 -- consent_texts owner policies apply. Returns the new version number.
+-- Review R-35 (G-HEALTH): it may publish a NEW VERSION of health_allergy but never the FIRST one. The first
+-- health text arrives only through a reviewed SQL draft (0006 with G-HEALTH = system, after G9b), so an owner who
+-- chose the paper form can't reopen health storage from the SQL editor by accident. Raises 23514.
+-- While the publishing screen is parked (PK-03), the owner runs this in Cloud → SQL editor (00-overview § 8.0).
 create or replace function public.publish_consent_text(
   p_purpose                          public.consent_purpose,
   p_title_th                         text,
@@ -1169,6 +1177,13 @@ declare
 begin
   perform public.require_owner_or_server();
   perform pg_advisory_xact_lock(hashtextextended('consent_texts:' || p_purpose::text, 0));
+
+  if p_purpose = 'health_allergy'::public.consent_purpose
+     and not exists (select 1 from public.consent_texts ct
+                      where ct.purpose = 'health_allergy'::public.consent_purpose) then
+    raise exception 'The first health_allergy text comes only from a reviewed SQL draft (G-HEALTH, G9b)'
+      using errcode = '23514';
+  end if;
 
   select coalesce(max(ct.version), 0) + 1 into v_version
     from public.consent_texts ct
@@ -1224,8 +1239,15 @@ grant execute on function public.publish_consent_text(public.consent_purpose, te
 --      Rules:
 --        * identity is NOT marked as checked (R-21): staff confirm in the family's LINE chat. Changed contact
 --          fields are kept in guardians.pending_link_changes for staff to review.
---        * a switch that is OFF records 'withdrawn' when the latest guardian decision was 'granted', else
---          'refused' (R-05); health "refused" works the same way. "skipped" records nothing.
+--        * media switch ON records 'granted'. A switch that is OFF records 'refused' ONLY when this guardian has
+--          no earlier decision for that child × purpose; otherwise it records NOTHING (R-33). The /enrol boxes
+--          always start unticked, so "off" can't tell "untouched" from "switched off": a family re-sent an enrol
+--          link (e.g. to add allergy info) must never lose its media consents by accident. Withdrawals go
+--          through /my/$token or staff (D29 alerts still fire there).
+--        * health "refused" (the explicit "I don't want to share this" button) records 'withdrawn' when the
+--          latest guardian decision was 'granted', else 'refused' (R-05). "skipped" records nothing.
+--        * health "granted" while the child's own latest health decision is refused/withdrawn raises 23514
+--          (R-34): D11 says staff talk with the family first; the form hides the health box in that case.
 --        * the trigger queue_consent_change_alert queues staff alerts; their ids are returned in alert_ids.
 --        * contacts not in the list are soft-deleted (is_active = false), never hard-deleted (R-22).
 --      Returns {"ok": true, "family_id": uuid, "alert_ids": [uuid…]} or {"ok": false, "code": "link_invalid" |
@@ -1330,6 +1352,20 @@ begin
 
     -- 3a. Health (explicit consent, s.26). "skipped" (= "Not now") records nothing and deletes nothing.
     v_health := coalesce(v_child -> 'health', '{}'::jsonb);
+    -- R-34: a 10+ child's own "no" (D11) blocks a new guardian grant until staff have talked with the family.
+    -- Raised BEFORE any write so it surfaces as 23514 (TS → invalid_input), never as the 42501 of the
+    -- child_health trigger (TS → server_error).
+    if (v_health ->> 'decision') = 'granted' and (
+         select cr.decision
+           from public.consent_records cr
+          where cr.child_id = v_child_id
+            and cr.purpose = 'health_allergy'::public.consent_purpose
+            and cr.given_by = 'child'::public.consent_given_by
+          order by cr.created_at desc, cr.id desc
+          limit 1
+       ) in ('refused'::public.consent_decision, 'withdrawn'::public.consent_decision) then
+      raise exception 'invalid_input: the child said no to sharing health information' using errcode = '23514';
+    end if;
     if (v_health ->> 'decision') in ('granted', 'refused') then
       v_prev := null;
       select cr.decision into v_prev
@@ -1365,7 +1401,8 @@ begin
       end if;
     end if;
 
-    -- 3b. Media: one record per purpose that was SHOWN (R-06). Off after a grant = withdrawal (R-05).
+    -- 3b. Media: one record per purpose that was SHOWN (R-06). ON = granted. OFF = refused only when this
+    --     guardian never decided this purpose for this child; otherwise nothing is recorded (R-33).
     v_level := nullif(v_child ->> 'media_level', '')::public.media_level;
     for v_media in select value from jsonb_array_elements(coalesce(v_child -> 'media', '[]'::jsonb)) loop
       v_purpose := (v_media ->> 'purpose')::public.consent_purpose;
@@ -1382,19 +1419,21 @@ begin
        limit 1;
       v_decision := case
         when (v_media ->> 'on')::boolean then 'granted'::public.consent_decision
-        when v_prev is not distinct from 'granted'::public.consent_decision then 'withdrawn'::public.consent_decision
-        else 'refused'::public.consent_decision
+        when v_prev is null then 'refused'::public.consent_decision
+        else null   -- R-33: an unticked box never changes an earlier decision
       end;
-      insert into public.consent_records
-        (family_id, guardian_id, child_id, purpose, consent_text_id, decision, given_by, media_level, channel,
-         method, family_link_id)
-      values
-        (v_link.family_id, v_guardian.id, v_child_id, v_purpose, (v_media ->> 'consent_text_id')::uuid,
-         v_decision, 'guardian'::public.consent_given_by,
-         case when v_decision = 'granted'::public.consent_decision then v_level else null end,
-         'web'::public.consent_channel, 'checkbox'::public.consent_method, v_link.id)
-      returning id into v_rec_id;
-      v_record_ids := v_record_ids || v_rec_id;
+      if v_decision is not null then
+        insert into public.consent_records
+          (family_id, guardian_id, child_id, purpose, consent_text_id, decision, given_by, media_level, channel,
+           method, family_link_id)
+        values
+          (v_link.family_id, v_guardian.id, v_child_id, v_purpose, (v_media ->> 'consent_text_id')::uuid,
+           v_decision, 'guardian'::public.consent_given_by,
+           case when v_decision = 'granted'::public.consent_decision then v_level else null end,
+           'web'::public.consent_channel, 'checkbox'::public.consent_method, v_link.id)
+        returning id into v_rec_id;
+        v_record_ids := v_record_ids || v_rec_id;
+      end if;
     end loop;
   end loop;
 

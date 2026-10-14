@@ -22,8 +22,11 @@
 --   "Apply this SQL migration exactly as written. Do not change it."
 -- Rules:
 --   * consent_texts are IMMUTABLE once inserted (trigger). If the lawyer changes the wording,
---     edit THIS FILE before applying. After applying, changes = a new version published by the
---     owner in /admin/settings (publishConsentText), never an UPDATE.
+--     edit THIS FILE before applying. After applying, changes = a new version, never an UPDATE: either a
+--     new reviewed SQL draft like this one (G9b + G4), or the owner runs publish_consent_text() in
+--     Cloud → SQL editor (00-overview § 8.0). The /admin/settings publishing screen is PARKED (card PK-03).
+--   * G-HEALTH = paper: publish_consent_text() refuses to create the FIRST health_allergy text (R-35), so
+--     health storage can only be switched on by a reviewed SQL draft after a new G-HEALTH decision.
 --   * TH and EN keep the same version number. Studio voice: warm, ends with ค่ะ, no fear wording.
 --   * Facts only: nothing here may promise group sizes, outcomes or policies the studio hasn't set.
 --   * Re-running is safe: on conflict (purpose, version, lang) do nothing.

@@ -16,8 +16,14 @@
 -- Runs as the database owner (SQL editor / psql): RLS is bypassed and auth.uid() is NULL, so
 -- audit rows show actor_kind = 'system'. Staff-permission behaviour is checked by
 -- tests/rls_smoke.sql instead.
--- Output: NOTICE lines "PASS …". The first failing check raises "FAIL …" and aborts.
--- The final SELECT prints one row when everything passed.
+-- Output: NOTICE lines "PASS …" (and "SKIP …" where a check can't run on this database). The first failing
+-- check raises "FAIL …" and aborts. The final SELECT prints one row when everything passed.
+-- Coverage of the review fixes (00-overview § 15): § 6 starts with R-35; § 7b checks create_family_from_request
+-- (R-15, R-38), the consent-change alert queue (D29/R-05), the allergy marker (R-07), the legacy/YouTube media rule
+-- (R-11), set_media_asset_children and publish_consent_text (R-15), set_primary_guardian (R-39), submit_enrolment
+-- (scope, R-21, R-22, R-33, R-34, link_used, health withdrawal) and the restriction guard (D28/R-09/R-36/R-37).
+-- Not checkable here: the row LOCK in submit_enrolment (needs two concurrent sessions; the reviewer reads the
+-- FOR UPDATE at card P3-17).
 -- =============================================================================
 
 begin;
@@ -336,6 +342,24 @@ $$;
 -- 6. Consent texts (TEST version 999), health consent, audited reads (P4)
 -- -----------------------------------------------------------------------------
 
+-- R-35: publish_consent_text() never creates the FIRST health_allergy text (G-HEALTH = paper must hold).
+-- Runs before the TEST health text below exists; skipped when 0006 with health rows is already applied.
+do $$
+begin
+  if exists (select 1 from public.consent_texts ct where ct.purpose = 'health_allergy') then
+    raise notice 'SKIP R-35 first-health-text check: a health_allergy text already exists (G-HEALTH = system)';
+  else
+    begin
+      perform public.publish_consent_text('health_allergy', 'TEST', 'TEST body — not real wording', 'TEST',
+                                          'TEST body — not real wording', true, 10::smallint);
+      raise exception 'FAIL publish_consent_text created the first health_allergy text';
+    exception when check_violation then
+      raise notice 'PASS publish_consent_text refuses the first health_allergy text (R-35)';
+    end;
+  end if;
+end
+$$;
+
 insert into public.consent_texts (id, purpose, version, lang, title, body_md, is_explicit, requires_child_consent_from_age)
 values
   ('60000000-0000-4000-8000-000000000001', 'health_allergy', 999, 'en', 'TEST health text', 'TEST body — not real wording', true, 10),
@@ -514,6 +538,518 @@ begin
   exception when check_violation then
     raise notice 'PASS media grant needs a face level';
   end;
+end
+$$;
+
+
+-- -----------------------------------------------------------------------------
+-- 7b. Review safety SQL (00-overview § 15). Uses the SECOND test family (f…0002) and a third one made from a
+--     request, so section 8's export/erase counts for f…0001 stay the same.
+--     c…0003 (7 y), c…0004 (11 y), c…0005 (7 y) are new children of f…0002.
+-- -----------------------------------------------------------------------------
+
+insert into public.children (id, family_id, nickname, birth_month)
+values
+  ('c0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000002', 'น้องทดสอบสาม',
+   (date_trunc('month', now() at time zone 'Asia/Bangkok') - interval '7 years 2 months')::date),
+  ('c0000000-0000-4000-8000-000000000004', 'f0000000-0000-4000-8000-000000000002', 'น้องทดสอบสี่',
+   (date_trunc('month', now() at time zone 'Asia/Bangkok') - interval '11 years 2 months')::date),
+  ('c0000000-0000-4000-8000-000000000005', 'f0000000-0000-4000-8000-000000000002', 'น้องทดสอบห้า',
+   (date_trunc('month', now() at time zone 'Asia/Bangkok') - interval '7 years 2 months')::date);
+
+insert into public.family_contacts
+  (id, family_id, name, phone, relationship, is_emergency_contact, is_authorised_pickup, guardian_attests_informed_at)
+values
+  ('e0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000002', 'ผู้รับทดสอบสาม', '0800000008',
+   'TEST relative', false, true, now());
+
+insert into public.consent_texts (id, purpose, version, lang, title, body_md, is_explicit, requires_child_consent_from_age)
+values ('60000000-0000-4000-8000-000000000004', 'media_youtube', 1000, 'en', 'TEST youtube text',
+        'TEST body — not real wording', false, 10);
+
+insert into public.booking_requests
+  (id, ref_code, guardian_name, contact_phone, preferred_contact, children, privacy_notice_version)
+values
+  ('90000000-0000-4000-8000-000000000002', 'CL-TEST7', 'ผู้ปกครองทดสอบสาม', '0800000007', 'phone',
+   '[{"nickname": "น้องทดสอบหก", "age_years": 9}]'::jsonb, 'test-v0'),
+  ('90000000-0000-4000-8000-000000000003', 'CL-TEST8', 'Test Parent', null, 'line',
+   '[{"age_years": 8}]'::jsonb, 'test-v0');
+
+-- 7b.1 create_family_from_request (R-15) and the LINE path without any contact detail (D26, R-38)
+do $$
+declare
+  v_fam uuid;
+  v_n   integer;
+begin
+  v_fam := public.create_family_from_request(
+    '90000000-0000-4000-8000-000000000002', 'ครอบครัวทดสอบสาม (TEST)',
+    '{"full_name": "ผู้ปกครองทดสอบสาม", "phone": "0800000007", "line_id": null}'::jsonb,
+    '[{"nickname": "น้องทดสอบหก", "age_years": 9}]'::jsonb);
+  select count(*) into v_n from public.guardians g where g.family_id = v_fam and g.is_primary;
+  if v_n <> 1 then
+    raise exception 'FAIL create_family_from_request: expected 1 primary guardian, got %', v_n;
+  end if;
+  if not exists (select 1 from public.children c
+                  where c.family_id = v_fam and c.reported_age_years = 9 and c.reported_age_on is not null) then
+    raise exception 'FAIL create_family_from_request: the child''s age was not copied';
+  end if;
+  if not exists (select 1 from public.booking_requests br
+                  where br.id = '90000000-0000-4000-8000-000000000002'
+                    and br.status = 'converted' and br.converted_family_id = v_fam) then
+    raise exception 'FAIL create_family_from_request: the request is not marked converted';
+  end if;
+  raise notice 'PASS create_family_from_request writes family, guardian, child and request status in one call';
+
+  begin
+    perform public.create_family_from_request('90000000-0000-4000-8000-000000000002', 'TEST again',
+      '{"full_name": "Test Parent", "phone": "0800000007", "line_id": null}'::jsonb,
+      '[{"nickname": "TEST", "age_years": 9}]'::jsonb);
+    raise exception 'FAIL a request was converted twice';
+  exception when check_violation then
+    raise notice 'PASS a request converts only once';
+  end;
+
+  begin
+    perform public.create_family_from_request('90000000-0000-4000-8000-000000000003', 'ครอบครัวทดสอบสี่ (TEST)',
+      '{"full_name": "Test Parent", "phone": null, "line_id": null}'::jsonb,
+      '[{"nickname": "TEST", "age_years": 8}]'::jsonb);
+    raise exception 'FAIL a guardian with no phone, LINE ID or email was accepted';
+  exception when check_violation then
+    null;
+  end;
+  if exists (select 1 from public.families f where f.source_request_id = '90000000-0000-4000-8000-000000000003')
+     or (select br.status::text from public.booking_requests br
+          where br.id = '90000000-0000-4000-8000-000000000003') <> 'new' then
+    raise exception 'FAIL a failed conversion left a half-written family behind';
+  end if;
+  raise notice 'PASS a conversion without any contact detail is refused and leaves nothing behind (R-38)';
+end
+$$;
+
+-- 7b.2 set_primary_guardian (R-39): one primary at a time, swapped in one call
+insert into public.guardians (id, family_id, full_name, phone, is_primary)
+values ('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000002', 'ผู้ปกครองทดสอบสี่',
+        '0800000010', false);
+
+do $$
+declare
+  v_primary uuid;
+  v_n       integer;
+begin
+  perform public.set_primary_guardian('a0000000-0000-4000-8000-000000000003');
+  select g.id into v_primary from public.guardians g
+   where g.family_id = 'f0000000-0000-4000-8000-000000000002' and g.is_primary;
+  select count(*) into v_n from public.guardians g
+   where g.family_id = 'f0000000-0000-4000-8000-000000000002' and g.is_primary;
+  if v_n <> 1 or v_primary is distinct from 'a0000000-0000-4000-8000-000000000003'::uuid then
+    raise exception 'FAIL set_primary_guardian: % primary guardians, primary = %', v_n, v_primary;
+  end if;
+  perform public.set_primary_guardian('a0000000-0000-4000-8000-000000000002');   -- back, for the checks below
+  if not exists (select 1 from public.guardians g
+                  where g.id = 'a0000000-0000-4000-8000-000000000002' and g.is_primary) then
+    raise exception 'FAIL set_primary_guardian did not swap back';
+  end if;
+  raise notice 'PASS set_primary_guardian swaps the primary guardian in one call (R-39)';
+end
+$$;
+
+-- 7b.3 consent-change alert queue (D29, R-05)
+do $$
+declare
+  v_rec uuid;
+  v_n   integer;
+begin
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, media_level, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000003', 'media_website', '60000000-0000-4000-8000-000000000002',
+          'granted', 'guardian', 'face_visible', 'web', 'checkbox');
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000003', 'media_youtube', '60000000-0000-4000-8000-000000000004',
+          'refused', 'guardian', 'web', 'checkbox');
+  select count(*) into v_n
+    from public.staff_notifications sn
+    join public.consent_records cr on cr.id = sn.ref_id
+   where sn.kind = 'consent_withdrawn' and cr.child_id = 'c0000000-0000-4000-8000-000000000003';
+  if v_n <> 0 then
+    raise exception 'FAIL a first grant or a first refusal queued % alerts', v_n;
+  end if;
+  raise notice 'PASS a first grant or refusal queues no alert';
+
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000003', 'media_website', '60000000-0000-4000-8000-000000000002',
+          'withdrawn', 'guardian', 'web', 'checkbox')
+  returning id into v_rec;
+  select count(*) into v_n from public.staff_notifications sn
+   where sn.kind = 'consent_withdrawn' and sn.ref_id = v_rec and sn.status = 'pending';
+  if v_n <> 1 then
+    raise exception 'FAIL a guardian withdrawal queued % pending alerts (expected 1)', v_n;
+  end if;
+  raise notice 'PASS a guardian withdrawal queues one pending alert (D29)';
+
+  -- a 10+ child's own "no" while the guardian's grant stands
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, media_level, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000004', 'media_website', '60000000-0000-4000-8000-000000000002',
+          'granted', 'guardian', 'face_visible', 'web', 'checkbox');
+  insert into public.consent_records (family_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method, recorded_by)
+  values ('f0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000004', 'media_website',
+          '60000000-0000-4000-8000-000000000002', 'refused', 'child', 'in_person', 'staff_recorded_verbal',
+          '50000000-0000-4000-8000-000000000001')
+  returning id into v_rec;
+  select count(*) into v_n from public.staff_notifications sn
+   where sn.kind = 'consent_withdrawn' and sn.ref_id = v_rec;
+  if v_n <> 1 then
+    raise exception 'FAIL a 10+ child''s refusal queued % alerts (expected 1)', v_n;
+  end if;
+  raise notice 'PASS a child''s own "no" queues an alert while the guardian''s grant stands';
+end
+$$;
+
+-- 7b.4 allergy marker (R-07)
+do $$
+declare
+  v_marker timestamptz;
+begin
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000003', 'health_allergy', '60000000-0000-4000-8000-000000000001',
+          'granted', 'guardian', 'web', 'checkbox');
+  perform public.upsert_child_health('c0000000-0000-4000-8000-000000000003', array['milk'], null, null, null);
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000003', 'health_allergy', '60000000-0000-4000-8000-000000000001',
+          'withdrawn', 'guardian', 'web', 'checkbox');
+  select c.allergy_check_needed_at into v_marker from public.children c
+   where c.id = 'c0000000-0000-4000-8000-000000000003';
+  if v_marker is null
+     or exists (select 1 from public.child_health h where h.child_id = 'c0000000-0000-4000-8000-000000000003') then
+    raise exception 'FAIL withdrawal should delete the health row and set allergy_check_needed_at';
+  end if;
+  raise notice 'PASS a health withdrawal deletes the row and sets allergy_check_needed_at (R-07)';
+
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000003', 'health_allergy', '60000000-0000-4000-8000-000000000001',
+          'granted', 'guardian', 'web', 'checkbox');
+  perform public.upsert_child_health('c0000000-0000-4000-8000-000000000003', array['egg'], null, null, null);
+  if (select c.allergy_check_needed_at from public.children c
+       where c.id = 'c0000000-0000-4000-8000-000000000003') is not null then
+    raise exception 'FAIL new allergy info did not clear allergy_check_needed_at';
+  end if;
+  raise notice 'PASS new allergy info clears the marker';
+end
+$$;
+
+-- 7b.5 media: legacy-only clip and the YouTube-on-website rule (R-11); set_media_asset_children (R-15)
+insert into public.media_assets (id, kind, youtube_id, title, shows_children, shows_faces, legacy_consent_note,
+                                 legacy_consent_purposes, on_website, on_youtube)
+values
+  ('70000000-0000-4000-8000-000000000002', 'youtube', 'TESTclip001', 'TEST legacy clip', true, true,
+   'TEST pre-system note', array['media_website']::public.consent_purpose[], true, true),
+  ('70000000-0000-4000-8000-000000000003', 'youtube', 'TESTclip002', 'TEST clip with a linked child', true, false,
+   null, '{}'::public.consent_purpose[], true, true);
+
+do $$
+begin
+  if not public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_website')
+     or public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_youtube')
+     or public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_social') then
+    raise exception 'FAIL a legacy-only clip must be publishable only on the channels its note covers';
+  end if;
+  raise notice 'PASS legacy-only clip: publishable only where the legacy note applies (R-11)';
+
+  perform public.set_media_asset_children('70000000-0000-4000-8000-000000000003',
+                                          array['c0000000-0000-4000-8000-000000000005']::uuid[]);
+  if (select count(*) from public.media_asset_children mac
+       where mac.asset_id = '70000000-0000-4000-8000-000000000003') <> 1 then
+    raise exception 'FAIL set_media_asset_children did not link the child';
+  end if;
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, media_level, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000005', 'media_website', '60000000-0000-4000-8000-000000000002',
+          'granted', 'guardian', 'face_visible', 'web', 'checkbox');
+  if public.can_publish_media('70000000-0000-4000-8000-000000000003', 'media_website') then
+    raise exception 'FAIL a YouTube clip passed the website check without media_youtube consent';
+  end if;
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, media_level, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000005', 'media_youtube', '60000000-0000-4000-8000-000000000004',
+          'granted', 'guardian', 'face_visible', 'web', 'checkbox');
+  if not public.can_publish_media('70000000-0000-4000-8000-000000000003', 'media_website') then
+    raise exception 'FAIL a YouTube clip with website + YouTube consent is still not publishable on the website';
+  end if;
+  raise notice 'PASS a YouTube clip on the website also needs media_youtube consent (R-11)';
+end
+$$;
+
+-- 7b.6 publish_consent_text (R-15): TH + EN of version N+1 together, older versions retired
+do $$
+declare
+  v_version integer;
+begin
+  v_version := public.publish_consent_text('media_social', 'TEST title TH', 'TEST body TH — not real wording',
+                                           'TEST title EN', 'TEST body EN — not real wording', false, 10::smallint);
+  if (select count(*) from public.consent_texts ct
+       where ct.purpose = 'media_social' and ct.version = v_version and ct.retired_at is null) <> 2 then
+    raise exception 'FAIL publish_consent_text did not add TH + EN of version %', v_version;
+  end if;
+  if exists (select 1 from public.consent_texts ct
+              where ct.purpose = 'media_social' and ct.version < v_version and ct.retired_at is null) then
+    raise exception 'FAIL publish_consent_text left an older media_social version current';
+  end if;
+  raise notice 'PASS publish_consent_text adds TH + EN together and retires older versions';
+end
+$$;
+
+-- 7b.7 submit_enrolment (R-15 scope, R-21, R-22, R-33, R-34, link_used, health withdrawal)
+insert into public.family_links (id, family_id, purpose, token_hash, expires_at)
+values ('62000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000002', 'enrol',
+        repeat('c1', 32), now() + interval '14 days'),
+       ('62000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000002', 'enrol',
+        repeat('c2', 32), now() + interval '14 days');
+
+do $$
+declare
+  v_out     jsonb;
+  v_g       record;
+  v_n0      integer;
+  v_n1      integer;
+  v_m3      text;
+  v_m4      text;
+  v_guard   jsonb := jsonb_build_object('full_name', 'ผู้ปกครองทดสอบสอง', 'phone', '0800000003',
+                                        'line_id', null, 'email', null);
+begin
+  select to_char(c.birth_month, 'YYYY-MM') into v_m3 from public.children c
+   where c.id = 'c0000000-0000-4000-8000-000000000003';
+  select to_char(c.birth_month, 'YYYY-MM') into v_m4 from public.children c
+   where c.id = 'c0000000-0000-4000-8000-000000000004';
+
+  -- scope: a child of ANOTHER family is refused (22023) and nothing is written
+  begin
+    perform public.submit_enrolment('62000000-0000-4000-8000-000000000001', jsonb_build_object(
+      'guardian', v_guard,
+      'children', jsonb_build_array(jsonb_build_object(
+        'child_id', 'c0000000-0000-4000-8000-000000000001', 'birth_month', v_m3,
+        'health', jsonb_build_object('decision', 'skipped'), 'media', '[]'::jsonb, 'media_level', null)),
+      'contacts', '[]'::jsonb));
+    raise exception 'FAIL submit_enrolment accepted a child from another family';
+  exception when invalid_parameter_value then
+    raise notice 'PASS submit_enrolment refuses a child outside the link''s family';
+  end;
+
+  -- R-34: the 11-year-old said no to health info → a guardian "granted" fails with 23514, not 42501
+  insert into public.consent_records (family_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method, recorded_by)
+  values ('f0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000004', 'health_allergy',
+          '60000000-0000-4000-8000-000000000001', 'refused', 'child', 'in_person', 'staff_recorded_verbal',
+          '50000000-0000-4000-8000-000000000001');
+  begin
+    perform public.submit_enrolment('62000000-0000-4000-8000-000000000001', jsonb_build_object(
+      'guardian', v_guard,
+      'children', jsonb_build_array(jsonb_build_object(
+        'child_id', 'c0000000-0000-4000-8000-000000000004', 'birth_month', v_m4,
+        'health', jsonb_build_object('decision', 'granted',
+                                     'consent_text_id', '60000000-0000-4000-8000-000000000001',
+                                     'allergens', jsonb_build_array('milk'), 'other_allergens', '',
+                                     'foods_to_avoid', '', 'care_notes', ''),
+        'media', '[]'::jsonb, 'media_level', null)),
+      'contacts', '[]'::jsonb));
+    raise exception 'FAIL health was accepted although the child said no';
+  exception when check_violation then
+    raise notice 'PASS a child''s own health "no" blocks a guardian grant with 23514 (R-34)';
+  end;
+
+  -- the full statement: phone changed, c…0003 YouTube ticked, c…0004 website left unticked (it was granted)
+  select count(*) into v_n0 from public.consent_records cr
+   where cr.child_id = 'c0000000-0000-4000-8000-000000000004' and cr.purpose = 'media_website'
+     and cr.given_by = 'guardian';
+  v_out := public.submit_enrolment('62000000-0000-4000-8000-000000000001', jsonb_build_object(
+    'guardian', v_guard || jsonb_build_object('phone', '0800000006'),
+    'children', jsonb_build_array(
+      jsonb_build_object(
+        'child_id', 'c0000000-0000-4000-8000-000000000003', 'birth_month', v_m3,
+        'health', jsonb_build_object('decision', 'skipped'),
+        'media', jsonb_build_array(jsonb_build_object('purpose', 'media_youtube', 'on', true,
+                                   'consent_text_id', '60000000-0000-4000-8000-000000000004')),
+        'media_level', 'face_hidden'),
+      jsonb_build_object(
+        'child_id', 'c0000000-0000-4000-8000-000000000004', 'birth_month', v_m4,
+        'health', jsonb_build_object('decision', 'skipped'),
+        'media', jsonb_build_array(jsonb_build_object('purpose', 'media_website', 'on', false,
+                                   'consent_text_id', '60000000-0000-4000-8000-000000000002')),
+        'media_level', null)),
+    'contacts', jsonb_build_array(jsonb_build_object(
+      'id', null, 'name', 'ผู้ติดต่อทดสอบสี่', 'phone', '0800000009', 'relationship', 'TEST aunt',
+      'is_emergency_contact', true, 'is_authorised_pickup', false))));
+  if (v_out ->> 'ok') is distinct from 'true'
+     or (v_out ->> 'family_id') is distinct from 'f0000000-0000-4000-8000-000000000002' then
+    raise exception 'FAIL submit_enrolment did not succeed: %', v_out;
+  end if;
+  if (select fl.used_at from public.family_links fl where fl.id = '62000000-0000-4000-8000-000000000001') is null then
+    raise exception 'FAIL the enrol link was not spent';
+  end if;
+  select g.phone, g.identity_checked_at, g.pending_link_changes into v_g
+    from public.guardians g where g.id = 'a0000000-0000-4000-8000-000000000002';
+  if v_g.phone is distinct from '0800000006' or v_g.identity_checked_at is not null
+     or (v_g.pending_link_changes -> 'before' ->> 'phone') is distinct from '0800000003' then
+    raise exception 'FAIL R-21: phone %, identity_checked_at %, pending %', v_g.phone, v_g.identity_checked_at,
+                    v_g.pending_link_changes;
+  end if;
+  raise notice 'PASS submit_enrolment spends the link, keeps the old phone for staff and never marks identity (R-21)';
+
+  select count(*) into v_n1 from public.consent_records cr
+   where cr.child_id = 'c0000000-0000-4000-8000-000000000004' and cr.purpose = 'media_website'
+     and cr.given_by = 'guardian';
+  if v_n1 <> v_n0 then
+    raise exception 'FAIL an unticked box on a re-sent link changed an earlier media decision (R-33)';
+  end if;
+  if (select cc.decision::text from public.current_consents cc
+       where cc.child_id = 'c0000000-0000-4000-8000-000000000003' and cc.purpose = 'media_youtube'
+         and cc.given_by = 'guardian') is distinct from 'granted' then
+    raise exception 'FAIL a ticked box did not record granted';
+  end if;
+  raise notice 'PASS ticked = granted; unticked keeps an earlier decision (R-33)';
+
+  if not exists (select 1 from public.family_contacts fc
+                  where fc.id = 'e0000000-0000-4000-8000-000000000003' and not fc.is_active)
+     or not exists (select 1 from public.family_contacts fc
+                     where fc.family_id = 'f0000000-0000-4000-8000-000000000002' and fc.is_active
+                       and fc.phone = '0800000009') then
+    raise exception 'FAIL contacts: the left-out one must be soft-deleted, the new one added (R-22)';
+  end if;
+  raise notice 'PASS contacts left out are soft-deleted and new ones added (R-22)';
+
+  v_out := public.submit_enrolment('62000000-0000-4000-8000-000000000001', jsonb_build_object(
+    'guardian', v_guard, 'children', '[]'::jsonb, 'contacts', '[]'::jsonb));
+  if (v_out ->> 'code') is distinct from 'link_used' then
+    raise exception 'FAIL a used enrol link returned %', v_out;
+  end if;
+  raise notice 'PASS a used enrol link returns link_used';
+
+  -- explicit health "no" after a grant (c…0003 has a health row from 7b.4) → withdrawn, row gone, alert id back
+  v_out := public.submit_enrolment('62000000-0000-4000-8000-000000000002', jsonb_build_object(
+    'guardian', v_guard || jsonb_build_object('phone', '0800000006'),
+    'children', jsonb_build_array(jsonb_build_object(
+      'child_id', 'c0000000-0000-4000-8000-000000000003', 'birth_month', v_m3,
+      'health', jsonb_build_object('decision', 'refused',
+                                   'consent_text_id', '60000000-0000-4000-8000-000000000001'),
+      'media', '[]'::jsonb, 'media_level', null)),
+    'contacts', '[]'::jsonb));
+  if (v_out ->> 'ok') is distinct from 'true' or jsonb_array_length(v_out -> 'alert_ids') <> 1 then
+    raise exception 'FAIL a health withdrawal through /enrol should return one alert id: %', v_out;
+  end if;
+  if (select cc.decision::text from public.current_consents cc
+       where cc.child_id = 'c0000000-0000-4000-8000-000000000003' and cc.purpose = 'health_allergy'
+         and cc.given_by = 'guardian') is distinct from 'withdrawn'
+     or exists (select 1 from public.child_health h where h.child_id = 'c0000000-0000-4000-8000-000000000003') then
+    raise exception 'FAIL "I don''t want to share this" after a grant must record withdrawn and delete the row';
+  end if;
+  raise notice 'PASS health "I don''t want to share this" after a grant = withdrawn, row deleted, alert id returned';
+end
+$$;
+
+-- 7b.8 restriction (D28, R-09, R-36, R-37)
+insert into public.family_links (id, family_id, purpose, token_hash, expires_at)
+values ('62000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000002', 'enrol',
+        repeat('c3', 32), now() + interval '14 days');
+
+do $$
+declare
+  v_audit0 integer;
+  v_audit1 integer;
+begin
+  begin
+    update public.families set processing_restricted_at = now()
+     where id = 'f0000000-0000-4000-8000-000000000002';
+    raise exception 'FAIL the restriction columns changed without set_family_restriction()';
+  exception when insufficient_privilege then
+    raise notice 'PASS the restriction columns are guarded';
+  end;
+
+  perform public.set_family_restriction('f0000000-0000-4000-8000-000000000002', true, 'TEST restriction');
+  if (select fl.revoked_at from public.family_links fl
+       where fl.id = '62000000-0000-4000-8000-000000000003') is null then
+    raise exception 'FAIL restricting did not revoke the unused enrol link';
+  end if;
+  raise notice 'PASS restricting revokes unused enrol links';
+
+  begin
+    update public.guardians set full_name = 'ผู้ปกครองทดสอบสอง (แก้)' where id = 'a0000000-0000-4000-8000-000000000002';
+    raise exception 'FAIL a restricted family''s guardian was edited';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.children set nickname = 'TEST edit' where id = 'c0000000-0000-4000-8000-000000000003';
+    raise exception 'FAIL a restricted family''s child was edited';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.families set display_name = 'TEST edit' where id = 'f0000000-0000-4000-8000-000000000002';
+    raise exception 'FAIL a restricted family''s display name was edited (R-36)';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.families set staff_note = 'TEST' where id = 'f0000000-0000-4000-8000-000000000002';
+    raise exception 'FAIL a restricted family''s staff note was edited (R-36)';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.family_contacts set relationship = 'TEST edit' where id = 'e0000000-0000-4000-8000-000000000003';
+    raise exception 'FAIL an inactive contact of a restricted family was edited (R-36)';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.family_links (family_id, purpose, token_hash, expires_at)
+    values ('f0000000-0000-4000-8000-000000000002', 'enrol', repeat('c4', 32), now() + interval '14 days');
+    raise exception 'FAIL a restricted family got a new enrol link';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                        given_by, media_level, channel, method)
+    values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+            'c0000000-0000-4000-8000-000000000003', 'media_website', '60000000-0000-4000-8000-000000000002',
+            'granted', 'guardian', 'face_visible', 'web', 'checkbox');
+    raise exception 'FAIL a restricted family recorded a new grant';
+  exception when check_violation then null;
+  end;
+  -- withdrawals still work
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-000000000005', 'media_youtube', '60000000-0000-4000-8000-000000000004',
+          'withdrawn', 'guardian', 'web', 'checkbox');
+  raise notice 'PASS restricted: edits (incl. the family row), new links and new grants refused; withdrawal allowed (D28, R-36)';
+
+  -- R-37: correcting disputed data = lift → correct → restrict again; the audit log shows each step
+  select count(*) into v_audit0 from public.audit_log a
+   where a.table_name = 'families' and a.row_id = 'f0000000-0000-4000-8000-000000000002' and a.action = 'update';
+  perform public.set_family_restriction('f0000000-0000-4000-8000-000000000002', false, null);
+  update public.guardians set full_name = 'ผู้ปกครองทดสอบสอง (แก้ไข)' where id = 'a0000000-0000-4000-8000-000000000002';
+  perform public.set_family_restriction('f0000000-0000-4000-8000-000000000002', true, 'TEST restriction (after correction)');
+  select count(*) into v_audit1 from public.audit_log a
+   where a.table_name = 'families' and a.row_id = 'f0000000-0000-4000-8000-000000000002' and a.action = 'update';
+  if v_audit1 - v_audit0 < 2
+     or (select f.processing_restricted_at from public.families f
+          where f.id = 'f0000000-0000-4000-8000-000000000002') is null
+     or not exists (select 1 from public.audit_log a
+                     where a.table_name = 'guardians' and a.row_id = 'a0000000-0000-4000-8000-000000000002'
+                       and a.action = 'update') then
+    raise exception 'FAIL lift → correct → restrict again did not work or was not audited';
+  end if;
+  raise notice 'PASS lift → correct → restrict again works and each step is audited (R-37)';
 end
 $$;
 

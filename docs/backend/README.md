@@ -57,7 +57,11 @@ grep -rlE "SUPABASE_SERVICE_ROLE_KEY|TURNSTILE_SECRET_KEY|LINE_ALERT_CHANNEL_SEC
 ```
 
 Run `npx vite build` **before** `npx tsc --noEmit` whenever you add or rename a route file: the build regenerates
-`src/routeTree.gen.ts`, and `createFileRoute("/new/path")` fails type-checking until it does.
+`src/routeTree.gen.ts`, and `createFileRoute("/new/path")` fails type-checking until it does. A `routeTree.gen.ts`
+rewritten by the build is expected and is **not** a stop: never edit it by hand and never revert it; if your card adds
+no route and `git status` still shows it changed, say so in your report (the builder decides whether to commit it).
+The leak grep above already lists every server-only name in this plan; cards run it **unchanged** and never edit this
+README to "extend" it.
 Do not run `npm install`, `bun install` or add packages. If a task needs a package, the card says so and a human
 asks Lovable to add it; afterwards use `npm install --no-package-lock` only if the card tells you to.
 
@@ -77,9 +81,11 @@ asks Lovable to add it; afterwards use `npm install --no-package-lock` only if t
 - Never create `src/server/index.ts` (the SSR entry is the file `src/server.ts`; don't touch it).
 - Server functions → `src/lib/backend/<area>.functions.ts`. Never put them, hooks or components in a folder named `server`.
 - Shared zod schemas and types → `src/lib/backend/<area>.schema.ts` (safe for the browser).
-- Import the service-role client **only** from `@/server/supabase-admin.server`, never from
-  `@/integrations/supabase/client.server` directly.
-- Use `.validator(schema)` on server functions (`.inputValidator` is deprecated in the installed version).
+- Import the service-role client **only** from `@/server/supabase-admin.server` (inside `src/server/` the relative
+  `./supabase-admin.server` is the same file), never from `@/integrations/supabase/client.server` directly.
+- Use `.validator(schema)` on server functions (`.inputValidator` is deprecated in the installed version). One
+  exception: public and private-link functions use a typed pass-through `.validator((input: <Raw>) => input)` and run
+  `safeParse` inside the handler, so bad input returns `invalid_input` instead of throwing (`20-server-api.md` § 9.0).
 - Read secrets only through `requireServerEnv("NAME")` / `optionalServerEnv("NAME")`, inside handlers.
   Never use `import.meta.env` for secrets. Bracket form `process.env["NAME"]` (tsconfig requires it).
 - Don't touch `src/server.ts`, and keep `errorMiddleware` and `csrfMiddleware` in `src/start.ts`.

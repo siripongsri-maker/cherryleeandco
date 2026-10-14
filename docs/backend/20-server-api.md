@@ -374,6 +374,94 @@ Usage: `createServerFn({ method }).middleware([requireStaff]).validator(Schema).
 `context` then has `supabase`, `userId`, `claims` (from the generated middleware) and `role`.
 Use `.validator`, never the deprecated `.inputValidator`.
 
+**What must exist before this block type-checks (card P0-17, R-40).** The generated
+`src/integrations/supabase/auth-middleware.ts` must export `requireSupabaseAuth`, a function middleware whose server
+context has `supabase`, `userId` and `claims` (§ 2). `src/integrations/supabase/types.ts` must list the function
+`current_app_role` (no arguments, returns the enum `app_role`) and the enum `app_role` (`owner` | `staff`): both come
+from `sql/0001_foundation.sql` § 3 (`current_app_role()` returns NULL for a user without a role and is granted to
+`authenticated`), so they exist only after G4 · 0001 and the types regeneration. Read-only check:
+`grep -n "current_app_role"` and `grep -n "app_role:"` on `src/integrations/supabase/types.ts` each print at least one line (the function and the enum). The generated
+`auth-middleware.ts` must not import `client.server`, the service-role key or `@tanstack/react-start/server-only`
+(card P0-15 records its import lines in `40-integrations.md` § 2 row 18): `auth.middleware.ts` lives in the
+browser-bundled `src/lib/backend/`, and only the `.server()` callbacks are stripped from the browser build.
+
+**How a thrown code reaches the admin UI.** TanStack's server-function handler
+(`@tanstack/start-server-core`, `server-functions-handler.js`) catches anything thrown by a function middleware or a
+handler and returns it serialized (`x-tss-serialized` header, status 500); the browser-side call rethrows an `Error`
+with the same `message`. So `adminError("forbidden")` arrives as `error.message === "forbidden"` and
+`toAdminErrorCode` (§ 4) maps it. `errorMiddleware` in `src/start.ts` is a **request** middleware and never sees these
+errors (it only handles errors thrown outside server functions). The framework logs `Server Fn Error!` with the error
+in the server log: our messages are codes only, never data, so nothing personal reaches the log.
+
+📝 `src/lib/backend/auth.middleware.test.ts` (card P0-17). The role gate is tested by calling each middleware's
+`.server` callback directly (`options.server` is part of the public `createMiddleware` type); the generated
+`requireSupabaseAuth` is mocked, so no token handling runs here (no token → `Unauthorized: …` is the generated
+middleware's job and is checked on the preview in card P0-22):
+
+```ts
+import { describe, expect, it, vi } from "vitest";
+import { requireOwner, requireStaff } from "./auth.middleware";
+
+vi.mock("@/integrations/supabase/auth-middleware", () => ({ requireSupabaseAuth: {} }));
+
+type ServerCallback = (args: {
+  next: (opts?: { context?: Record<string, unknown> }) => Promise<unknown>;
+  context: Record<string, unknown>;
+}) => Promise<unknown>;
+
+function serverOf(middleware: unknown): ServerCallback {
+  const fn = (middleware as { options?: { server?: unknown } }).options?.server;
+  if (typeof fn !== "function") throw new Error("middleware has no server callback");
+  return fn as ServerCallback;
+}
+
+function staffContext(rpcResult: { data: unknown; error: unknown }) {
+  return {
+    supabase: { rpc: vi.fn().mockResolvedValue(rpcResult) },
+    userId: "00000000-0000-4000-8000-000000000001",
+    claims: {},
+  };
+}
+
+describe("requireStaff", () => {
+  it.each(["owner", "staff"])("lets role %s through and adds it to the context", async (role) => {
+    const next = vi.fn().mockResolvedValue("ok");
+    const context = staffContext({ data: role, error: null });
+    await serverOf(requireStaff)({ next, context });
+    expect(context.supabase.rpc).toHaveBeenCalledWith("current_app_role");
+    expect(next).toHaveBeenCalledWith({ context: { role } });
+  });
+  it("throws forbidden for a signed-in user with no role", async () => {
+    const next = vi.fn();
+    await expect(
+      serverOf(requireStaff)({ next, context: staffContext({ data: null, error: null }) }),
+    ).rejects.toThrow("forbidden");
+    expect(next).not.toHaveBeenCalled();
+  });
+  it("throws server_error when the role lookup fails", async () => {
+    await expect(
+      serverOf(requireStaff)({
+        next: vi.fn(),
+        context: staffContext({ data: null, error: { code: "XX000" } }),
+      }),
+    ).rejects.toThrow("server_error");
+  });
+});
+
+describe("requireOwner", () => {
+  it("throws forbidden for staff", async () => {
+    await expect(
+      serverOf(requireOwner)({ next: vi.fn(), context: { role: "staff" } }),
+    ).rejects.toThrow("forbidden");
+  });
+  it("lets the owner through", async () => {
+    const next = vi.fn().mockResolvedValue("ok");
+    await serverOf(requireOwner)({ next, context: { role: "owner" } });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
 ---
 
 ## 7. Server-only modules
@@ -813,7 +901,11 @@ describe("link tokens", () => {
 });
 ```
 
-### 7.8 `staff-notify.server.ts` ✅ (F1-04; Stage A subset in card P1-03, consent kinds + delivery helpers in card P4-03)
+### 7.8 `staff-notify.server.ts` ✅ (rev) (F1-04; Stage A subset in card P1-03, consent kinds + delivery helpers in card P4-03)
+
+(rev, R-41: `childrenCount: data.children_count ?? 0`, a type-only fix for the nullable generated column.)
+The 4-second budget lives **here**, on the LINE token + push only (`AbortSignal.timeout(4000)`); the database calls
+have no timeout. Callers such as `handleBookingRequest` simply `await notifyStaff(…)` and add no timeout of their own.
 
 Outbox pattern: the `staff_notifications` row is written first, then LINE is called, then the row is updated. The
 LINE retry key is the notification id, so a retry of the same row can never produce two messages (LINE answers 409).
@@ -853,7 +945,8 @@ async function loadAlertInput(kind: NotificationKind, refId: string): Promise<St
       kind,
       refCode: data.ref_code,
       dateLabel: date ? formatSessionDate(date, "th") : null,
-      childrenCount: data.children_count,
+      // generated column: the generated Row type is `number | null` (no NOT NULL); a request always has 1–3 children
+      childrenCount: data.children_count ?? 0,
       adminUrl: `${base}/admin/inbox/${refId}`,
     };
   }
@@ -1092,10 +1185,13 @@ export async function areCurrentConsentTexts(
 }
 ```
 
-### 7.10 `booking-request.server.ts` ✅ (F1-03)
+### 7.10 `booking-request.server.ts` ✅ (rev) (F1-03)
 
 The whole `/book` decision chain as a plain async function, so vitest can test each outcome with mocked modules
 (a `createServerFn` wrapper is awkward to call from tests). `booking.functions.ts` (§ 9.1) only wraps it.
+(rev, R-41: `status: "new" as const` so the insert fits the generated enum type; the test block gained the
+`form_closed` case and an explicit vitest import.) Inside `src/server/` the relative import `./supabase-admin.server` **is**
+the one service-role door the README golden rule names; keep it relative here and in the test's `vi.mock`.
 
 ```ts
 import "@tanstack/react-start/server-only";
@@ -1152,7 +1248,7 @@ export async function handleBookingRequest(
     if (settings?.booking_form_open === false) return fail("form_closed");
 
     const row = {
-      status: "new",
+      status: "new" as const, // literal, so it fits the generated enum type booking_request_status
       guardian_name: v.guardianName,
       contact_phone: v.contactPhone ?? null,
       contact_line_id: v.contactLineId ?? null,
@@ -1195,10 +1291,12 @@ export async function handleBookingRequest(
 }
 ```
 
-Tests ✅ (`booking-request.server.test.ts`): these cover the P1 acceptance list (honeypot, too fast, bot check, rate
-limit, invalid input, success + alert).
+Tests ✅ (rev) (`booking-request.server.test.ts`): these cover the whole P1 acceptance list (success + alert, honeypot,
+too fast, bot check, rate limit, invalid input, form closed). `db.bookingFormOpen` is a mutable holder created with
+`vi.hoisted`, so one test can close the form without a second mock.
 
 ```ts
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookingRequestRaw } from "@/lib/backend/booking.schema";
 import { REF_CODE_PATTERN } from "@/lib/backend/ref-code";
 import { handleBookingRequest } from "./booking-request.server";
@@ -1214,8 +1312,8 @@ vi.mock("./rate-limit.server", () => ({ checkRateLimit: vi.fn(async () => true) 
 vi.mock("./staff-notify.server", () => ({
   notifyStaff: vi.fn(async () => ({ notificationId: "n", status: "sent" })),
 }));
+const db = vi.hoisted(() => ({ bookingFormOpen: true }));
 vi.mock("./supabase-admin.server", () => {
-  const settings = { data: { booking_form_open: true }, error: null };
   const inserted = {
     data: { id: "00000000-0000-4000-8000-000000000001", ref_code: "CL-7KQ2M" },
     error: null,
@@ -1224,7 +1322,7 @@ vi.mock("./supabase-admin.server", () => {
     select: () => chain,
     eq: () => chain,
     insert: vi.fn(() => chain),
-    maybeSingle: async () => settings,
+    maybeSingle: async () => ({ data: { booking_form_open: db.bookingFormOpen }, error: null }),
     single: async () => inserted,
   };
   return { supabaseAdmin: { from: vi.fn(() => chain) } };
@@ -1246,7 +1344,10 @@ const valid: BookingRequestRaw = {
 };
 
 describe("handleBookingRequest", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.bookingFormOpen = true;
+  });
 
   it("saves, alerts and returns the ref code", async () => {
     expect(await handleBookingRequest(valid)).toEqual({ ok: true, data: { refCode: "CL-7KQ2M" } });
@@ -1280,6 +1381,11 @@ describe("handleBookingRequest", () => {
       ok: false,
       code: "invalid_input",
     });
+  });
+  it("form closed → nothing sent", async () => {
+    db.bookingFormOpen = false;
+    expect(await handleBookingRequest(valid)).toEqual({ ok: false, code: "form_closed" });
+    expect(notifyStaff).not.toHaveBeenCalled();
   });
 });
 ```
@@ -1573,8 +1679,9 @@ export function formatDateTime(iso: string, lang: Lang): string {
 Tests: `formatDateTime("2026-10-17T03:42:00Z", "th")` → `"เสาร์ 17 ต.ค. 2569 · 10:42"`; `"en"` → `"Sat 17 Oct 2026 · 10:42"`;
 `"2026-10-16T17:30:00Z"` (th) → `"เสาร์ 17 ต.ค. 2569 · 00:30"`; `"not a date"` → returned unchanged.
 
-### 8.6 `staff-alert-text.ts` ✅
+### 8.6 `staff-alert-text.ts` ✅ (rev)
 
+(rev, R-41: the local `ConsentPurpose` alias is no longer exported, so `common.schema.ts` is its only export.)
 PII-free **by type**: the input has no field that could carry a name, phone, LINE ID, message or health detail.
 
 ```ts
@@ -1596,7 +1703,11 @@ export type StaffAlertInput =
   | { kind: "enrolment_submitted"; adminUrl: string }
   | { kind: "consent_withdrawn"; purpose: ConsentPurpose; adminUrl: string };
 
-export type ConsentPurpose =
+/**
+ * Same union as `ConsentPurpose` in ./common.schema (kept local so this file needs no zod import). NOT exported:
+ * every other file imports ConsentPurpose from ./common.schema only (R-41, one exported name per type).
+ */
+type ConsentPurpose =
   "health_allergy" | "media_parents_group" | "media_website" | "media_social" | "media_youtube";
 
 const PURPOSE_LABEL_TH: Record<ConsentPurpose, string> = {
@@ -1828,10 +1939,10 @@ fails (or the schema's own stricter max + 1 fails and its max is `<=` `DB_LIMITS
 |---|---|
 | Method | `GET` for reads, `POST` for writes. **Exceptions:** token functions (`getEnrolmentForm`, `getMyConsents`) are `POST` so the token travels in the body, not a query string; `getChildHealth` is `POST` because each call writes an audit row and must never run on prefetch/refetch. |
 | CSRF | `src/start.ts` already applies `csrfMiddleware` to **all** server-function calls (GET and POST): same-origin only. Nothing to add. |
-| Validator | Staff: `.validator(<Fn>Input)` (zod schema). Public/token: `.validator((input: <Raw type>) => input)` + `safeParse` in the handler. |
+| Validator | Staff: `.validator(<Fn>Input)` (zod schema). Public/token: `.validator((input: <Raw type>) => input)` (a typed pass-through) + `safeParse` in the handler, so bad input becomes `{ ok: false, code: "invalid_input" }` instead of a throw. This is the one sanctioned exception to the README rule "use `.validator(schema)`" (R-42). |
 | Schema names | `<FunctionName>Input` in PascalCase, e.g. `listBookingRequests` → `ListBookingRequestsInput`, in `<area>.schema.ts`. |
 | Return | Public: `PublicResult<T>`. Staff: a camelCase view type from `<area>.schema.ts`, or `{ saved: true }` / `{ id }`. Never raw rows. |
-| Errors | Staff: `throw adminError(code)`. Handle the specific SQLSTATE listed per function first, then `throw adminErrorFromDb(error)`. Public: any DB error → `server_error` (or `invalid_input` for `23514`). |
+| Errors | Staff: `throw adminError(code)`. Handle the specific SQLSTATE listed per function first, then `throw adminErrorFromDb(error)`. Public: any DB error → `server_error`, except `22023` (bad scope/arguments, e.g. from `submit_enrolment`) and `23514` (a business rule) → `invalid_input`. |
 | Clients | Staff → `context.supabase`. Public/token → `supabaseAdmin`, every query filtered by the resolved id. Owner staff-role functions → `supabaseAdmin.auth.admin.*` after `requireOwner`. |
 | Audit | Writes through `context.supabase` are audited by the `audit_row_change()` trigger with the staff user as actor. Health reads are audited inside the SQL functions. Don't write `audit_log` rows from TypeScript. |
 | Paging | `PAGE_SIZE = 30` from `common.schema.ts`, `range(page * 30, page * 30 + 29)`, return `total` from `{ count: "exact" }`. |
@@ -1839,6 +1950,17 @@ fails (or the schema's own stricter max + 1 fails and its max is `<=` `DB_LIMITS
 
 Phase gating: a function may only be added once the SQL file it needs has been applied (G4) and `types.ts` regenerated.
 Each block below lists its phase and SQL dependency.
+
+**Writing to Supabase under this repo's strict `tsconfig.json`** (`strict`, `exactOptionalPropertyTypes`,
+`noUncheckedIndexedAccess`; R-43). Applies to every 📝 function:
+- Build insert/update objects **without `undefined`-valued keys**: add an optional column with a conditional spread
+  (`...(v.id ? { id: v.id } : {})`), never `{ id: v.id }` when `v.id` may be `undefined`. Zod output types carry
+  `| undefined` on optional keys, so don't pass them to `.insert()`/`.update()` unchanged.
+- An **update by id** chains `.select("id")` and throws `adminError("not_found")` when the returned array is empty
+  (a plain `update()` returns no rows, so a missing id would otherwise look like success).
+- Guard indexed access on returned arrays (`const row = data?.[0]; if (!row) throw adminError("not_found");`).
+- Tests under `src/` are type-checked too: read mock calls with optional chaining (`mock.calls.at(0)?.[0]`) and avoid
+  object literals with explicit `undefined` for optional properties.
 
 ### 9.1 `booking.functions.ts` (P1, needs `0002_booking_requests.sql`)
 
@@ -1896,7 +2018,9 @@ export const BookingFormFields = z.object({
 export const BookingAntiSpamFields = z.object({
   lang: LangSchema,
   privacyNoticeVersion: z.string().trim().min(1).max(20),
-  companyWebsite: z.string().max(200).optional(), // honeypot
+  // honeypot: NO max on purpose (R-41). Any fill, however long, must reach the fake success in
+  // handleBookingRequest instead of invalid_input, which would tell a bot the field is checked.
+  companyWebsite: z.string().optional(),
   fillMs: z.number().int().min(0).max(86_400_000),
   turnstileToken: z.string().max(2048),
 });
@@ -2479,7 +2603,9 @@ seats_left, public_note_th, public_note_en` for `status = 'open'` sessions in th
 ### 9.5 `families.functions.ts` (P3, needs `0004_families.sql`)
 
 ✅ (rev) `src/lib/backend/families.schema.ts` (note: `SaveFamilyInput.id` is optional so staff can add a family who
-booked on LINE without a web request; view types are in § 14.4):
+booked on LINE without a web request; view types are in § 14.4 and are appended to this same file, which is why the
+imports below include `ConsentPurpose` (for `ConsentCell`) and `PaymentRow` (for `FamilyDetail.payments`, defined in
+`payments.schema.ts` by card P3-05, R-43); import `ConsentPurpose` only from `./common.schema`):
 
 ```ts
 import { z } from "zod";
@@ -2493,7 +2619,9 @@ import {
   SearchQuery,
   ThaiPhoneSchema,
   Uuid,
+  type ConsentPurpose,
 } from "./common.schema";
+import type { PaymentRow } from "./payments.schema";
 
 export const ListFamiliesInput = z.object({
   q: SearchQuery.optional(),
@@ -2591,14 +2719,17 @@ export const DeleteFamilyContactInput = z.object({ id: Uuid });
 |---|---|---|---|
 | `listFamilies` | GET | Skeleton § 14.4: no `q` → one paged `families` query; with `q` → three id queries (family name, guardian name/phone, child nickname), de-duplicated, then the page; children + primary guardian for the page rows in two more queries. | `{ rows: FamilyListRow[], total }` (§ 14.4) |
 | `getFamily` | GET | Skeleton § 14.4: family (incl. restriction columns from 0007), guardians (incl. `pending_link_changes`), children (incl. `allergy_check_needed_at`), **active** contacts, package balances, payments (`hasSlip`, never the path), last 50 bookings; P4: `family_links` (**never `token_hash`**) and one `rpc("consent_matrix", { p_child_ids })`. | `FamilyDetail` (§ 14.4); `not_found` |
-| `createFamilyFromRequest` | POST | **One** `rpc("create_family_from_request", { p_request_id, p_display_name, p_guardian: { full_name, phone, line_id }, p_children: [{ nickname, age_years }] })` (R-15; one transaction). `P0002` → `not_found`; `23514` "already converted" → `invalid_state`. | `{ familyId }` |
-| `saveFamily` | POST | Insert (no `id`) or update `display_name`, `preferred_lang`, `staff_note` only. `status`, `last_activity_at`, `retain_until` are system-managed by SQL: never write them. Never store health details in `staff_note` (UI hint). | `{ id }` |
-| `saveGuardian` | POST | Insert/update. When `isPrimary`, first set `is_primary = false` on the family's other guardians. When `markIdentityChecked`, set `identity_check_method`, `identity_checked_by = context.userId`, `identity_checked_at = now()` (only staff ever set identity, R-21). When `confirmsParentalResponsibility`, set `has_parental_responsibility = true`, `responsibility_attested_at = now()` (the DB requires this before any `granted` consent from this guardian). When `confirmLinkChanges`, set `pending_link_changes = null`. A restricted family → `family_restricted`. | `{ id }`; `23505` (second primary) → `conflict` |
-| `saveChild` | POST | Insert/update; `birth_month = birthMonth ? \`${birthMonth}-01\` : null`. | `{ id }` |
-| `saveFamilyContact` | POST | Insert/update; `guardian_attests_informed_at = now()` on insert or when re-attested. | `{ id }` |
-| `deleteFamilyContact` | POST | **Soft delete** (R-22): `update family_contacts set is_active = false where id = …` (never `.delete()`), so the "picked up by" history on bookings stays. `not_found` when no row changed. | `{ deleted: true }` |
+| `createFamilyFromRequest` | POST | **One** `rpc("create_family_from_request", { p_request_id, p_display_name, p_guardian: { full_name, phone, line_id }, p_children: [{ nickname, age_years }] })` (R-15; one transaction). The RPC returns the bare family uuid: return `{ familyId: data }`. Errors: `throw adminErrorFromDb(error)` (`P0002` "Request not found" → `not_found`; `23514` "Request already converted" → `invalid_state`; `23505` → `conflict`). A LINE-path request may have no phone and no LINE ID (D26): the dialog makes staff add one first (zod `contact_required`, R-38). | `{ familyId }` |
+| `saveFamily` | POST | Insert (no `id`; also set `created_by = context.userId`, like `create_family_from_request`) or update by id: `display_name`, `preferred_lang`, `staff_note` only. `status`, `last_activity_at`, `retain_until` are system-managed by SQL: never write them. Never store health details in `staff_note` (UI hint). A restricted family refuses the update (`23514`, R-36) → `adminErrorFromDb` → `family_restricted`. | `{ id }` |
+| `saveGuardian` | POST | **Two steps, safe order (R-39):** (1) insert (`is_primary: false`) or update by id the plain fields (`full_name`, `phone`, `line_id`, `email`; never `is_primary` here); (2) only when `isPrimary` and the row is not primary yet: **one** `rpc("set_primary_guardian", { p_guardian_id })` (0004; clears the other primary and sets this one in one transaction). If (2) fails the old primary stays, so a family never loses its primary guardian (`submit_enrolment` needs one). `isPrimary: false` never un-sets the current primary: a family keeps one; to change it, mark another guardian primary. Identity columns are written **only** when `markIdentityChecked` (`identity_check_method`, `identity_checked_by = context.userId`, `identity_checked_at = now()`; only staff ever set identity, R-21); otherwise `identityCheckMethod` is ignored and the three columns stay as they are. When `confirmsParentalResponsibility`, set `has_parental_responsibility = true`, `responsibility_attested_at = now()` (never set back to false). When `confirmLinkChanges`, set `pending_link_changes = null`. A restricted family → `family_restricted`. | `{ id }`; `23505` (second primary) → `conflict` |
+| `saveChild` | POST | Insert/update by id; `birth_month = birthMonth ? \`${birthMonth}-01\` : null`. A restricted family → `family_restricted`. | `{ id }` |
+| `saveFamilyContact` | POST | Insert (`guardian_attests_informed_at = now()`) or update by id. On update, read the row first (`name, phone`) and set `guardian_attests_informed_at = now()` **only when `name` or `phone` changed** (a different person or number needs a fresh "I told them"); otherwise keep the existing timestamp (R-39). Editing an inactive contact is allowed (staff may correct history); it stays inactive. A restricted family → `family_restricted`. | `{ id }` |
+| `deleteFamilyContact` | POST | **Soft delete** (R-22): `update family_contacts set is_active = false where id = …` with `.select("id")` (never `.delete()`), so the "picked up by" history on bookings stays. No row → `not_found`. Already inactive → still `{ deleted: true }` (idempotent). Allowed for a restricted family (it reduces processing). | `{ deleted: true }` |
 
-Families are never deleted from the UI; the owner uses `eraseFamily` (§ 9.13).
+Families are never deleted from the UI; the owner uses `eraseFamily` (§ 9.13). Every write above follows the strict-TS
+rules in § 9.0 (no `undefined`-valued keys, update-by-id with `.select("id")` → `not_found`). The six functions are
+exported as `createServerFn` results with exactly these names: `createFamilyFromRequest`, `saveFamily`,
+`saveGuardian`, `saveChild`, `saveFamilyContact`, `deleteFamilyContact` (00 § 10).
 
 ### 9.6 `payments.functions.ts` (P3, needs `0004`)
 
@@ -2843,8 +2974,9 @@ import {
   ThaiPhoneSchema,
   Uuid,
   type ConsentPurpose,
+  type MediaPurpose,
 } from "./common.schema";
-import { ALLERGENS } from "./health.schema";
+import { ALLERGENS } from "./health.schema"; // health.schema.ts is created by card P4-07 (a dependency of P4-04)
 
 export const LinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
@@ -2997,11 +3129,21 @@ export const SubmitEnrolmentRpcResult = z.discriminatedUnion("ok", [
 ]);
 
 export type ConsentTextView = { id: string; version: number; title: string; bodyMd: string };
+/** R-33: this guardian's latest decision for one media purpose (shown above the unticked box) */
+export type CurrentMediaDecision = { decision: "granted" | "refused" | "withdrawn"; decidedAt: string };
 export type EnrolmentForm = {
   familyDisplayName: string;
   expiresAt: string;
   guardian: { fullName: string; phone: string | null; lineId: string | null; email: string | null };
-  children: Array<{ childId: string; nickname: string; birthMonth: string | null }>;
+  children: Array<{
+    childId: string;
+    nickname: string;
+    birthMonth: string | null;
+    /** R-33: absent purpose = never decided. An unticked box keeps a decided purpose as it is (SQL records nothing). */
+    currentMedia: Partial<Record<MediaPurpose, CurrentMediaDecision>>;
+    /** R-34: the child's own latest health decision is a "no" (D11): hide the health box; staff talk with the family */
+    childRefusedHealth: boolean;
+  }>;
   contacts: Array<{
     id: string;
     name: string;
@@ -3026,14 +3168,16 @@ import { optionalServerEnv } from "@/server/env.server";
 import { newLinkToken, resolveLinkToken } from "@/server/link-tokens.server";
 import { supabaseAdmin } from "@/server/supabase-admin.server";
 import { requireStaff } from "./auth.middleware";
+import type { ConsentPurpose, MediaPurpose } from "./common.schema";
 import {
   CreateEnrolmentLinkInput,
   GetEnrolmentFormInput,
   RevokeFamilyLinkInput,
+  type CurrentMediaDecision,
   type EnrolmentForm,
   type SubmitEnrolmentRaw,
 } from "./enrolment.schema";
-import { adminError, fail, ok, type PublicResult } from "./result";
+import { adminError, adminErrorFromDb, fail, ok, type PublicResult } from "./result";
 
 const ENROL_LINK_DAYS = 14;
 
@@ -3072,6 +3216,23 @@ export const getEnrolmentForm = createServerFn({ method: "POST" })
       ]);
       if (family.error || !family.data || !guardian.data) return fail("server_error");
 
+      const kids = (children.data ?? []) as Array<{
+        id: string;
+        nickname: string;
+        birth_month: string | null;
+      }>;
+      // R-33 / R-34: current decisions, in ONE call (R-18), so the form can show them and hide health after a
+      // child's own "no". The ids come from the query above, which is filtered by the link's family.
+      const matrix = await supabaseAdmin.rpc("consent_matrix", { p_child_ids: kids.map((k) => k.id) });
+      if (matrix.error) return fail("server_error");
+      const cells = (matrix.data ?? []) as Array<{
+        child_id: string;
+        purpose: ConsentPurpose;
+        guardian_decision: CurrentMediaDecision["decision"] | null;
+        guardian_decided_at: string | null;
+        child_decision: CurrentMediaDecision["decision"] | null;
+      }>;
+
       return ok({
         familyDisplayName: family.data.display_name,
         expiresAt: res.link.expiresAt,
@@ -3081,17 +3242,29 @@ export const getEnrolmentForm = createServerFn({ method: "POST" })
           lineId: guardian.data.line_id,
           email: guardian.data.email,
         },
-        children: (
-          (children.data ?? []) as Array<{
-            id: string;
-            nickname: string;
-            birth_month: string | null;
-          }>
-        ).map((c) => ({
-          childId: c.id,
-          nickname: c.nickname,
-          birthMonth: c.birth_month ? c.birth_month.slice(0, 7) : null,
-        })),
+        children: kids.map((c) => {
+          const currentMedia: Partial<Record<MediaPurpose, CurrentMediaDecision>> = {};
+          let childRefusedHealth = false;
+          for (const cell of cells) {
+            if (cell.child_id !== c.id) continue;
+            if (cell.purpose === "health_allergy") {
+              childRefusedHealth =
+                cell.child_decision === "refused" || cell.child_decision === "withdrawn";
+            } else if (cell.guardian_decision && cell.guardian_decided_at) {
+              currentMedia[cell.purpose] = {
+                decision: cell.guardian_decision,
+                decidedAt: cell.guardian_decided_at,
+              };
+            }
+          }
+          return {
+            childId: c.id,
+            nickname: c.nickname,
+            birthMonth: c.birth_month ? c.birth_month.slice(0, 7) : null,
+            currentMedia,
+            childRefusedHealth,
+          };
+        }),
         contacts: (
           (contacts.data ?? []) as Array<{
             id: string;
@@ -3147,7 +3320,8 @@ export const createEnrolmentLink = createServerFn({ method: "POST" })
       expires_at: expiresAt,
       created_by: context.userId,
     });
-    if (error) throw adminError("server_error");
+    // 23514 'processing is restricted' (D28) → family_restricted; anything else through the same map (R-43)
+    if (error) throw adminErrorFromDb(error);
     const base = optionalServerEnv("PUBLIC_SITE_URL") ?? getRequestUrl().origin;
     return { url: `${base}/enrol/${token}`, expiresAt };
   });
@@ -3234,20 +3408,39 @@ Key behaviours:
 - Health: `granted` → consent record first, then `upsert_child_health` (inside SQL). `refused` ("I don't want to share
   this") → `refused`, or `withdrawn` if the latest guardian decision was `granted`; the row is deleted by the trigger and
   the child gets `allergy_check_needed_at`. `skipped` ("Not now" or untouched) records nothing and deletes nothing (R-07).
-- Media: one record per purpose **shown** (R-06). Switch on → `granted` with the face level; off → `withdrawn` if the
-  latest guardian decision was `granted` (alert queued by the trigger, R-05), else `refused`.
+- Media: one entry per purpose **shown** (R-06). Box ticked → `granted` with the face level. Box unticked → `refused`
+  **only** when this guardian never decided that purpose for that child; otherwise the SQL records nothing (R-33),
+  so a link re-sent to an enrolled family (e.g. to add allergy info) can never withdraw media consent by accident.
+  The form shows each decided purpose's current decision (`currentMedia`) above the box. Withdrawals happen on
+  `/my/$token` or with staff, where the trigger queues the takedown alert (D29).
+- Health after a 10+ child's own "no" (R-34): `getEnrolmentForm` returns `childRefusedHealth`, the form hides the
+  health box for that child and sends `skipped`; if a stale form still sends `granted`, the SQL raises `23514`
+  before writing anything and the handler returns `invalid_input` (never the `42501` of the `child_health` trigger).
 - Identity is **not** marked as checked by using the link; changed contact fields are kept in
   `guardians.pending_link_changes` for staff to confirm in the LINE chat (R-21).
 - Contacts not in the submitted list are soft-deleted (`is_active = false`, R-22).
 - The link is marked `used_at` inside the same transaction; on any error nothing is written and the parent can resubmit.
 - Alerts: queued withdrawal alerts first (`deliverAlertIds`, at most 5 pushed now, the rest stay pending in the admin),
   then `enrolment_submitted` (PII-free).
-- Tests to write (`enrolment-submit.server.test.ts`, mock `./supabase-admin.server`, `./link-tokens.server`,
-  `./consent-texts.server`, `./staff-notify.server`): expired link → `link_expired`; SQL `{ ok:false, code:"link_used" }`
-  → `link_used`; SQL error `22023` → `invalid_input`; success → `deliverAlertIds` called with the returned ids, then
-  `notifyStaff("enrolment_submitted", familyId)`; a text not current → `invalid_input` and no RPC call. And
-  `enrolment.schema.test.ts`: enrolment with only `media_website` and `media_youtube` entries passes (R-06); a media
-  switch on without `mediaLevel` fails; `toSubmitEnrolmentPayload` maps "skipped" health to `{ decision: "skipped" }`.
+- Tests to write, **two files, two cards** (R-44):
+  - `enrolment-submit.server.test.ts` (card **P4-06**; handler cases only). Mock `./supabase-admin.server`
+    (`{ supabaseAdmin: { rpc: vi.fn() } }`), `./link-tokens.server` (`resolveLinkToken` → `{ ok: true, link: { id,
+    familyId, purpose: "enrol", expiresAt } }` or `{ ok: false, code: "link_expired" }`, § 7.7),
+    `./consent-texts.server` (`areCurrentConsentTexts` → `true`/`false`, § 7.9) and `./staff-notify.server`
+    (`deliverAlertIds` and `notifyStaff` as `vi.fn()`, § 7.8). Cases: expired link → `link_expired` and no RPC call;
+    SQL `{ ok:false, code:"link_used" }` → `link_used`; SQL error `22023` → `invalid_input`; SQL error `23514` →
+    `invalid_input`; success → `deliverAlertIds` called with the returned ids, then
+    `notifyStaff("enrolment_submitted", familyId)`; a text not current → `invalid_input` and no RPC call.
+    Valid fixture (fake values only; limits from §§ 8.8 and 9.8): `token` = `"A".repeat(43)`, `lang` `"th"`,
+    guardian `fullName` `"ผู้ปกครองทดสอบ"`, `phone` `"0800000001"`, `lineId` `"test.line.id"`, `email` `null`,
+    `confirmsParentalResponsibility: true`; one child `{ childId: "00000000-0000-4000-8000-000000000002",
+    birthMonth: "2018-05", health: { decision: "skipped" }, media: [{ purpose: "media_website", on: true,
+    consentTextId: "00000000-0000-4000-8000-000000000003" }], mediaLevel: "face_hidden" }`; `contacts: []`. RPC
+    success value: `{ ok: true, family_id: "00000000-0000-4000-8000-000000000004", alert_ids:
+    ["00000000-0000-4000-8000-000000000005"] }`. Read mock calls with `mock.calls.at(0)?.[0]` (§ 9.0).
+  - `enrolment.schema.test.ts` (card **P4-04**, not P4-06): enrolment with only `media_website` and `media_youtube`
+    entries passes (R-06); a media switch on without `mediaLevel` fails; `toSubmitEnrolmentPayload` maps "skipped"
+    health to `{ decision: "skipped" }`.
 
 ### 9.9 `consent.functions.ts` (P4; owner text versions F5-05)
 
@@ -3318,7 +3511,7 @@ export const GetConsentEvidenceUrlInput = z.object({ consentRecordId: Uuid });
 | `uploadConsentEvidence` | staff, POST (FormData `familyId`, `file`) | Same checks as `uploadPaymentSlip`; bucket `consent-evidence`, path `<family_id>/<uuid>.<ext>`. Upload **before** `recordStaffConsent` and pass the returned path. | `{ evidencePath }` |
 | `getConsentEvidenceUrl` | staff, GET | Signed URL (60 s) for `evidence_path` of one record. | `{ url }` |
 | `listConsentTexts` | owner, GET — **parked** (D27) | All versions (both languages), newest first; include `sha256`, `effective_from`, `retired_at`. | `ConsentTextRow[]` (§ 14.6) |
-| `publishConsentText` | owner, POST — **parked** | **One** `rpc("publish_consent_text", { p_purpose, p_title_th, p_body_md_th, p_title_en, p_body_md_en, p_is_explicit, p_requires_child_consent_from_age })` (R-15: TH + EN + retiring the old version in one transaction). | `{ version }` |
+| `publishConsentText` | owner, POST — **parked** | **One** `rpc("publish_consent_text", { p_purpose, p_title_th, p_body_md_th, p_title_en, p_body_md_en, p_is_explicit, p_requires_child_consent_from_age })` (R-15: TH + EN + retiring the old version in one transaction). The SQL refuses the **first** `health_allergy` text (`23514` → `invalid_state`, R-35). | `{ version }` |
 | `retireConsentText` | owner, POST — **parked** | `retired_at = now()` for both languages of that version (one update statement). Refuse if it is the only non-retired version of `health_allergy`: `invalid_state`. | `{ retired: true }` |
 
 Consent texts are **never updated** (SQL blocks it, D12); a wording change is always a new version.
@@ -4171,6 +4364,9 @@ These are additions the architect didn't name. Use them exactly; `90-task-breakd
 | `getSystemCheck`, `SystemCheck`, `SecretName` | `staff.functions.ts`, `staff.schema.ts` | Owner checks secrets are set without seeing values (F1-10, R-30) |
 | `listPendingStaffAlerts`, `PendingAlert` | `inbox.functions.ts`, `inbox.schema.ts` | Unsent enrolment/consent alerts with a resend button (D29, R-30) |
 | `HEALTH_IN_SYSTEM` | `public-config.ts` | G-HEALTH switch for the UI (R-29) |
+| `CurrentMediaDecision`, `EnrolmentForm.children[].currentMedia`, `EnrolmentForm.children[].childRefusedHealth` | `enrolment.schema.ts` | Re-sent enrol links keep earlier media decisions (R-33); a child's health "no" hides the health box (R-34) |
+| `auth.middleware.test.ts` | `src/lib/backend/` | Role-gate test, card P0-17 (R-40) |
+| SQL `set_primary_guardian(p_guardian_id uuid)` (called by `saveGuardian`) | `0004` | Primary-guardian swap in one transaction (R-39) |
 
 ---
 
@@ -4191,7 +4387,7 @@ export type BookingRequestAlert = {
   id: string;
   status: NotifyStatus;
   attempts: number;
-  /** short code only, e.g. "line_push_429" */
+  /** short code only, e.g. "line_push_http_429" (codes from § 7.5) */
   lastError: string | null;
   sentAt: string | null;
   createdAt: string;

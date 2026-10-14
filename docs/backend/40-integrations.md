@@ -204,6 +204,7 @@ generated code builds, and record the results in § 2.
 | 15 | Is the GitHub repo `siripongsri-maker/github-seed` **private**? (It must be: poster images and history stay in git.) | | |
 | 16 | Does pg_cron appear in Cloud → Jobs after `0002`? First run status | | |
 | 17 | Does Lovable's built-in analytics set cookies or localStorage on the published site? (G12, § 10.1) | | |
+| 18 | Import lines of the generated `src/integrations/supabase/auth-middleware.ts` (card P0-15: `grep -n "^import" …`; module names only). Must NOT include `client.server`, `@tanstack/react-start/server-only` or anything reading `SUPABASE_SERVICE_ROLE_KEY` (our `auth.middleware.ts` imports it from browser-bundled code, `20-server-api.md` § 6). Exported name of the middleware (`requireSupabaseAuth`?) and its context members (`supabase`, `userId`, `claims`?) | | |
 
 ---
 
@@ -501,7 +502,7 @@ https://lineforbusiness.com/th/service/line-oa-features/broadcast-message).
 | group of 3 staff | 3 | 100 |
 
 When the quota is used up, LINE returns 429 and the message is **not** sent. Our row becomes `failed` with
-`line_push_429`; the request is still safe in the inbox. If this happens regularly, either alert only the owner, or move
+`line_push_http_429`; the request is still safe in the inbox. If this happens regularly, either alert only the owner, or move
 the alert OA to a paid plan (Basic ฿1,280/month + VAT, 15,000 messages; prices from the lineforbusiness page above,
 ⚠️ check current prices before buying).
 
@@ -956,9 +957,9 @@ After Publish (on the published URL, with obviously fake data):
 |---|---|---|
 | Admin pages show errors, `/book` falls back to "send on LINE", Cloud shows paused | Cloud ran out of credits or auto-paused | 🧑 Owner: add credits → **More → Cloud → Overview → Wake up**; then run the purge once (§ 7) |
 | Inbox shows "แจ้งเตือนไม่สำเร็จ / Alert failed", `last_error = missing_config` | a LINE secret is missing or the site wasn't republished | 🧑 add the secret (§ 4), Publish, press Resend |
-| `last_error = line_token_400` or `line_token_401` | wrong channel ID or secret, or the secret was reissued | 🧑 recopy both from Basic settings |
-| `last_error = line_push_400` | `LINE_ALERT_TO` wrong (must be `U…`/`C…` + 32 hex), or the bot is no longer in the group | 🧑 recopy the user ID; re-invite the bot |
-| `last_error = line_push_429` | monthly free quota used up (or rate limit) | wait for next month or alert only the owner (§ 5.8); requests are safe in the inbox |
+| `last_error = line_token_http_400` or `line_token_http_401` | wrong channel ID or secret, or the secret was reissued | 🧑 recopy both from Basic settings |
+| `last_error = line_push_http_400` | `LINE_ALERT_TO` wrong (must be `U…`/`C…` + 32 hex), or the bot is no longer in the group | 🧑 recopy the user ID; re-invite the bot |
+| `last_error = line_push_http_429` | monthly free quota used up (or rate limit) | wait for next month or alert only the owner (§ 5.8); requests are safe in the inbox |
 | Alerts work, but the owner gets nothing on the phone | the owner blocked or removed the alert OA | 🧑 unblock / add as friend again |
 | `timeout` | LINE slow; Workers 4 s budget | press Resend later |
 | Turnstile widget shows an error mentioning the domain (client error code `110200`) | hostname not in the widget list | 🧑 add the exact hostname (§ 6.1); never the apex `lovable.app` |

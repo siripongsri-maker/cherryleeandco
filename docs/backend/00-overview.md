@@ -230,7 +230,7 @@ Each decision has an id so the other files can point to it.
 | D27 | **Deliver in stages with go/no-go gates** (§ 8.0): Stage A = P0 + P1 (+ P2) is the MVP; **G-MVP** (owner, after ≥ 8 weeks of real use) decides whether to build Stage B (P3 records + P5 core privacy); **G-HEALTH** decides whether allergy data is stored in the system in Stage C (P4 + `/my`). DSR tracker, breach log, audit viewer, consent-text publishing UI, reports and every P6/P7 extra are **parked**: runbooks + a private owner spreadsheet until volume justifies them. | A 1–2 person weekend studio whose bookings live in LINE should only carry the system it uses; less stored data = less PDPA risk. |
 | D28 | **Restriction (PDPA s.34) is real data**, not a status trick: `families.processing_restricted_at` + `restriction_note`, set only by the owner through `set_family_restriction()`. While set, the database refuses new bookings, enrol links, granted consents and profile edits (withdrawals still work); the family is never marked inactive or auto-erased. | `families.status` is system-managed and recomputed nightly, so it can't carry a restriction. |
 | D29 | **Consent-change alerts come from the database.** An AFTER INSERT trigger on `consent_records` queues a `consent_withdrawn` staff notification whenever a guardian's or child's decision moves away from `granted` (any channel). Server code then pushes the queued row (`deliverConsentAlert`); unsent rows show in the admin with a resend button. | Every path (web enrol, `/my`, staff recording, a 10+ child's "no") starts the takedown/health runbook. |
-| D30 | **Multi-row writes run in one SQL transaction**: `create_family_from_request`, `submit_enrolment` (locks the link row), `publish_consent_text`, `set_media_asset_children`. Screens that need many rows use one set-returning function: `get_sessions_with_seats`, `consent_matrix`, `media_publishability`. | No half-written families or consent texts; no per-row RPC loops on Workers. |
+| D30 | **Multi-row writes run in one SQL transaction**: `create_family_from_request`, `submit_enrolment` (locks the link row), `publish_consent_text`, `set_media_asset_children`, `set_primary_guardian` (R-39). Screens that need many rows use one set-returning function: `get_sessions_with_seats`, `consent_matrix`, `media_publishability`. | No half-written families or consent texts; no per-row RPC loops on Workers. |
 
 ---
 
@@ -301,8 +301,9 @@ when its acceptance criteria pass on the Lovable preview **and** the owner has p
 While an item is parked, the owner uses the runbooks in `50-security-privacy.md` (§ 18 DSR, § 20 breach, § 5 monthly
 audit review via Cloud → Database → `audit_log` read-only view) and a **private** spreadsheet with the same fields as
 `dsr_requests` / `breach_incidents` (no health details, kept 3 / 5 years). New consent wording is published as a new
-SQL draft (like 0006) or with `publish_consent_text()` in the SQL editor (G4-style approval). The SQL for these items
-already exists (0007), so un-parking only adds screens.
+SQL draft (like 0006) or with `publish_consent_text()` in the SQL editor (G4-style approval); that function refuses the
+**first** `health_allergy` text, which only a reviewed SQL draft may add after a G-HEALTH = system decision (R-35).
+The SQL for these items already exists (0005, 0007), so un-parking only adds screens.
 
 **No real family data before Stage B is live.** Lovable drafts share one database: until Stage B is published, staff
 enter only obviously fake test families on the preview and delete them before go-live.
@@ -462,7 +463,8 @@ used credits stay used after the bookings behind them are purged.
 Goal: allergy info (only if G-HEALTH = system) and media permissions recorded properly, with evidence, before they are
 used; parents can withdraw on the web as easily as they gave consent.
 
-- **F4-01** SQL `0005_consent_health.sql` (already applied in Stage B as tables only): consent enums, `consent_texts`,
+- **F4-01** SQL `0005_consent_health.sql` (the whole file was already applied in Stage B at G4 · 0005, functions
+  included; only the P4 screens wait for Stage C): consent enums, `consent_texts`,
   `consent_records` (append-only), view `current_consents`, `child_health` + consent trigger + withdrawal trigger,
   consent-change alert trigger (D29), `family_links`, `media_assets`, `media_asset_children`, functions
   `child_age_years`, `has_active_consent`, `consent_status`, `can_publish_media`, `get_child_health`,
@@ -475,7 +477,9 @@ used; parents can withdraw on the web as easily as they gave consent.
   section (own unticked explicit-consent box showing the full text; "ไม่ใช่ตอนนี้ / Not now" records nothing; a separate
   "ไม่ต้องการให้ข้อมูลนี้ / I don't want to share this" records a refusal and deletes earlier info), media: **each
   published purpose shows its title and full text above its own unticked control** (R-04) + face level, contacts with
-  "I've told them". Noindex + `no-referrer`. Staff alert on submit; staff confirm changed contact details.
+  "I've told them". Noindex + `no-referrer`. Staff alert on submit; staff confirm changed contact details. A link
+  re-sent to an enrolled family shows each child's current media decision; an unticked box keeps it (R-33);
+  withdrawing happens on `/my` or with staff.
 - **F4-05** Staff consent recording: paper/in-person (evidence upload), child's own consent for 10+ with the script in `30-ui.md`.
 - **F4-06** Health on roster: three states (allergies / parent reported none / no info — check with the family before
   cooking), full notes via `get_child_health` (audited); edit via `upsert_child_health`. Hidden if G-HEALTH = paper.
@@ -490,8 +494,9 @@ Acceptance: inserting into `child_health` without a granted `health_allergy` con
 record deletes the health row and queues a staff alert; each health read writes one `audit_log` row; a 10+ child without
 their own media consent shows "not publishable"; an enrol link works once and not after expiry, and two concurrent
 submits can't both succeed; `consent_texts` rows can't be edited after insert (only `retired_at`); no consent control is
-pre-ticked and every consent control has its full text visible (UI tests); turning a previously granted media channel
-off on `/enrol` records `withdrawn` and alerts staff; notice `…-v3` live.
+pre-ticked and every consent control has its full text visible (UI tests); withdrawing a granted media channel on
+`/my` (or by staff) records `withdrawn` and alerts staff, while an unticked box on a re-sent `/enrol` link keeps the
+earlier decision (R-33); a 10+ child's health "no" hides the health box on `/enrol` (R-34); notice `…-v3` live.
 
 ### P6 · Reporting (Stage D, optional) and parked extras
 
@@ -611,7 +616,7 @@ uuid, p_display_name text, p_guardian jsonb, p_children jsonb)`, `consent_matrix
 `media_publishability()`, `set_media_asset_children(p_asset_id uuid, p_child_ids uuid[])`,
 `publish_consent_text(p_purpose, p_title_th, p_body_md_th, p_title_en, p_body_md_en, p_is_explicit,
 p_requires_child_consent_from_age)`, `submit_enrolment(p_link_id uuid, p jsonb)`, `set_family_restriction(p_family_id
-uuid, p_restricted boolean, p_note text)`; trigger functions `guard_package_purge_counter`,
+uuid, p_restricted boolean, p_note text)`, `set_primary_guardian(p_guardian_id uuid)` (R-39); trigger functions `guard_package_purge_counter`,
 `cancel_bookings_of_cancelled_session`, `queue_consent_change_alert`, `guard_family_restriction_columns`,
 `block_restricted_family`. New columns: `guardians.pending_link_changes`, `children.allergy_check_needed_at`,
 `family_contacts.is_active`, `package_purchases.sessions_used_purged`, `media_assets.legacy_consent_purposes`,
@@ -831,7 +836,9 @@ approach (D11), the cross-border position and the retention schedule before the 
 ## 15. Review resolutions (October 2026)
 
 An independent review (verdict: database layer strong, plan not yet ready for Haiku) raised 2 blockers, 13 major and
-12 minor issues (R-01 … R-27). A finalisation pass while writing the task cards found five more gaps (R-28 … R-32). This log is **authoritative**: it sits in the top file of the order of authority, so if any lower file
+12 minor issues (R-01 … R-27). A finalisation pass while writing the task cards found five more gaps (R-28 … R-32). A
+second verification round (a verifier plus Haiku dry-runs of cards P0-17, P1-06, P1-14, P3-04 and P4-06) added
+R-33 … R-48. This log is **authoritative**: it sits in the top file of the order of authority, so if any lower file
 still says something else, this table wins and the lower file is the one to fix. Every entry is already applied to the
 files named.
 
@@ -841,7 +848,7 @@ files named.
 | R-02 | Notice shipped after collection; two version formats (blocker) | Notice per stage (`…-v1` A, `…-v2` B, `…-v3` C), format `YYYY-MM-vN` only, wording source = 50 §§ 11.3–11.4 tagged by phase, G9a per stage, G10 checks it | 00 § 8.0/§ 9, 30 § 3.4, 50 § 11.1 |
 | R-03 | LINE call-back by LINE ID impossible (major) | D26: LINE = parent sends the ref code to @cherryleeandco; phone required only for call-backs; LINE ID = optional matching hint; inbox shows "find chat", not "add" | 00 D26/§ 6, 0002, 20 § 9.1, 30 § 3.2/§ 4.3, 50 § 11 |
 | R-04 | Media consent text hidden in a collapsible (major) | Title + full `body_md` above each unticked control on `/enrol` and `/my`; UI test checks every consent control has its text in the DOM | 30 §§ 3.5–3.6, 50 § 13 |
-| R-05 | Takedown alert only for `withdrawn` via two functions (major) | D29: `queue_consent_change_alert` trigger (any channel, guardian or child); `/enrol` records `withdrawn` when a granted switch is turned off; `deliverConsentAlert` pushes | 0005, 20 §§ 7.8, 9.8–9.12 |
+| R-05 | Takedown alert only for `withdrawn` via two functions (major) | D29: `queue_consent_change_alert` trigger (any channel, guardian or child); ~~`/enrol` records `withdrawn` when a granted switch is turned off~~ (superseded by R-33: on `/enrol` only the explicit health decline can withdraw); `deliverConsentAlert` pushes | 0005, 20 §§ 7.8, 9.8–9.12 |
 | R-06 | All four media text ids required (major) | Media is a list of only the purposes shown; texts not published are hidden and nothing is recorded for them | 20 § 9.8, 30 § 3.5, 0005 `submit_enrolment` |
 | R-07 | Allergy data lost or shown as "none" (major) | Roster three states; `children.allergy_check_needed_at`; "Not now" = skipped, explicit "I don't want to share" = refused; child-refusal deletion stays a G9b lawyer question | 0004, 0005, 20 § 9.10, 30 §§ 3.5/4.3 |
 | R-08 | Orphan check would delete kept slips/evidence (major) | Orphan = object not referenced by any `payments.slip_path` or `consent_records.evidence_path` (never "family missing"); slips stay on erasure unless G11/lawyer decide otherwise (then `erase_family` nulls `slip_path` in a new SQL file); 50 § 18.3 corrected; orphan check is a manual, parked runbook step | 50 §§ 7.3, 18.3, 19.4; 20 § 9.13 |
@@ -869,3 +876,19 @@ files named.
 | R-30 | Unsent consent/enrolment alerts had no list; F1-10 secret check had no function (finalisation) | `listPendingStaffAlerts` + dashboard "alerts not sent" with resend (card P4-19); owner `getSystemCheck` on `/admin/settings` (card P1-19), names only, never values | 20 §§ 9.2, 9.3, 13; 30 §§ 4.3, 5.1 |
 | R-31 | Purge acceptance test could not pass after 0007 (finalisation) | Runbook backdates `created_at` as well, because `mark_inactive_families()` runs first and clears `retain_until` on active families | 50 § 19.5 |
 | R-32 | Stale wording (finalisation) | SQL editor instead of Lovable chat for non-migration SQL (40 G5/§ 7, 10 § 6.1, 50 § 19.3); admin copy pointers (20 § 4, 30 § 5 comment); version labels (50 § 11); decision range (40 header); `90-task-breakdown.md` written (closes R-01) | 10, 20, 30, 40, 50, 90 |
+| R-33 | Re-sent enrol link silently withdrew media consents (major): every box starts unticked, so "off" recorded `withdrawn` for earlier grants | `submit_enrolment`: ticked = `granted`; unticked = `refused` only when the guardian never decided that purpose, otherwise nothing. `getEnrolmentForm` returns `currentMedia` (one `consent_matrix` call); the media block shows the current decision + `keepNote`; withdrawals go through `/my` or staff. Boxes are never pre-ticked from the current state | 0005 § 10c; 20 § 9.8 (`CurrentMediaDecision`); 30 § 3.5 (MediaSection, enrol copy); 10 § 13; 50 § 16.1; 00 § 8 P4; 90 P4-04/05/09/14/24; seed_dev § 7b.7 |
+| R-34 | A 10+ child's health "no" turned a guardian's health grant into a `42501` → `server_error` that rolled back the whole `/enrol` statement (major) | `submit_enrolment` raises `23514` before any write (handler → `invalid_input`); `getEnrolmentForm` returns `childRefusedHealth`; `HealthSection` (optional `childRefused`) shows only `health.childRefusedNote` (OWNER-APPROVE) and sends `skipped` | 0005 § 10c; 20 § 9.8; 30 § 3.5; 90 P4-05/06/08/14; seed_dev § 7b.7 |
+| R-35 | 0006 header pointed at the parked `/admin/settings` publisher; nothing stopped a first `health_allergy` text after G-HEALTH = paper (minor) | 0006 header: new versions by reviewed SQL draft or `publish_consent_text()` in the SQL editor (PK-03 parked). `publish_consent_text` refuses the **first** `health_allergy` text (`23514`) | 0005, 0006; 00 § 8.0; 20 § 9.9; 50 § 12.0; seed_dev § 6 |
+| R-36 | Restriction gaps (major): the family row itself (name, language, staff note) stayed editable although D28 says "profile edits"; an inactive contact could be edited; FK set-null columns would block staff offboarding or a request purge | `block_restricted_family` also runs BEFORE UPDATE on `families` (only system and restriction columns may change while restricted); the contact exception is only `is_active` true → false; `identity_checked_by`, `created_by`, `source_request_id` count as system columns | 0007 § 4b; 10 § 9; 20 § 9.5; 50 § 18.4; 90 P3-04/P3-18/P5-05; seed_dev § 7b.8 |
+| R-37 | Restriction blocks the very correction an accuracy dispute needs (minor) | Runbook: owner lifts → makes only the requested correction → restricts again, one DSR-sheet line; the audit log already records each step | 50 § 18.4, § 28 Q9; seed_dev § 7b.8 |
+| R-38 | LINE-path requests (D26) may have no phone and no LINE ID, but conversion requires one (minor) | Convert dialog shows the request's phone/LINE ID as editable fields and `convertDialog.contactNeeded` when both are empty; zod `contact_required` stays (a family record needs a way to reach the parent; `guardians_contact_present`) | 30 § 4.3, § 5 inbox copy; 20 § 9.5; 90 P3-14; seed_dev § 7b.1 |
+| R-39 | `saveGuardian` primary swap was two unguarded statements; other `families.functions` write rules were ambiguous; staff could hard-delete contacts (major) | New SQL `set_primary_guardian()` (one transaction; D30); `saveGuardian` writes plain fields first, then the RPC; `isPrimary: false` never un-sets the primary; identity/responsibility columns only on their flags; `saveFamilyContact` re-stamps `guardian_attests_informed_at` only when name/phone change; `deleteFamilyContact` idempotent; `saveFamily` insert sets `created_by`; `family_contacts` hard delete owner only | 0004 §§ 14c, 15; rls_smoke; 10 §§ 8, 11; 00 D30, § 10; 20 § 9.5; 30 § 4.3; 90 P3-01/P3-04/P3-11; seed_dev § 7b.2 |
+| R-40 | P0-17 could not prove or test the role gate (major for Haiku) | Card gate = G4 · 0001 + types check (`current_app_role`, `app_role`); P0-15 records the generated `auth-middleware.ts` imports (40 § 2 row 18); 📝 `auth.middleware.test.ts`; 20 § 6 explains how thrown codes reach the UI (server-function handler, not `errorMiddleware`) | 20 § 6; 40 § 2; 90 § 2, P0-15, P0-17 |
+| R-41 | Type and test gaps in ✅ blocks (minor) | `status: "new" as const`; `children_count ?? 0`; `form_closed` test via `vi.hoisted`; honeypot field has no max; the second `ConsentPurpose` in `staff-alert-text.ts` is no longer exported; P0-10 keeps Cloudflare's dummy test secret; P1-06 reads/deps/types check | 20 §§ 7.8, 7.10, 8.6, 9.1; 90 P0-10, P1-03, P1-06 |
+| R-42 | Rule conflicts that would fail a review (minor) | README: the public/token pass-through validator is the one exception to `.validator(schema)`; `./supabase-admin.server` inside `src/server/` is the same door; a rebuilt `routeTree.gen.ts` is not a stop; the leak grep is run unchanged | README; 20 § 9.0; 90 § 1.6, P1-07, P4-05, P4-06 |
+| R-43 | Strict-TS write traps and missing imports (major for Haiku) | 20 § 9.0 write rules (no `undefined` keys, update-by-id `.select("id")` → `not_found`, guarded indexing, test mocks); `families.schema.ts` imports `ConsentPurpose` and `PaymentRow`, so P3-02 depends on P3-05; `createEnrolmentLink` maps errors with `adminErrorFromDb`; § 9.0 public errors list `22023` | 20 §§ 9.0, 9.5, 9.8; 90 § 4 (batches recomputed), P3-02/P3-03 |
+| R-44 | P4-06 had no gate, missing reads, mixed test scope; P4-04 imported a file from a card it didn't depend on (major for Haiku) | P4-04 and P4-06 depend on P4-07; P4-06 gate G4 · 0005 + `submit_enrolment` in `types.ts`; handler tests only, with a fake fixture and mock shapes; schema tests stay in P4-04 | 20 § 9.8; 90 § 4, P4-04, P4-06 |
+| R-45 | `/book` form: radio groups had no accessible name, a hard-coded honeypot label, no test recipe, and the short notice states a proposed retention with no gate (major) | `aria-labelledby` on each `RadioGroup`; `bookingContent.honeypotLabel`; 📝 `BookingForm.test.tsx` / `BookingThanks.test.tsx` (fireEvent, `LanguageProvider`, fake `window.turnstile`, `ResizeObserver` stub); `notice` marked OWNER-APPROVE and approved at G9a · v1 with G0 Q6 | 30 §§ 3.2, 6, 7; 90 § 2, P1-13, P1-14, P2-08 |
+| R-46 | `AGENTS.md` says copy lives only in `site.tsx` (minor) | Card P0-13 amends that bullet to `src/content/*` | 90 P0-13 |
+| R-47 | Leftovers of R-09/R-14 (minor) | 50 PDPA row s.34, the DSR deadline row and lawyer question 9 describe the D28 restriction; LINE error codes `line_token_http_<status>` / `line_push_http_<status>` everywhere; the `privacy.tsx` code block keeps one sample section per language, so 50 is the only notice wording | 50 §§ 10, 18.1, 28; 40 §§ 5.8, 14; 20 § 14.1; 30 § 3.4 |
+| R-48 | "0005 tables only in Stage B" read as "functions later" (minor) | G4 · 0005 applies the whole file in Stage B, `submit_enrolment` included; only P4 screens wait | 00 § 8 P4; 10 § 1; 0005 header; 90 § 2, P3-17 |
