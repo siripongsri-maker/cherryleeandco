@@ -15,6 +15,13 @@
 --             restriction guard also covers the family row itself and inactive contacts, and ignores FK set-null
 --             columns (R-36); correcting disputed data = lift → correct → restrict (R-37, 50 § 18.4).
 --             Behaviour checks: seed_dev.sql § 7b.8.
+--             Decision 2 (14 Oct 2026): guardian_consent_records is covered by the restriction guard (grants refused,
+--             withdrawals allowed), by export_family_data (access and portability), by erase_family (detached, kept
+--             3 years) and by the purge; view marketing_follow_up_list (staff card P3-19). Checks: seed_dev § 7c.
+--             Round two (14 Oct 2026, brief items 2, 4, 5): export_family_data reads health ONLY through
+--             get_child_health(child, includeHealth) (the plain join is removed); marketing_follow_up_list has one row
+--             per granted guardian and the label 'ครอบครัวน้อง' + the first active child's nickname (+ English label).
+--             erase_family keeps credits (cherrylee.studio_cancel). Checks: seed_dev § 7d.
 -- Delivery (review R-12): 0007 must be applied BEFORE family records (P3) go live, because retention,
 --             export, erasure and restriction for families live here. It depends on 0005, so the order is
 --             0004 → 0005 → 0007 → (Stage B publish); 0006/0006b wait for G9b.
@@ -272,7 +279,7 @@ begin
 end;
 $$;
 
--- BEFORE INSERT/UPDATE on bookings, family_links, consent_records, guardians, children, family_contacts,
+-- BEFORE INSERT/UPDATE on bookings, family_links, consent_records, guardian_consent_records, guardians, children, family_contacts,
 -- and BEFORE UPDATE on families (R-36): refuse new processing for a restricted family. Erasure and the purge run
 -- with cherrylee.allow_purge = 'on' and are never blocked. Columns that a foreign key sets to NULL when a staff
 -- user or a booking request is deleted (identity_checked_by, created_by, source_request_id) count as system columns,
@@ -306,8 +313,8 @@ begin
     end if;
     return new;
   end if;
-  if tg_table_name = 'consent_records' and (to_jsonb(new) ->> 'decision') <> 'granted' then
-    return new;   -- withdrawals and refusals are always allowed
+  if tg_table_name in ('consent_records', 'guardian_consent_records') and (to_jsonb(new) ->> 'decision') <> 'granted' then
+    return new;   -- withdrawals and refusals are always allowed (decision 2: a parent can always withdraw marketing)
   end if;
   if tg_table_name = 'bookings' and tg_op = 'UPDATE' then
     return new;   -- check-in/out, absent, cancel of existing bookings stay possible
@@ -388,6 +395,9 @@ create or replace trigger family_links_block_restricted
   for each row execute function public.block_restricted_family();
 create or replace trigger consent_records_block_restricted
   before insert on public.consent_records
+  for each row execute function public.block_restricted_family();
+create or replace trigger guardian_consent_records_block_restricted
+  before insert on public.guardian_consent_records
   for each row execute function public.block_restricted_family();
 create or replace trigger guardians_block_restricted
   before insert or update on public.guardians
@@ -476,6 +486,9 @@ grant execute on function public.mark_inactive_families() to authenticated, serv
 --    family_links are exported without token_hash. Files (slips, evidence) are referenced by path.
 -- -----------------------------------------------------------------------------
 
+-- Round two (14 Oct 2026, brief item 2, owner-chosen route): child_health is read ONLY through the audited function
+-- get_child_health(child, includeHealth). The owner's access export is a full copy, so it passes includeHealth = true.
+-- No second exception route; the plain join is removed.
 create or replace function public.export_family_data(p_family_id uuid)
 returns jsonb
 language plpgsql
@@ -495,7 +508,7 @@ begin
   end if;
 
   perform public.log_audit_event('export', 'families', p_family_id::text,
-                                 jsonb_build_object('function', 'export_family_data'));
+                                 jsonb_build_object('function', 'export_family_data', 'include_health', true));
 
   select jsonb_build_object(
     'export_format', 'cherrylee-family-export-v1',
@@ -505,14 +518,16 @@ begin
                              from public.guardians g where g.family_id = p_family_id), '[]'::jsonb),
     'children', coalesce((select jsonb_agg(to_jsonb(c) order by c.created_at)
                             from public.children c where c.family_id = p_family_id), '[]'::jsonb),
-    'child_health', coalesce((select jsonb_agg(to_jsonb(h))
-                                from public.child_health h
-                                join public.children c on c.id = h.child_id
+    'child_health', coalesce((select jsonb_agg(to_jsonb(ch) order by c.created_at)
+                                from public.children c
+                               cross join lateral public.get_child_health(c.id, true) as ch
                                where c.family_id = p_family_id), '[]'::jsonb),
     'family_contacts', coalesce((select jsonb_agg(to_jsonb(fc) order by fc.created_at)
                                    from public.family_contacts fc where fc.family_id = p_family_id), '[]'::jsonb),
     'consent_records', coalesce((select jsonb_agg(to_jsonb(cr) order by cr.created_at)
                                    from public.consent_records cr where cr.family_id = p_family_id), '[]'::jsonb),
+    'guardian_consent_records', coalesce((select jsonb_agg(to_jsonb(gcr) order by gcr.given_at)
+                                            from public.guardian_consent_records gcr where gcr.family_id = p_family_id), '[]'::jsonb),
     'package_purchases', coalesce((select jsonb_agg(to_jsonb(pp) order by pp.purchased_on)
                                      from public.package_purchases pp where pp.family_id = p_family_id), '[]'::jsonb),
     'payments', coalesce((select jsonb_agg(to_jsonb(p) order by p.created_at)
@@ -587,6 +602,8 @@ begin
   v_prev_flag := current_setting('cherrylee.allow_purge', true);
   perform set_config('cherrylee.allow_purge', 'on', true);
 
+  -- Round two: a system cancellation gives the credit back (validate_booking skips the notice rule).
+  perform set_config('cherrylee.studio_cancel', 'on', true);
   update public.bookings b
      set status = 'cancelled'::public.booking_status
     from public.sessions s
@@ -596,6 +613,7 @@ begin
      and s.session_date >= (now() at time zone 'Asia/Bangkok')::date;
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('future_bookings_cancelled', v_n);
+  perform set_config('cherrylee.studio_cancel', 'off', true);
 
   update public.consent_records
      set family_id = null,
@@ -605,6 +623,15 @@ begin
    where family_id = p_family_id;
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('consent_records_detached', v_n);
+
+  -- Decision 2: the marketing choices of the family's guardians are detached the same way (guardian FK).
+  update public.guardian_consent_records
+     set family_id = null,
+         guardian_id = null,
+         retain_until = now() + interval '3 years'
+   where family_id = p_family_id;
+  get diagnostics v_n = row_count;
+  v_counts := v_counts || jsonb_build_object('guardian_consent_records_detached', v_n);
 
   update public.bookings
      set family_id = null,
@@ -731,6 +758,8 @@ begin
 
   -- 4. Attendance, then money (bookings are always younger than packages/payments).
   --    R-10: count the credits of expiring bookings first, so balances never "get credits back".
+  -- Round two: a credit is used when consumes_credit and status is not 'cancelled' (absent and cancelled_late count;
+  -- a cancellation with notice on time does not), the same rule as validate_booking and package_balances.
   update public.package_purchases pp
      set sessions_used_purged = least(pp.sessions_total, pp.sessions_used_purged + x.n)
     from (select b.package_purchase_id, count(*)::smallint as n
@@ -759,6 +788,10 @@ begin
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('consent_records', v_n);
 
+  delete from public.guardian_consent_records where family_id is null and retain_until < now();
+  get diagnostics v_n = row_count;
+  v_counts := v_counts || jsonb_build_object('guardian_consent_records', v_n);
+
   -- 6. Privacy operations logs.
   delete from public.dsr_requests where retain_until < now();
   get diagnostics v_n = row_count;
@@ -784,5 +817,48 @@ $$;
 
 revoke execute on function public.purge_expired_records() from public, anon, authenticated;
 grant execute on function public.purge_expired_records() to service_role;
+
+-- -----------------------------------------------------------------------------
+-- 9. marketing_follow_up_list (decision 2, 14 Oct 2026; staff card P3-19; round two, brief items 4 and 5, 14 Oct 2026)
+--    Staff only, read only. ONE ROW PER GUARDIAN whose CURRENT marketing choice is 'granted' (a family with two
+--    consenting guardians has two rows, each with the same family label; brief item 5).
+--    Columns (minimum to reach a family by hand from the studio's LINE OA chat):
+--      family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at.
+--    Family label (brief item 4): 'ครอบครัวน้อง' + the NICKNAME of the family's first ACTIVE child (ordered by
+--    created_at, then id); English: 'Family of ' + the same nickname. Nickname only: never a full name, age or health data.
+--    The nickname is stored without the word น้อง, because the label adds it.
+--    A family with no active child is not listed (no label to show); staff look at it on the family page.
+--    Excluded: inactive families and restricted families (PDPA s.34: no new processing, marketing included).
+--    Built on current_marketing_consents (0005), so the caller's RLS applies (staff only). No phone, e-mail or
+--    LINE ID. No child data is shown to anyone outside staff. The guardian_name tells apart the two rows of one family.
+-- -----------------------------------------------------------------------------
+
+create or replace view public.marketing_follow_up_list
+with (security_invoker = true)
+as
+select f.id                                 as family_id,
+       g.id                                 as guardian_id,
+       g.full_name                          as guardian_name,
+       ('ครอบครัวน้อง' || first_child.nickname) as family_label_th,
+       ('Family of ' || first_child.nickname)   as family_label_en,
+       cm.given_at                          as consented_at
+  from public.current_marketing_consents cm
+  join public.guardians g on g.id = cm.guardian_id
+  join public.families f on f.id = cm.family_id
+  join lateral (
+    select c.nickname
+      from public.children c
+     where c.family_id = f.id
+       and c.is_active
+     order by c.created_at, c.id
+     limit 1
+  ) as first_child on true
+ where cm.decision = 'granted'
+   and f.status = 'active'
+   and f.processing_restricted_at is null;
+
+revoke all on table public.marketing_follow_up_list from anon, authenticated;
+grant select on table public.marketing_follow_up_list to authenticated;
+grant select on table public.marketing_follow_up_list to service_role;
 
 -- End of 0007_privacy_ops.sql

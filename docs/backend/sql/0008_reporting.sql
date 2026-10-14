@@ -11,6 +11,9 @@
 --   "Apply this SQL migration exactly as written. Do not change it."
 -- After applying: git pull --ff-only; types.ts must contain "report_requests_weekly".
 -- Rules: additive only. Safe to run twice (create or replace view).
+-- Round two (14 Oct 2026, brief item 1): 'cancelled_late' (late or no notice) uses one credit, keeps its seat and is
+-- counted as NOT attended. 'cancelled' = notice on time (no credit). New columns are appended at the end, so the
+-- existing column order is unchanged and create or replace view still works.
 -- Note: booking requests are deleted after 6 months, so request reports cover at most ~6 months;
 --       bookings after 24 months; payments after ~5 years.
 -- =============================================================================
@@ -43,17 +46,19 @@ select
   s.capacity,
   s.seats_held_offline,
   (count(b.id) filter (where b.status in ('held'::public.booking_status, 'confirmed'::public.booking_status,
-                                          'attended'::public.booking_status, 'absent'::public.booking_status)))::integer
+                                          'attended'::public.booking_status, 'absent'::public.booking_status,
+                                          'cancelled_late'::public.booking_status)))::integer
                                                                                     as seats_booked,
   (count(b.id) filter (where b.status = 'attended'::public.booking_status))::integer as attended,
   (count(b.id) filter (where b.status = 'absent'::public.booking_status))::integer   as absent,
   (count(b.id) filter (where b.status = 'cancelled'::public.booking_status))::integer as cancelled,
-  public.session_seats_left(s.id)                                                   as seats_left
+  public.session_seats_left(s.id)                                                   as seats_left,
+  (count(b.id) filter (where b.status = 'cancelled_late'::public.booking_status))::integer as cancelled_late
 from public.sessions s
 left join public.bookings b on b.session_id = s.id
 group by s.id;
 
-comment on view public.report_session_fill is 'Seats booked / left per session (staff only).';
+comment on view public.report_session_fill is 'Seats booked / left per session (staff only). seats_booked includes cancelled_late (the seat stays taken). cancelled = notice on time (no credit); cancelled_late = late or no notice (one credit used).';
 
 
 -- Attendance per calendar month (non-cancelled sessions).
@@ -70,15 +75,18 @@ select
   round(
     100.0 * count(b.id) filter (where b.status = 'attended'::public.booking_status)
     / nullif(count(b.id) filter (where b.status in ('attended'::public.booking_status,
-                                                   'absent'::public.booking_status)), 0),
-    1)                                                                               as attendance_rate_pct
+                                                   'absent'::public.booking_status,
+                                                   'cancelled_late'::public.booking_status)), 0),
+    1)                                                                               as attendance_rate_pct,
+  (count(b.id) filter (where b.status = 'cancelled_late'::public.booking_status))::integer as cancelled_late,
+  (count(b.id) filter (where b.consumes_credit and b.status <> 'cancelled'::public.booking_status))::integer as credit_bookings
 from public.sessions s
 left join public.bookings b on b.session_id = s.id
 where s.status <> 'cancelled'::public.session_status
 group by 1;
 
 comment on view public.report_attendance_monthly is
-  'Attendance per month. attendance_rate_pct = attended / (attended + absent) × 100, NULL when nothing was marked.';
+  'Attendance per month. attendance_rate_pct = attended / (attended + absent + cancelled_late) × 100, NULL when nothing was marked. cancelled_late (late or no notice) uses a credit and counts as not attended (round two). cancelled = notice on time, no credit. credit_bookings = consumes_credit and not cancelled, the same rule as package_balances (held and confirmed count for future months).';
 
 
 -- Revenue per month (Bangkok) and method. OWNER ONLY: other callers get zero rows.

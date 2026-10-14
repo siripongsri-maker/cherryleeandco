@@ -13,6 +13,14 @@
 --             create_family_from_request() in one transaction (R-15), cancelling a session cancels its
 --             held/confirmed bookings (R-23); second review: set_primary_guardian() swaps the primary
 --             guardian in one transaction (R-39). Behaviour checks: seed_dev.sql § 7b.
+--             Decision 10 (14 Oct 2026): studio_settings.cancel_notice_hours (default 3, 0–72) and
+--             check_make_up_notice() for the make-up booking rule. Also queue_storage_cleanup() covers
+--             guardian_consent_records (decision 2). Checks: seed_dev.sql § 7c.
+--             Round two (14 Oct 2026, brief item 1): credit rule by notice. A cancellation with notice on or
+--             before (session start − cancel_notice_hours) keeps its credit (status 'cancelled'). 'absent' and
+--             'cancelled_late' use one credit. New: booking_status 'cancelled_late', enum notice_channel
+--             ('line', 'in_person'), bookings.cancel_notice_channel / cancel_notice_at; validate_booking decides
+--             the cancellation status; seat and balance functions count 'cancelled_late'. Checks: seed_dev § 5, § 7d.
 -- Depends on: 0001, 0002, 0003
 -- Apply via Lovable chat:
 --   "Apply this SQL migration exactly as written. Do not change it."
@@ -53,7 +61,14 @@ begin
   end if;
   if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
                  where n.nspname = 'public' and t.typname = 'booking_status') then
-    create type public.booking_status as enum ('held', 'confirmed', 'attended', 'absent', 'cancelled');
+    -- Round two: 'cancelled_late' = cancelled with late or no notice (uses one credit, like 'absent').
+    -- Only if booking_status ALREADY exists without it (not the case before G4): run
+    -- alter type public.booking_status add value 'cancelled_late'; as its own step first.
+    create type public.booking_status as enum ('held', 'confirmed', 'attended', 'absent', 'cancelled', 'cancelled_late');
+  end if;
+  if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
+                 where n.nspname = 'public' and t.typname = 'notice_channel') then
+    create type public.notice_channel as enum ('line', 'in_person');
   end if;
 end
 $$;
@@ -83,7 +98,7 @@ create table if not exists public.families (
 comment on table public.families is
   'Customer household. Lawful basis s.24(3) contract. Deleted (via erase_family, P5) 12 months after last activity.';
 comment on column public.families.staff_note is 'Practical notes only. NEVER health, allergy or religious information.';
-comment on column public.families.display_name is 'Staff label, e.g. "ครอบครัวน้องมะลิ". No surnames needed.';
+comment on column public.families.display_name is 'Staff label. Not used on the follow-up list: that list uses ครอบครัวน้อง + the first active child''s nickname (round two, brief item 4). No surnames needed.';
 
 create index if not exists families_status_idx on public.families (status);
 create index if not exists families_retain_until_idx on public.families (retain_until) where retain_until is not null;
@@ -227,7 +242,7 @@ create table if not exists public.package_purchases (
 );
 
 comment on table public.package_purchases is
-  'Package bought by a family. price_thb is a snapshot of PRICES in src/content/business.ts at purchase time (staff may enter a different agreed amount). expires_on is NULL unless the studio sets an expiry rule. Used = live credit bookings + sessions_used_purged.';
+  'Package bought by a family. price_thb is a snapshot of PRICES in src/content/business.ts at purchase time (staff may enter a different agreed amount). expires_on is NULL unless the studio sets an expiry rule. Used = live credit-using bookings (held, confirmed, attended, absent, cancelled_late; a cancellation with notice on time is not used) + sessions_used_purged (round two, brief item 1).';
 
 create index if not exists package_purchases_family_idx on public.package_purchases (family_id);
 create index if not exists package_purchases_status_idx on public.package_purchases (status);
@@ -290,6 +305,11 @@ create table if not exists public.bookings (
   checked_out_at             timestamptz,
   picked_up_by_guardian_id   uuid references public.guardians (id) on delete set null,
   picked_up_by_contact_id    uuid references public.family_contacts (id) on delete set null,
+  -- Round two (14 Oct 2026, brief item 1): the notice for a cancellation, recorded by staff on the booking screen.
+  -- channel 'line' = notice_at is the time the LINE message arrived (taken from the OA chat); 'in_person' = told at the studio.
+  -- validate_booking() sets the status from this: on time -> 'cancelled'; late or missing -> 'cancelled_late'.
+  cancel_notice_channel      public.notice_channel,
+  cancel_notice_at           timestamptz,
   staff_note                 text check (staff_note is null or char_length(staff_note) <= 500),
   created_by                 uuid references auth.users (id) on delete set null,
   created_at                 timestamptz not null default now(),
@@ -298,12 +318,15 @@ create table if not exists public.bookings (
   constraint bookings_checkout_after_checkin
     check (checked_out_at is null or (checked_in_at is not null and checked_out_at >= checked_in_at)),
   constraint bookings_one_pickup_person
-    check (picked_up_by_guardian_id is null or picked_up_by_contact_id is null)
+    check (picked_up_by_guardian_id is null or picked_up_by_contact_id is null),
+  constraint bookings_notice_pair
+    check ((cancel_notice_channel is null) = (cancel_notice_at is null))
 );
 
 comment on table public.bookings is
-  'A child''s seat in a session. Credit-consuming bookings count against package_purchases.sessions_total unless cancelled. Kept 24 months after the session date.';
+  'A child''s seat in a session. Credit-using bookings (held, confirmed, attended, absent, cancelled_late) count against package_purchases.sessions_total. A cancellation with notice on time (status cancelled) does not. Kept 24 months after the session date.';
 
+-- cancelled_late keeps its seat: it is a late cancellation, so the seat is not free for someone else.
 create unique index if not exists bookings_one_active_seat_per_child
   on public.bookings (session_id, child_id) where status <> 'cancelled';
 create index if not exists bookings_session_idx on public.bookings (session_id);
@@ -403,6 +426,10 @@ $$;
 -- * a credit-consuming booking needs an ACTIVE package with sessions left (row-locked)
 -- * family_id / child_id cannot be switched to ANOTHER family/child (cancel and book again);
 --   they may only become NULL (family erased / FK ON DELETE SET NULL).
+-- * round two (14 Oct 2026): the status of a cancellation comes from its notice. Notice at or before
+--   (session start − studio_settings.cancel_notice_hours, default 3) -> 'cancelled' (credit kept). No notice,
+--   or later notice -> 'cancelled_late' (one credit used). Skipped when cherrylee.studio_cancel = 'on'
+--   (studio or system cancellation: the credit comes back).
 -- References are checked only on INSERT or when that column changes to a non-NULL value, so the
 -- cascaded SET NULL updates Postgres makes while a family is being deleted never trip a check.
 create or replace function public.validate_booking()
@@ -413,6 +440,9 @@ set search_path = ''
 as $$
 declare
   v_session_date      date;
+  v_session_start     timestamptz;
+  v_notice_hours      integer;
+  v_recompute         boolean := false;
   v_total             smallint;
   v_purged            smallint;
   v_pp_status         public.package_purchase_status;
@@ -422,11 +452,35 @@ declare
   v_check_guardian    boolean := false;
   v_check_contact     boolean := false;
 begin
-  select s.session_date into v_session_date from public.sessions s where s.id = new.session_id;
+  select s.session_date, (s.session_date + s.starts_at) at time zone 'Asia/Bangkok'
+    into v_session_date, v_session_start
+    from public.sessions s where s.id = new.session_id;
   if v_session_date is null then
     raise exception 'Session not found' using errcode = '23503';
   end if;
   new.retain_until := ((v_session_date + interval '24 months') at time zone 'Asia/Bangkok');
+
+  -- Round two (14 Oct 2026, brief item 1): the notice decides a cancellation. It is decided again only when the
+  -- status or the notice changes, so an unrelated later edit (a staff note, the family-erase anonymising update)
+  -- never flips a studio cancellation into a late one. Runs before the credit checks below.
+  if tg_op = 'INSERT' then
+    v_recompute := true;
+  else
+    v_recompute := new.status is distinct from old.status
+                   or new.cancel_notice_at is distinct from old.cancel_notice_at
+                   or new.cancel_notice_channel is distinct from old.cancel_notice_channel;
+  end if;
+  if v_recompute
+     and new.status in ('cancelled'::public.booking_status, 'cancelled_late'::public.booking_status)
+     and coalesce(current_setting('cherrylee.studio_cancel', true), '') <> 'on' then
+    select st.cancel_notice_hours into v_notice_hours from public.studio_settings st where st.id;
+    if new.cancel_notice_at is not null
+       and new.cancel_notice_at <= v_session_start - make_interval(hours => coalesce(v_notice_hours, 3)) then
+      new.status := 'cancelled'::public.booking_status;        -- notice on time: credit kept, nothing deducted
+    else
+      new.status := 'cancelled_late'::public.booking_status;   -- late or no notice: one credit used
+    end if;
+  end if;
 
   if tg_op = 'INSERT' then
     if new.child_id is null then
@@ -572,7 +626,7 @@ begin
         v_reason := 'replaced';
       end if;
     end if;
-  elsif tg_table_name = 'consent_records' then
+  elsif tg_table_name in ('consent_records', 'guardian_consent_records') then
     v_bucket := 'consent-evidence';
     if tg_op = 'DELETE' then
       v_path := old.evidence_path;
@@ -621,10 +675,13 @@ as $$
 begin
   if new.status = 'cancelled'::public.session_status
      and old.status is distinct from 'cancelled'::public.session_status then
+    -- Round two: a studio cancellation gives the credit back, so validate_booking must not apply the notice rule.
+    perform set_config('cherrylee.studio_cancel', 'on', true);
     update public.bookings b
        set status = 'cancelled'::public.booking_status
      where b.session_id = new.id
        and b.status in ('held'::public.booking_status, 'confirmed'::public.booking_status);
+    perform set_config('cherrylee.studio_cancel', 'off', true);
   end if;
   return null;
 end;
@@ -721,7 +778,7 @@ left join public.bookings b on b.package_purchase_id = pp.id
 group by pp.id;
 
 comment on view public.package_balances is
-  'Sessions left per package purchase = sessions_total − sessions_used_purged − non-cancelled credit-consuming bookings (absent counts as used; staff choose absent vs cancelled).';
+  'Sessions left per package purchase = sessions_total − sessions_used_purged − non-cancelled credit-consuming bookings (absent and cancelled_late use a credit; a cancellation with notice on time, status cancelled, does not).';
 
 revoke all on table public.package_balances from anon, authenticated;
 grant select on table public.package_balances to authenticated;
@@ -752,7 +809,8 @@ begin
                   from public.bookings b
                  where b.session_id = s.id
                    and b.status in ('held'::public.booking_status, 'confirmed'::public.booking_status,
-                                    'attended'::public.booking_status, 'absent'::public.booking_status)),
+                                    'attended'::public.booking_status, 'absent'::public.booking_status,
+                                    'cancelled_late'::public.booking_status)),
              0)
          end
     into v_left
@@ -790,7 +848,8 @@ as $$
             from public.bookings b
            where b.session_id = s.id
              and b.status in ('held'::public.booking_status, 'confirmed'::public.booking_status,
-                              'attended'::public.booking_status, 'absent'::public.booking_status))
+                              'attended'::public.booking_status, 'absent'::public.booking_status,
+                              'cancelled_late'::public.booking_status))
     from public.sessions s
    where s.session_date between p_from and p_to
    order by s.session_date, s.starts_at;
@@ -1035,7 +1094,8 @@ begin
       for delete to authenticated using ((select public.is_owner()));
   end if;
 
-  -- bookings: staff select/insert/update (cancel = status 'cancelled'); owner delete.
+  -- bookings: staff select/insert/update (cancel = status 'cancelled' with notice on time, else validate_booking sets
+  -- 'cancelled_late'); owner delete.
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'bookings' and policyname = 'bookings_staff_select') then
     create policy "bookings_staff_select" on public.bookings
       for select to authenticated using ((select public.is_staff()));
@@ -1165,5 +1225,71 @@ $$;
 
 revoke execute on function public.purge_expired_records() from public, anon, authenticated;
 grant execute on function public.purge_expired_records() to service_role;
+
+-- -----------------------------------------------------------------------------
+-- 18. Decision 10 (14 Oct 2026): cancel_notice_hours and the make-up notice rule.
+--     Packages never expire; siblings may share a package (owner Q4, still open). Credit rule (round two, 14 Oct 2026):
+--     see the bookings comment and validate_booking(). A make-up session needs notice at least
+--     cancel_notice_hours (default 3) BEFORE the ORIGINAL session starts. The studio_settings table is the
+--     single-row settings table from 0001: the key is a column here, so it is additive (no edit to 0001).
+-- -----------------------------------------------------------------------------
+
+alter table public.studio_settings
+  add column if not exists cancel_notice_hours integer not null default 3;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'studio_settings_cancel_notice_hours_range') then
+    alter table public.studio_settings
+      add constraint studio_settings_cancel_notice_hours_range
+      check (cancel_notice_hours between 0 and 72);
+  end if;
+end
+$$;
+
+comment on column public.studio_settings.cancel_notice_hours is
+  'Hours of notice a family must give before the ORIGINAL session starts for a make-up session (decision 10). Owner sets it; default 3; 0–72.';
+
+-- Only the owner changes it (the existing owner update policy applies; column grant added here).
+grant update (cancel_notice_hours) on table public.studio_settings to authenticated;
+
+-- check_make_up_notice(original session, notice time) — the make-up booking function calls this BEFORE it inserts
+-- the make-up booking. It raises 23514 when the notice came too late. p_notice_at is the time the family gave
+-- notice (the server passes now() for a live request; staff pass the time a LINE message was received).
+-- Round two: p_notice_at is the cancel_notice_at of the ORIGINAL booking, and a make-up is booked only when that
+-- booking's status is 'cancelled' (notice on time). A 'cancelled_late' or 'absent' booking gets no make-up.
+create or replace function public.check_make_up_notice(
+  p_original_session_id uuid,
+  p_notice_at           timestamptz default now()
+)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_hours integer;
+  v_start timestamptz;
+begin
+  perform public.require_staff_or_server();
+
+  select st.cancel_notice_hours into v_hours
+    from public.studio_settings st where st.id;
+  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
+    from public.sessions s where s.id = p_original_session_id;
+  if v_start is null then
+    raise exception 'Session not found' using errcode = '23503';
+  end if;
+
+  if p_notice_at > v_start - make_interval(hours => coalesce(v_hours, 3)) then
+    raise exception 'Make-up needs notice at least % hours before the original session',
+      coalesce(v_hours, 3) using errcode = '23514';
+  end if;
+end;
+$$;
+
+revoke execute on function public.check_make_up_notice(uuid, timestamptz) from public, anon;
+grant execute on function public.check_make_up_notice(uuid, timestamptz) to authenticated, service_role;
 
 -- End of 0004_families.sql

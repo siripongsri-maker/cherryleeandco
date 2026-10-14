@@ -45,16 +45,17 @@ Apply **in this order**, one file per G4 gate. Each file says at the top what it
 | 1 | `sql/0001_foundation.sql` | P0 · F0-05 | enums `app_role`, `site_lang`; tables `user_roles`, `audit_log`, `studio_settings` (1 row); functions `has_role`, `is_staff`, `is_owner`, `current_app_role`, `require_staff_or_server`, `require_owner_or_server`, `set_updated_at`, `prevent_update_delete`, `log_audit_event`, `audit_row_change`, `prevent_last_owner_removal` | G1–G3 done → **G4** → G5 |
 | 2 | `sql/0002_booking_requests.sql` | P1 · F1-01 | 6 enums; `booking_requests` (D26 contact rule), `rate_limit_events`, `staff_notifications`; `is_valid_request_children`, `check_rate_limit`, `purge_expired_records` v1; pg_cron jobs `purge-expired-records`, `cron-history-cleanup` (fallback route if refused, R-19) | **G4** |
 | 3 | `sql/0003_sessions.sql` | P2 · F2-01 | `session_status`; `sessions`; `booking_requests.session_id`; `session_seats_left` v1 (staff/server only), `get_sessions_with_seats` v1, `get_open_sessions`, `generate_weekend_sessions` | **G4** |
-| 4 | `sql/0004_families.sql` | P3 · F3-01 | 6 enums; `families`, `guardians` (+`pending_link_changes`), `children` (+`allergy_check_needed_at`), `family_contacts` (+`is_active`), `package_purchases` (+`sessions_used_purged`), `payments`, `bookings`, `storage_cleanup_queue`; view `package_balances`; `booking_requests.converted_family_id`; `session_seats_left` v2, `get_sessions_with_seats` v2, `create_family_from_request`, `set_primary_guardian`; triggers `guard_package_purge_counter`, `cancel_bookings_of_cancelled_session`; bucket `payment-slips`; `purge_expired_records` v2 | **G4**, G11 |
-| 5 | `sql/0005_consent_health.sql` | P4 · F4-01 (the **whole file** is applied in **Stage B**, functions included; only the P4 screens wait, 00 § 8.0) | 9 enums; `consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets` (+`legacy_consent_purposes`), `media_asset_children`; view `current_consents`; consent + health functions; `queue_consent_change_alert` trigger; `consent_matrix`, `media_publishability`, `set_media_asset_children`, `publish_consent_text`, `submit_enrolment`; bucket `consent-evidence`; seed of the 6 homepage clips into `media_assets`; `purge_expired_records` v3 | **G4** |
-| 6 | `sql/0006_seed_consent_texts.sql` | P4 · F4-02 | v1 consent wording, TH + EN, 4 purposes (health, website, social, YouTube; data only) | **G9b first**, then **G4** |
+| 4 | `sql/0004_families.sql` | P3 · F3-01 | 6 enums; `families`, `guardians` (+`pending_link_changes`), `children` (+`allergy_check_needed_at`), `family_contacts` (+`is_active`), `package_purchases` (+`sessions_used_purged`), `payments`, `bookings`, `storage_cleanup_queue`; view `package_balances`; `booking_requests.converted_family_id`; `session_seats_left` v2, `get_sessions_with_seats` v2, `create_family_from_request`, `set_primary_guardian`; triggers `guard_package_purge_counter`, `cancel_bookings_of_cancelled_session`; bucket `payment-slips`; `purge_expired_records` v2; `studio_settings.cancel_notice_hours` and `check_make_up_notice()` (decision 10, 14 Oct 2026); round two (14 Oct 2026): `notice_channel`, status `cancelled_late`, `bookings.cancel_notice_channel` / `cancel_notice_at`, the credit rule in `validate_booking` (brief item 1) | **G4**, G11 |
+| 5 | `sql/0005_consent_health.sql` | P4 · F4-01 (the **whole file** is applied in **Stage B**, functions included; only the P4 screens wait, 00 § 8.0) | 9 enums; `consent_texts`, `consent_records`, `child_health`, `family_links`, `media_assets` (+`legacy_consent_purposes`), `media_asset_children`, `guardian_consent_records` (§ 6.17a, decision 2), `media_assets.on_print` (decision 3); views `current_consents`, `current_marketing_consents`; consent + health functions; `queue_consent_change_alert` trigger; `consent_matrix`, `media_publishability`, `set_media_asset_children`, `publish_consent_text`, `submit_enrolment`; bucket `consent-evidence`; seed of the 2 founder clips into `media_assets` (the 4 class clips only after the written source is recorded, G0 Q15, § 18); `purge_expired_records` v3 | **G4** |
+| 6a | `sql/0006a_seed_marketing_text.sql` | P3 · card P3-20 (decision 2) | v1 `marketing_line` wording, TH + EN (guardian scope; separate opt-in; never pre-ticked) | **G9b first**, then **G4 · 0006a** (Stage B, before the family create screens go live) |
+| 6 | `sql/0006_seed_consent_texts.sql` | P4 · F4-02 | v1 consent wording, TH + EN, 5 purposes (health, website, social, YouTube, print; data only; `media_print` added 14 Oct 2026) | **G9b first**, then **G4** |
 | 6b | `sql/0006b_seed_media_parents_group.sql` | P4 · F4-02 (optional) | v1 wording for `media_parents_group`, only if G0 Q9 confirms the private parents' group | G0 Q9 = yes, **G9b**, **G4** |
-| 7 | `sql/0007_privacy_ops.sql` | P5 · F5-01 (applied in **Stage B**, after 0005) | 4 enums; `dsr_requests`, `breach_incidents`; restriction columns + `set_family_restriction`, `guard_family_restriction_columns`, `block_restricted_family`; `mark_inactive_families`, `export_family_data`, `erase_family`; `purge_expired_records` v4 (complete) | **G4** |
-| 8 | `sql/0008_reporting.sql` | P6 · F6-01 | views `report_requests_weekly`, `report_session_fill`, `report_attendance_monthly`, `report_revenue_monthly` | **G4** |
+| 7 | `sql/0007_privacy_ops.sql` | P5 · F5-01 (applied in **Stage B**, after 0005) | 4 enums; `dsr_requests`, `breach_incidents`; restriction columns + `set_family_restriction`, `guard_family_restriction_columns`, `block_restricted_family`; `mark_inactive_families`, `export_family_data`, `erase_family`; `purge_expired_records` v4 (complete); `guardian_consent_records` in the restriction guard, export, erase and purge; view `marketing_follow_up_list` (decision 2) | **G4** |
+| 8 | `sql/0008_reporting.sql` | P6 · F6-01 | views `report_requests_weekly`, `report_session_fill` (+`cancelled_late`), `report_attendance_monthly` (+`cancelled_late`, `credit_bookings`), `report_revenue_monthly` | **G4** |
 | — | `sql/tests/rls_smoke.sql` | after any file | read-only security check (BEGIN … ROLLBACK) | builder runs in **Cloud → SQL editor**, user OK |
 | — | `sql/seed_dev.sql` | after 0007 + 0008 | **fake** data + behaviour checks, always ROLLBACK. Not a migration. | builder runs in **Cloud → SQL editor** (or local Supabase), user OK |
 
-**Apply order:** 0001 → 0002 → 0003 → 0004 → 0005 → 0007 → 0006 (+0006b) → 0008. 0007 comes before 0006 because Stage B
+**Apply order:** 0001 → 0002 → 0003 → 0004 → 0005 → 0007 → 0006a (Stage B, after G9b) → 0006 (+0006b, Stage C) → 0008. 0007 comes before 0006a and 0006 because Stage B
 (family records) needs retention, export, erasure and restriction, while 0006 waits for the lawyer (G9b).
 
 `purge_expired_records()` is re-declared **in full** in 0002 (v1), 0004 (v2), 0005 (v3) and 0007 (v4). The returned
@@ -125,6 +126,7 @@ JSON has a `"version"` key, so you can see which one is live.
            │                └─n:m─ media_asset_children ──► media_assets
            ├─1:n─ family_contacts   (emergency / authorised pickup)
            ├─1:n─ family_links      (enrol / manage tokens, hash only)
+           ├─1:n─ guardian_consent_records (marketing_line, guardian scope; holds no child data)
            ├─1:n─ package_purchases ◄─ payments (slip_path → bucket payment-slips)
            └─0:n─ dsr_requests (family_id nullable)
 
@@ -207,8 +209,9 @@ Identical to `00-overview.md` § 10.
 | `package_purchase_status` | `active`, `closed`, `void` | 0004 |
 | `payment_method` | `promptpay`, `bank_transfer`, `cash`, `other` | 0004 |
 | `payment_status` | `pending`, `paid`, `refunded`, `void` | 0004 |
-| `booking_status` | `held`, `confirmed`, `attended`, `absent`, `cancelled` | 0004 |
-| `consent_purpose` | `health_allergy`, `media_parents_group`, `media_website`, `media_social`, `media_youtube` | 0005 |
+| `booking_status` | `held`, `confirmed`, `attended`, `absent`, `cancelled` (notice on time, no credit), `cancelled_late` (late or no notice, one credit; round two, 14 Oct 2026) | 0004 |
+| `notice_channel` | `line`, `in_person` (round two, 14 Oct 2026: channel of a cancellation notice on `bookings`) | 0004 |
+| `consent_purpose` | `health_allergy`, `media_parents_group`, `media_website`, `media_social`, `media_youtube`, `marketing_line` (guardian scope only, 14 Oct 2026: `consent_records` refuses it; `consent_status`, `consent_matrix` and `can_publish_media` never list it), `media_print` (decision 3; a child media purpose) | 0005 |
 | `consent_decision` | `granted`, `refused`, `withdrawn` | 0005 |
 | `consent_given_by` | `guardian`, `child` | 0005 |
 | `consent_channel` | `web`, `line`, `paper`, `in_person` | 0005 |
@@ -222,8 +225,11 @@ Identical to `00-overview.md` § 10.
 | `dsr_status` | `received`, `in_review`, `waiting_for_requester`, `extended`, `completed`, `refused` | 0007 |
 | `breach_risk` | `unlikely`, `risk`, `high` | 0007 |
 
-Allergen chips (`child_health.allergens`, CHECK-enforced): `peanut`, `tree_nut`, `milk`, `egg`, `wheat`, `soy`, `fish`,
-`shellfish`, `sesame`. Anything else goes in `other_allergens`.
+Allergen keys (`child_health.allergens`, CHECK-enforced, 10 keys): `peanut`, `tree_nut`, `milk`, `egg`, `wheat`, `flour`,
+`soy`, `fish`, `shellfish`, `sesame`. Round two (owner, 14 Oct 2026, brief item 7): `flour` is new and covers all kinds of
+flour and products made with flour (Thai label "แป้ง (ทุกชนิด และผลิตภัณฑ์จากแป้ง)", English "Flour (all kinds, and products made with flour)").
+`wheat` keeps its own key ("แป้งสาลี / ข้าวสาลี"). Nuts: one group "ถั่ว" in the UI with two choices, `peanut` (ถั่วลิสง) and
+`tree_nut` (ถั่วเปลือกแข็ง); both keys are kept. Anything else goes in `other_allergens`.
 
 Status labels for the admin (from 00-overview "COPY KEYS"): `new` ใหม่ / New · `contacted` ติดต่อแล้ว / Contacted ·
 `waitlisted` รอคิว / Waitlisted · `converted` จองแล้ว / Booked · `closed` ปิด / Closed · `spam` สแปม / Spam.
@@ -281,10 +287,11 @@ Exactly one row (`id = true`), inserted by the migration.
 | `booking_form_open` | boolean | | `true` | `submitBookingRequest` returns `form_closed` when false |
 | `staff_alerts_enabled` | boolean | | `true` | `notifyStaff` records `skipped` when false |
 | `default_session_capacity` | integer | ✓ | | > 0. NULL until the owner sets it (group size isn't published). |
+| `cancel_notice_hours` | integer | | 3 | (decision 10, 14 Oct 2026; added by 0004) hours of notice a family must give **before the ORIGINAL session starts** for a make-up session. 0–72 (CHECK). Owner sets it. Used by `check_make_up_notice()`. Packages never expire, and a missed day does not deduct a credit (see § 18, open conflict). |
 | `created_at`, `updated_at` | timestamptz | | `now()` | |
 | `updated_by` | uuid | ✓ | | server function sets `context.userId` |
 
-RLS: staff select; owner update (columns `booking_form_open`, `staff_alerts_enabled`, `default_session_capacity`,
+RLS: staff select; owner update (columns `booking_form_open`, `staff_alerts_enabled`, `default_session_capacity`, `cancel_notice_hours`,
 `updated_by`). Audited.
 
 ### 6.4 `booking_requests` (P1 · 0002; +`session_id` 0003; +`converted_family_id` 0004)
@@ -375,7 +382,7 @@ RLS: staff select/insert/update; owner delete. Public read only via `get_open_se
 | Column | Type | N | Default | Notes |
 |---|---|---|---|---|
 | `id` | uuid | | | |
-| `display_name` | text | | | 1–80, a staff label (e.g. "ครอบครัวน้องมะลิ") |
+| `display_name` | text | | | 1–80, a staff label. Never a child's nickname on any list (20 § 9.5a). OPEN (owner): the label rule for the follow-up list (card P3-19). |
 | `processing_restricted_at` | timestamptz | ✓ | | (0007, D28/R-09) PDPA s.34 restriction in force; set only via `set_family_restriction()` (owner) |
 | `restriction_note` | text | ✓ | | (0007) ≤ 200, short reason, never health details |
 | `preferred_lang` | `site_lang` | | `th` | |
@@ -505,16 +512,18 @@ A child's seat in a session, credit use and attendance.
 | `family_id` | uuid | ✓ | | → `families`, set null. **Filled automatically from the child** if omitted. Can't change family. |
 | `package_purchase_id` | uuid | ✓ | | → `package_purchases`, set null; required when `consumes_credit` |
 | `consumes_credit` | boolean | | true | |
-| `status` | `booking_status` | | `confirmed` | `absent` uses a credit; `cancelled` returns it (staff choose) |
+| `status` | `booking_status` | | `confirmed` | `absent` and `cancelled_late` use a credit; `cancelled` (notice on time) does not. Staff choose absent or cancelled; `validate_booking()` makes a cancellation `cancelled_late` when its notice is late or missing (round two, brief item 1) |
 | `checked_in_at`, `checked_out_at` | timestamptz | ✓ | | out ≥ in |
 | `picked_up_by_guardian_id` | uuid | ✓ | | → `guardians` of the same family |
 | `picked_up_by_contact_id` | uuid | ✓ | | → `family_contacts` of the same family **with `is_authorised_pickup`** (only one of the two pickup columns) |
+| `cancel_notice_channel` | `notice_channel` | ✓ | | `line` (notice from the studio's LINE OA chat) or `in_person`. Round two (14 Oct 2026). Set together with `cancel_notice_at` (CHECK `bookings_notice_pair`). |
+| `cancel_notice_at` | timestamptz | ✓ | | The time the notice arrived (for LINE: the time the LINE message arrived, not the time it was typed). Round two. |
 | `staff_note` | text | ✓ | | ≤ 500 |
 | `created_by` | uuid | ✓ | | |
 | `created_at`, `updated_at` | timestamptz | | `now()` | |
 | `retain_until` | timestamptz | | trigger | session date + 24 months |
 
-Partial unique index: one non-cancelled booking per child per session. `validate_booking()` refuses a credit booking when
+Partial unique index: one booking per child per session that is not `cancelled` (`cancelled_late` keeps the seat). `validate_booking()` refuses a credit booking when
 the package is not `active` or has no sessions left (row-locked). Seats are **not** enforced by the DB (staff may
 overbook on purpose; the UI warns). RLS: staff select/insert/update; owner delete. Audited.
 
@@ -586,11 +595,52 @@ pages read texts via the service role.
 | `created_at` | timestamptz | | trigger | `clock_timestamp()` so rows written in one transaction stay ordered |
 | `retain_until` | timestamptz | ✓ | | NULL while the family exists; erase sets now() + 3 years |
 
-Insert rules (`validate_consent_record`): text exists and matches the purpose; a **grant** needs a text that is in effect,
+Purpose `marketing_line` is refused here (check `consent_records_no_marketing`): that choice is guardian scope only (§ 6.17a). Insert rules (`validate_consent_record`): text exists and matches the purpose; a **grant** needs a text that is in effect,
 not retired, and explicit for health; child and guardian belong to the family; a **guardian grant** needs
 `has_parental_responsibility = true`. A health `refused`/`withdrawn` (guardian **or** child) deletes the `child_health`
 row immediately (`apply_consent_withdrawal`). RLS: staff select; staff insert (column list in 0005) with
 `recorded_by = auth.uid()`; the server writes web consents. Audited.
+
+### 6.17a `guardian_consent_records` (P4 · 0005; used from Stage B by P3-04 and P3-11, and on `/my` in Stage C) — **new, 14 Oct 2026**
+
+**Append-only** guardian-scope marketing choice (decision 2). Purpose `marketing_line` only. It is about the **parent**
+who receives the messages, never the child: there is **no child column**, and no function, view or policy joins
+children to this table. "Not now" = no row = not granted. Never pre-ticked. Giving consent = a `granted` row.
+Withdrawing = a **new** `withdrawn` row (rows are never edited or deleted, so a withdrawal is as easy as giving).
+
+| Column | Type | N | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid | | `gen_random_uuid()` | |
+| `family_id` | uuid | ✓* | | → `families` (no action). *Required on insert; NULL only after erase |
+| `guardian_id` | uuid | ✓* | | → `guardians` (no action). *Required on insert; NULL only after erase |
+| `purpose` | `consent_purpose` | | `marketing_line` | must be `marketing_line` |
+| `consent_text_id` | uuid | | | → `consent_texts`; the text must be `marketing_line` (seeded by 0006a) |
+| `decision` | `consent_decision` | | | `granted` or `withdrawn` only (CHECK) |
+| `given_at` | timestamptz | | trigger | set to `clock_timestamp()` when written; **cannot be back-dated**. For a paper or LINE choice, the signed form or the message is the evidence |
+| `channel` | `consent_channel` | | | `web` (the parent on `/my`, via a private link) · `line` · `paper` · `in_person` (staff) |
+| `method` | `consent_method` | | | `web` ⇒ `checkbox` |
+| `recorded_by` | uuid | ✓ | | staff user id (no FK). **Required when channel ≠ web** |
+| `evidence_path` | text | ✓ | | object in bucket `consent-evidence`, same path rule as `consent_records` |
+| `family_link_id` | uuid | ✓ | | the private link used (web); no FK |
+| `guardian_name_snapshot` | text | ✓ | trigger | the guardian's name when the row was written |
+| `retain_until` | timestamptz | ✓ | | NULL while the family exists; erase sets `now() + 3 years` |
+
+Constraints: `purpose = 'marketing_line'`; `decision in (granted, withdrawn)`; `web ⇒ checkbox`; non-web ⇒ `recorded_by`;
+family and guardian both set, **or** `retain_until` set (detached after erase).
+
+Insert rules (`validate_guardian_consent_record`): the text exists and is `marketing_line`; a **grant** needs a text in
+effect and not retired; the guardian belongs to the family. There is **no** parental-responsibility rule here (PDPA s.20
+is about consenting for a child; the parent is the data subject). **Restricted families** (0007, D28): a grant is refused
+with 23514 `Family processing is restricted`; a withdrawal is always allowed.
+
+Reads: the latest row per guardian is view `current_marketing_consents` (0005); the staff follow-up list is view
+`marketing_follow_up_list` (0007, card P3-19): one row per guardian whose current choice is `granted`, for active,
+non-restricted families, with `family_label_th` / `family_label_en` (`ครอบครัวน้อง` + the first active child's nickname only), guardian name and consent date (no phone, no email, no LINE ID, no full name, age or health data). One row per granted guardian (brief item 5, round two, 14 Oct 2026: a family with two consenting guardians has two rows; 20 § 9.5a must match).
+
+RLS: staff select; staff insert (column list above; `recorded_by = auth.uid()`; channel ≠ web). Web rows come from the
+server (service role) through the private link. No update or delete policies: append-only (42501), except inside
+`purge_expired_records()` and `erase_family()`. Audited. Triggers: `guardian_consent_records_validate`,
+`_append_only`, `_queue_storage_cleanup` (delete), `_audit`, and `_block_restricted` (0007).
 
 ### 6.18 `child_health` (P4 · 0005)
 
@@ -600,7 +650,7 @@ Sensitive data (PDPA s.26). Exists only while the guardian's explicit consent st
 |---|---|---|---|---|
 | `id` | uuid | | | |
 | `child_id` | uuid | | | → `children`, cascade; unique |
-| `allergens` | text[] | | `{}` | subset of the 9 chips |
+| `allergens` | text[] | | `{}` | subset of the 10 allergen keys (round two adds `flour`) |
 | `other_allergens` | text | ✓ | | ≤ 200 |
 | `foods_to_avoid` | text | ✓ | | ≤ 300; **never ask the reason** (could reveal religion) |
 | `care_notes` | text | ✓ | | ≤ 500 |
@@ -608,7 +658,7 @@ Sensitive data (PDPA s.26). Exists only while the guardian's explicit consent st
 | `updated_by` | uuid | ✓ | | staff id, or NULL (parent via link). No FK. |
 | `created_at`, `updated_at` | timestamptz | | `now()` | |
 
-**No privileges for anon or authenticated.** Read: `get_child_health()` (full, audited) and
+**No privileges for anon or authenticated.** Read: `get_child_health(child, includeHealth)` (audited; allergens always; `foods_to_avoid` and `care_notes` only when `includeHealth` is true; `includeHealth` is required, round two) and
 `list_session_health_flags()` (chips + flags, audited). Write: `upsert_child_health()`. The trigger
 `enforce_health_consent` raises 42501 unless `has_active_consent(child, 'health_allergy')`. Audited.
 
@@ -644,15 +694,17 @@ revocation, or enrol use. Audited.
 | `legacy_consent_note` | text | ✓ | | pre-system confirmation (text) |
 | `legacy_consent_purposes` | `consent_purpose[]` | | `{}` | (R-11) channels the pre-system confirmation covers; set by the 0005 seed from G0 Q15; **never written by the admin** |
 | `on_parents_group` | boolean | | false | (**new**) matches purpose `media_parents_group` |
-| `on_website`, `on_social`, `on_youtube` | boolean | | false | where it is published now |
+| `on_website`, `on_social`, `on_youtube`, `on_print` | boolean | | false | where it is published now (`on_print` added 14 Oct 2026, decision 3, matches purpose `media_print`) |
 | `status` | `media_asset_status` | | `active` | `taken_down` needs `taken_down_at` |
 | `taken_down_at` | timestamptz | ✓ | | |
 | `staff_note` | text | ✓ | | ≤ 500 |
 | `created_by`, `created_at`, `updated_at` | | | | |
 
-0005 seeds the six homepage clips from `src/content/videos.ts` (YouTube ids and English titles; the four class clips
-get the legacy note "Studio confirmed parents' permission to show this clip on the website on 2026-10-13, before this
-system.").
+0005 seeds the six homepage clips from `src/content/videos.ts` (YouTube ids and English titles). The **two founder clips**
+are seeded at once. The **four class clips** are **gated** (decision 7, 14 Oct 2026): their legacy cover is all five child
+media channels, with the note "Owner statement 14 Oct 2026; written source to be recorded before G4 (G0 Q15)", but the
+written source is pending, so they are seeded only when the session setting `cherrylee.legacy_clip_source_recorded` is
+`'on'` (see § 18, item 10). The builder never sets it in the file.
 
 `media_asset_children` — `asset_id` → `media_assets` (cascade), `child_id` → `children` (cascade), `created_by`,
 `created_at`, `primary key (asset_id, child_id)`.
@@ -717,12 +769,14 @@ underlying tables decides what comes back).
 |---|---|---|---|
 | `package_balances` | 0004 | `package_purchase_id, family_id, package_code, status, purchased_on, expires_on, sessions_total, sessions_used, sessions_left` (used includes `sessions_used_purged`, R-10) | staff |
 | `current_consents` | 0005 | `consent_record_id, family_id, child_id, purpose, given_by, decision, media_level, consent_text_id, channel, method, created_at` (latest per child × purpose × given_by) | staff |
+| `current_marketing_consents` | 0005 | `guardian_consent_record_id, family_id, guardian_id, purpose, decision, given_at, channel, consent_text_id` (latest per guardian; § 6.17a) | staff |
+| `marketing_follow_up_list` | 0007 | `family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at` (one row per guardian whose current choice is `granted`; label = `ครอบครัวน้อง` + the first active child's nickname, English `Family of <nickname>`; nickname only; active, non-restricted families only; decision 2 and brief items 4 and 5 of 14 Oct 2026; card P3-19) | staff |
 | `report_requests_weekly` | 0008 | `week_start (Monday, Bangkok), status, requests, children` | staff |
-| `report_session_fill` | 0008 | `session_id, session_date, status, capacity, seats_held_offline, seats_booked, attended, absent, cancelled, seats_left` | staff |
-| `report_attendance_monthly` | 0008 | `month, sessions, bookings, attended, absent, cancelled, attendance_rate_pct` | staff |
+| `report_session_fill` | 0008 | `session_id, session_date, status, capacity, seats_held_offline, seats_booked, attended, absent, cancelled, seats_left, cancelled_late` | staff |
+| `report_attendance_monthly` | 0008 | `month, sessions, bookings, attended, absent, cancelled, attendance_rate_pct, cancelled_late, credit_bookings` | staff |
 | `report_revenue_monthly` | 0008 | `month, method, payments_paid, paid_thb, payments_refunded, refunded_thb` | **owner only** (zero rows for staff) |
 
-`sessions_used` counts non-cancelled credit-consuming bookings (`absent` counts as used).
+`sessions_used` counts credit-using bookings: `consumes_credit` and not `cancelled`, so `absent` and `cancelled_late` count as used and a cancellation with notice on time does not (round two).
 
 ---
 
@@ -739,6 +793,7 @@ underlying tables decides what comes back).
 | `require_staff_or_server()` | void | definer | other functions | passes for staff, `service_role`, or no API role (cron); else 42501 (**new**) |
 | `require_owner_or_server()` | void | definer | other functions | same for owner (**new**) |
 | `log_audit_event(p_action, p_table, p_row_id, p_details)` | void | definer | other definer functions only | (**new**) |
+| `record_family_print(p_family_id, p_include_health)` | void | definer | `getPrintSheet` (P4-25), first call | (**new**, 0005 § 9b) staff or server. One `audit_log` row: action `print_record`, table `families`, row id = family id, details `{include_health}` only. Raises P0002 for a missing family. |
 | `set_updated_at()`, `audit_row_change()`, `prevent_update_delete()` | trigger | — | triggers | bypass for append-only: `set_config('cherrylee.allow_purge','on',true)` inside purge/erase only |
 | `prevent_last_owner_removal()` | trigger | definer | trigger on `user_roles` | (**new**) |
 | `is_valid_request_children(p jsonb)` | boolean | immutable | CHECK on `booking_requests.children` | (**new**) |
@@ -750,28 +805,29 @@ underlying tables decides what comes back).
 | `set_primary_guardian(p_guardian_id uuid)` | void | **invoker** | staff (`saveGuardian`) | (0004, R-39) clears the family's other primary and sets this guardian, one transaction; never leaves a family without a primary; `P0002` if missing; restricted family → `23514` |
 | `get_open_sessions(p_from date, p_to date)` | table `(session_id uuid, session_date date, starts_at time, ends_at time, seats_left int, public_note_th text, public_note_en text)` | definer | **service role only** (`getOpenSessions`) | open sessions from max(p_from, today) to min(p_to, today + 70 days); **never capacity** |
 | `generate_weekend_sessions(p_from date, p_weeks int, p_capacity int)` | integer (created) | **invoker** | staff (`generateWeekendSessions`) | Sat + Sun, 09:00–15:00, status `open`, from the first Saturday on/after `p_from`; `p_weeks` 1–26; NULL capacity → studio default; skips existing dates |
+| `check_make_up_notice(p_original_session_id uuid, p_notice_at timestamptz default now())` | void | definer, stable | staff, server (**make-up booking function, not yet in 20-server-api**) | decision 10 (14 Oct 2026): raises 23514 `Make-up needs notice at least N hours before the original session` when `p_notice_at` is later than the ORIGINAL session start minus `studio_settings.cancel_notice_hours` (default 3). 23503 if the session is missing. The make-up booking function calls it BEFORE the insert. Round two: `p_notice_at` is the ORIGINAL booking's `cancel_notice_at`, and a make-up is booked only when that booking is `cancelled` (on time), not `cancelled_late`. Not granted to anon |
 | `child_age_years(p_birth_month date, p_on date)` | integer | immutable | anyone signed in, server | during the birth month the child counts as the new age (errs towards asking the child) |
 | `has_active_consent(p_child_id uuid, p_purpose consent_purpose)` | boolean | definer | trigger, server (**not** `authenticated`, R-20) | latest guardian = granted AND child hasn't refused/withdrawn. No age rule. |
 | `consent_status(p_child_id uuid, p_purpose consent_purpose)` | text: `granted` \| `needs_child` \| `not_granted` | definer | staff, server | D11: media needs the child's own grant when age ≥ text threshold (default 10) or age unknown; health needs the guardian only |
 | `can_publish_media(p_asset_id uuid, p_purpose consent_purpose)` | boolean | definer | staff, server | media purposes only; rules in 0005: legacy note counts only for `legacy_consent_purposes`; `face_hidden` blocks assets with faces; a `youtube` asset on `media_website` also needs `media_youtube` (R-11) |
-| `consent_matrix(p_child_ids uuid[])` | table `(child_id, purpose, guardian_decision, guardian_media_level, guardian_decided_at, child_decision, status)` | definer | staff, server | 5 rows per child (≤ 200 children); `status` = `consent_status()` (R-18) |
-| `media_publishability()` | table `(asset_id, purpose, publishable)` | definer | staff, server | every asset × 4 media purposes (R-18) |
+| `consent_matrix(p_child_ids uuid[])` | table `(child_id, purpose, guardian_decision, guardian_media_level, guardian_decided_at, child_decision, status)` | definer | staff, server | 6 rows per child (health + 5 media channels; marketing_line is never listed; ≤ 200 children); `status` = `consent_status()` (R-18) |
+| `media_publishability()` | table `(asset_id, purpose, publishable)` | definer | staff, server | every asset × 5 media purposes (R-18; media_print added 14 Oct 2026) |
 | `set_media_asset_children(p_asset_id uuid, p_child_ids uuid[])` | void | **invoker** | staff | replace links in one transaction (≤ 40) (R-15) |
 | `publish_consent_text(p_purpose, p_title_th, p_body_md_th, p_title_en, p_body_md_en, p_is_explicit boolean, p_requires_child_consent_from_age smallint)` | integer (new version) | **invoker** | owner (UI parked; SQL editor) | TH + EN of version N+1 and retire older versions, one transaction (R-15) |
 | `submit_enrolment(p_link_id uuid, p jsonb)` | jsonb | definer | **service role only** (`submitEnrolment`) | whole `/enrol` statement in one transaction, locks the link row; payload and rules in the 0005 comment (R-15, R-05, R-06, R-21, R-22) |
-| `get_child_health(p_child_id uuid)` | table `(child_id, allergens text[], other_allergens, foods_to_avoid, care_notes, has_allergy, updated_at)` | definer, volatile | staff (`getChildHealth`) | **one audit row per call** |
+| `get_child_health(p_child_id uuid, p_include_health boolean)` | table `(child_id, allergens text[], other_allergens, foods_to_avoid, care_notes, has_allergy, updated_at)` | definer, volatile | staff (`getChildHealth`), and the owner export with `true` | **one audit row per call**, with `include_health` in the details. `foods_to_avoid` and `care_notes` are NULL unless `p_include_health` is true. NULL is refused (22004). Round two, 14 Oct 2026 |
 | `upsert_child_health(p_child_id uuid, p_allergens text[], p_other_allergens text, p_foods_to_avoid text, p_care_notes text)` | void | definer | staff (`saveChildHealth`), server (`submit_enrolment`) | 42501 without consent; '' → NULL; chips de-duplicated; clears `children.allergy_check_needed_at` |
 | `list_session_health_flags(p_session_id uuid)` | table `(child_id uuid, nickname text, health_consent text, has_health_record bool, allergens text[], has_allergy bool, has_other_allergens bool, has_foods_to_avoid bool, has_care_notes bool, health_updated_at timestamptz, allergy_check_needed_at timestamptz)` | definer, volatile | staff (`getSessionHealthFlags`) | **one audit row per call**; booked (non-cancelled) children only; feeds the three roster states (R-07) |
 | `mark_inactive_families()` | integer | definer | purge (daily), owner | sets `status`, `last_activity_at`, `retain_until`; skips restricted families |
 | `set_family_restriction(p_family_id uuid, p_restricted boolean, p_note text)` | void | definer | owner (`setFamilyRestriction`) | the only way to change the restriction columns; restricting also revokes unused **enrol** links (manage links stay for withdrawals) (D28) |
-| `export_family_data(p_family_id uuid)` | jsonb | definer | owner (`exportFamilyData`) | one family only; no token hashes; audit `export` |
+| `export_family_data(p_family_id uuid)` | jsonb | definer | owner (`exportFamilyData`) | one family only; no token hashes; audit `export`; health only through `get_child_health(child, true)` (round two, brief item 2) |
 | `erase_family(p_family_id uuid)` | jsonb counts | definer | owner (`eraseFamily`), purge | see § 13; audit `erase`; cannot be undone |
 
 Trigger-only functions added by this design (all **new**): `set_accounting_retain_until`, `validate_booking`,
 `sync_child_last_session`, `queue_storage_cleanup`, `consent_texts_guard`, `validate_consent_record`,
 `apply_consent_withdrawal`, `enforce_health_consent`, `set_dsr_deadlines`, `set_breach_deadlines`; from the review:
 `guard_package_purge_counter` (R-10), `cancel_bookings_of_cancelled_session` (R-23), `queue_consent_change_alert` (D29),
-`guard_family_restriction_columns` and `block_restricted_family` (D28).
+`guard_family_restriction_columns` and `block_restricted_family` (D28); decision 2 (14 Oct 2026): `validate_guardian_consent_record` (0005), and `block_restricted_family` also guards `guardian_consent_records` (0007).
 
 pg_cron jobs (0002): `purge-expired-records` at `15 19 * * *` UTC (02:15 Bangkok) → `select public.purge_expired_records();`
 and `cron-history-cleanup` at `0 20 * * *` → deletes `cron.job_run_details` older than 7 days.
@@ -793,6 +849,7 @@ and `cron-history-cleanup` at `0 20 * * *` → deletes `cron.job_run_details` ol
 | `bookings` | `set_updated_at`; `validate_booking` (insert/update); `block_restricted_family` (0007, insert only in effect) | audit; `sync_child_last_session` (insert, update of status/session/child, delete) |
 | `consent_texts` | `consent_texts_guard` (insert: sha256; update: only `retired_at`; delete: refused) | — |
 | `consent_records` | `validate_consent_record` (insert); `prevent_update_delete` (update/delete); `block_restricted_family` (0007, grants only) | audit; `apply_consent_withdrawal` (insert); `queue_consent_change_alert` (insert, D29); `queue_storage_cleanup` (delete) |
+| `guardian_consent_records` | `validate_guardian_consent_record` (insert); `prevent_update_delete` (update/delete); `block_restricted_family` (0007, insert; grants only) | audit; `queue_storage_cleanup` (delete) |
 | `child_health` | `enforce_health_consent` (insert/update); `set_updated_at` | audit |
 | `family_links` | `set_updated_at`; `block_restricted_family` (0007, insert) | audit |
 | `dsr_requests` | `set_dsr_deadlines`; `set_updated_at` | audit |
@@ -839,12 +896,14 @@ the named functions. `service_role` bypasses RLS and has all privileges on every
 | `storage_cleanup_queue` | — | — | — | S U(cols) | |
 | `consent_texts` | — | — | S | S I(cols) U(retired_at) | immutable |
 | `consent_records` | — | — | S I(cols, own `recorded_by`) | same | append-only |
+| `guardian_consent_records` | — | — | S I(cols; own `recorded_by`; channel ≠ web) | same | append-only; guardian scope (`marketing_line`) only; no child data (§ 6.17a) |
 | `child_health` | — | — | fn | fn | `get_child_health`, `list_session_health_flags`, `upsert_child_health` |
 | `family_links` | — | — | S I(own `created_by`) U(revoked_at) | same | token functions use the server |
 | `media_assets` | — | — | S I U | S I U D | |
 | `media_asset_children` | — | — | S I D | S I D | |
 | `dsr_requests` | — | — | — | S I U | |
 | `breach_incidents` | — | — | — | S I U | |
+| views `current_marketing_consents`, `marketing_follow_up_list` | — | 0 rows | S | S | staff only through the base tables' RLS (decision 2) |
 | views (`package_balances`, `current_consents`, `report_*`) | — | 0 rows | S | S | `report_revenue_monthly`: owner only |
 | bucket `payment-slips` | — | — | S I | S I D | |
 | bucket `consent-evidence` | — | — | S I | S I D | |
@@ -891,13 +950,36 @@ includes the owner. Fields marked ⚠ are sensitive (s.26).
 | `media_asset_children` | Who appears in which asset | s.19/s.20 consent (publication) | Until the child/family is deleted; yearly review | Staff |
 | `dsr_requests` · `requester_name`, `requester_contact`, `details`, outcome | Handle rights requests on time | s.24(6) (PDPC access rules: keep ≥ 2 years) | 3 years after the response | Owner |
 | `breach_incidents` · all (no leaked data) | PDPC notification | s.24(6) (s.37(4)) | 5 years | Owner |
+| `guardian_consent_records` · `decision`, `given_at`, `channel`, `method`, `guardian_name_snapshot`, evidence file | Marketing choice: follow-up messages about classes from the studio by LINE (separate opt-in, withdrawable at any time; decision 2) | s.19 consent (opt-in) | While the family exists; then erase + 3 years as evidence | Staff read/append; the parent on `/my` (server) |
+| `media_assets` · `on_print`; `consent_records` with purpose `media_print` | Print use of photos or videos that show children (posters, leaflets; decision 3) | s.19 consent (guardian; the child's own at 10+, D11) | Until withdrawn or removed; consent evidence as for the other media channels | Staff |
+| `marketing_follow_up_list` (view, nothing stored) · family label, guardian name, consent date (no LINE ID) | Staff contact by hand from the studio's LINE OA chat, one family at a time | s.19 consent (opt-in) | Only while the choice is `granted`, the family is active and not restricted | Staff |
 | `storage_cleanup_queue` · paths (uuids only) | Delete files SQL can't | s.24(6) (s.37(3)) | 30 days after done | Owner |
 
 **Not collected** (00-overview § 6): national ID or passport numbers, ID card copies, children's full names, full birth
 dates, schools, gender, nationality, home address, reasons for foods to avoid, medical histories, diagnoses, medication
-lists, raw IPs, cookies, LINE chat content, payer bank account numbers, photos/videos of children, marketing consent.
+lists, raw IPs, cookies, LINE chat content, payer bank account numbers, photos/videos of children. (The marketing choice IS collected since 14 Oct 2026, decision 2, as in § 12 and § 12b; photos for print use are collected by reference only, decision 3.)
 
 ---
+
+### 12b. ROPA entry: family follow-up and print use (decisions 2 and 3, 14 Oct 2026)
+
+Draft for the record of processing (ROPA). The lawyer (G9b) reviews the wording and the lawful basis. Not legal advice.
+
+| Item | Entry |
+|---|---|
+| Activity | Follow-up for families by LINE (by hand), and print use of approved media |
+| Controller | CherryLee & Co. (the studio owner) |
+| Purposes | (a) Send follow-up messages about classes, class times and class-package offers, only to parents who opted in. (b) Use photos or videos that show children in printed materials, only where the consents on the record allow it |
+| Lawful basis | Consent (PDPA s.19), a separate choice for each purpose and each channel. For print use of children's photos: the guardian's consent, and the child's own consent at 10 and over (D11) |
+| Data subjects | Parents and guardians (follow-up). Children and their parents (print use) |
+| Categories | Follow-up: guardian name, LINE ID hint, decision, channel, time, text version, evidence file. The follow-up label uses the child's nickname only (round two, brief item 4). Print use: media reference, title, face-visibility level. No child names in copy, captions or file names |
+| Sensitive data | None in the follow-up choice. Health data is never used for either activity (§ 12, `child_health`) |
+| Recipients | Parents only, through the studio's LINE OA chat. No bulk sends (decision 2). No third-party marketing platform |
+| Processors and transfer | Database and backend on Lovable Cloud (Supabase), Asia Pacific region, outside Thailand (as in § 12 and 40-integrations). LINE Official Account (the studio's own) |
+| Retention | Follow-up choice: while the family exists, then erase + 3 years as evidence. Follow-up list: no separate storage. Print consent: as for the other media channels, until withdrawn; evidence 3 years after erase |
+| Security | RLS (staff only, no anon grant); append-only evidence; audit rows without values; the follow-up list shows no phone, no email and no child name, age or health data (nickname label only); restricted families are excluded (PDPA s.34) |
+| Rights | Access and portability through `export_family_data` (it includes both records). Withdrawal at any time, on `/my`, on LINE, or through staff |
+| Review | Lawyer (G9b) for the 0006 and 0006a texts. Owner for the list of printed materials |
 
 ## 13. Retention and the nightly purge
 
@@ -915,7 +997,7 @@ lists, raw IPs, cookies, LINE chat content, payer bank account numbers, photos/v
 5. `family_links` 30 days after expiry / revocation / enrol use.
 6. `bookings` past `retain_until` (session + 24 months) — their credits are first added to
    `package_purchases.sessions_used_purged` (R-10) — then `payments`, then `package_purchases` (year + 5).
-7. Detached `consent_records` past `retain_until` (erase + 3 years).
+7. Detached `consent_records` and `guardian_consent_records` past `retain_until` (erase + 3 years).
 8. `dsr_requests` (response + 3 years), `breach_incidents` (+ 5 years).
 9. `storage_cleanup_queue` rows done > 30 days ago; `audit_log` past `retain_until` (12 months).
 
@@ -925,6 +1007,7 @@ What `erase_family(id)` does (owner erasure request, or retention):
 |---|---|
 | Future held/confirmed bookings | cancelled (seats freed) |
 | `consent_records` | detached (ids → NULL), name/nickname snapshots kept, `retain_until = now() + 3 years` (**lawyer to confirm**) |
+| `guardian_consent_records` (marketing choices) | Detached: ids → NULL, `retain_until = now() + 3 years`, rows kept as evidence (decision 2) |
 | `bookings` | child/family/pickup → NULL, note → NULL; kept as counts until session + 24 months |
 | `payments`, `package_purchases` | family → NULL, notes → NULL; amounts, dates, receipt numbers and slip files kept (accounting, **G11**) |
 | `booking_requests` of the family | deleted |
@@ -964,7 +1047,7 @@ Everything below is a deliberate change or addition; other files must use these 
   `is_valid_request_children`, `set_accounting_retain_until`, `validate_booking`, `sync_child_last_session`,
   `queue_storage_cleanup`, `consent_texts_guard`, `validate_consent_record`, `apply_consent_withdrawal`,
   `enforce_health_consent`, `set_dsr_deadlines`, `set_breach_deadlines`; second review: `set_primary_guardian`
-  (0004, R-39). Policy renamed: `family_contacts_owner_delete` (was `family_contacts_staff_delete`, R-39).
+  (0004, R-39); decision 10: `check_make_up_notice` (0004); decision 2: `validate_guardian_consent_record` (0005). Policy renamed: `family_contacts_owner_delete` (was `family_contacts_staff_delete`, R-39).
 - Columns: `children.reported_age_years`, `children.reported_age_on`; `consent_records.guardian_name_snapshot`,
   `consent_records.child_nickname_snapshot`; `media_assets.shows_faces`, `media_assets.on_parents_group`;
   `dsr_requests.requester_contact`, `dsr_requests.details`, `dsr_requests.identity_verified_by`,
@@ -973,7 +1056,9 @@ Everything below is a deliberate change or addition; other files must use these 
   `payments.note`; `family_links.updated_at`; `breach_incidents.description`.
 - Return columns: `list_session_health_flags` (`health_consent`, `has_health_record`, `has_other_allergens`,
   `has_foods_to_avoid`, `has_care_notes`); `current_consents.consent_record_id`.
-- Transaction flag: `cherrylee.allow_purge` (as in 00-overview), used only inside `purge_expired_records` / `erase_family`.
+- Tables, views and columns added 14 Oct 2026 (decisions 2, 3, 10): table `guardian_consent_records` (§ 6.17a); views `current_marketing_consents` (0005) and `marketing_follow_up_list` (0007); column `studio_settings.cancel_notice_hours` (0004); column `media_assets.on_print` (0005); purposes `marketing_line` (guardian scope only) and `media_print` (child media); function `check_make_up_notice` (0004).
+- Round two names (14 Oct 2026): booking status `cancelled_late`; enum `notice_channel` (`line`, `in_person`); columns `bookings.cancel_notice_channel` and `bookings.cancel_notice_at`; allergen key `flour`; `get_child_health(p_child_id, p_include_health)`; follow-up view columns `family_label_th` and `family_label_en` (replacing `family_display_name`); report columns `cancelled_late` and `credit_bookings`.
+- Transaction flags: `cherrylee.allow_purge` (as in 00-overview), used only inside `purge_expired_records` / `erase_family`; `cherrylee.studio_cancel` (round two), set only by a studio or system cancellation so that the notice rule is skipped and the credit comes back.
 
 **Rules the server code must follow because of the database**
 
@@ -995,6 +1080,12 @@ Everything below is a deliberate change or addition; other files must use these 
 - `package_purchases.sessions_used_purged` is never sent from TypeScript.
 - `family_contacts`: never `.delete()` from the UI; set `is_active = false`. Pickup choices and the enrol form list
   only `is_active = true` contacts.
+- **Marketing choice (decision 2, 14 Oct 2026).** `/my` writes through the server with `channel = 'web'`, `method = 'checkbox'` and the link id. A tick after no grant inserts `granted`. An untick after a grant inserts `withdrawn`. An untick with no grant inserts nothing (no `refused` row for marketing). Staff screens (P3-04, P3-11) insert with `recorded_by = context.userId` and channel `line`, `paper` or `in_person`. `/enrol` never writes a marketing row. Every marketing row carries the `consent_text_id` of the current `marketing_line` text.
+- **Cancellations (round two, brief item 1).** The staff booking screen sends status `cancelled` (with notice) or `absent`, plus `cancel_notice_channel` (`line` or `in_person`) and `cancel_notice_at`. For LINE, `cancel_notice_at` is the time the message arrived in the OA chat. The database decides: `cancelled` with notice at or before (session start − `cancel_notice_hours`) keeps the credit; late or missing notice becomes `cancelled_late` (one credit, and the seat stays taken). `absent` uses one credit. Server code never writes `cancelled_late` itself.
+- **Health reads (round two, brief item 3).** Health is read only through `get_child_health(child, includeHealth)`, with the boolean chosen by staff for that print (`record_family_print` is called first). Allergens always show; `foods_to_avoid` and `care_notes` show only when true. The export passes true. There is no other route.
+- **Follow-up list (round two, brief items 4 and 5).** `marketing_follow_up_list` has one row per granted guardian. The screen shows `family_label_th` / `family_label_en` and `guardian_name`. Never a full name, age or health data, and only to staff.
+- **Make-up booking (decision 10).** The make-up booking function calls `check_make_up_notice(original_session_id, notice_at)` BEFORE it inserts. `notice_at` is the time the family's notice was received, never a later time. A LINE notice uses the time the message arrived.
+- **Media (decision 3).** `/enrol` and `/my` accept the five child media purposes. `media_print` follows the same publishability and face-level rules as `media_social`.
 
 ---
 
@@ -1035,11 +1126,12 @@ friendly thrown error (staff). Never show the raw message to parents; never log 
 | SQLSTATE | Raised when (message starts with) | Suggested handling |
 |---|---|---|
 | `42501` | not staff/owner (`Not allowed`), health without consent (`Health information needs…`), append-only write, editing a consent text, removing the last owner | staff: show "ไม่มีสิทธิ์ / Not allowed" or the specific hint; public: `server_error` |
-| `23514` | business rule: `No sessions left on this package`, `Package is not active`, `Child does not belong…`, `Pickup contact is not an authorised…`, retired/ineffective consent text, parental-responsibility statement missing, `Request already converted`, `Family processing is restricted` (→ `family_restricted`), CHECK constraints | staff: show the rule in TH/EN; public: `invalid_input` |
+| `23514` | business rule: `No sessions left on this package`, `Package is not active`, `Child does not belong…`, `Pickup contact is not an authorised…`, retired/ineffective consent text, parental-responsibility statement missing, `Request already converted`, `Family processing is restricted` (→ `family_restricted`), `Make-up needs notice at least N hours…` (decision 10), CHECK constraints (incl. `consent_records_no_marketing`) | staff: show the rule in TH/EN; public: `invalid_input` |
 | `23505` | unique: `ref_code` (retry once with a new code), `receipt_no`, one booking per child per session, one primary guardian | staff: "ซ้ำ / Already exists" |
 | `23502` | required value missing (`child_id is required…`, `family_id and child_id are required`) | bug in the caller |
 | `23503` | referenced row missing (`Session not found`, `Consent text not found`, FK) | staff: "ไม่พบข้อมูล / Not found" |
-| `22023` | bad arguments (`check_rate_limit: invalid arguments`, `p_weeks must be between 1 and 26`, `invalid_input: …` from `submit_enrolment`) | bug in the caller; public: `invalid_input` |
+| `22023` | bad arguments (`check_rate_limit: invalid arguments`, `p_weeks must be between 1 and 26`, `invalid_input: …` from `submit_enrolment`, `invalid_input: not a child media purpose`, `marketing_line is a guardian purpose` from `consent_status`) | bug in the caller; public: `invalid_input` |
+| `22004` | `includeHealth must be true or false` (`get_child_health`, round two, brief item 3) | bug in the caller |
 | `P0002` | `Family not found`, `Child not found` | staff: "ไม่พบข้อมูล / Not found" |
 
 ---
@@ -1056,7 +1148,7 @@ friendly thrown error (staff). Never show the raw message to parents; never log 
   consent immutability, health needs consent, audited reads, withdrawal deletes health, 10+ child consent, face level,
   DSR/breach deadlines, export scope, erase, purge; plus § 7b for the review SQL (R-05 alert queue, R-07 marker, R-11
   legacy/YouTube rule, R-15 `create_family_from_request` / `set_media_asset_children` / `publish_consent_text` /
-  `submit_enrolment`, R-21/R-22/R-33/R-34 enrolment rules, R-35, R-36/R-37 restriction, R-39 primary guardian).
+  `submit_enrolment`, R-21/R-22/R-33/R-34 enrolment rules, R-35, R-36/R-37 restriction, R-39 primary guardian). § 7c (14 Oct 2026 decisions): marketing_line (guardian scope, follow-up list, restriction, append-only), media_print (media_social rules), `cancel_notice_hours` and `check_make_up_notice`. § 7d (round two, 14 Oct 2026): the credit rule by notice (exactly on time, one second late, no notice, absent, studio cancellation, notice pair), the report columns, the follow-up two-row rule and nickname-only label, the allergen key `flour`, and `get_child_health` with `includeHealth`.
   The row lock in `submit_enrolment` needs two sessions and is checked by reading the SQL. Prefer a local Supabase; on the Lovable database only with the
   owner's OK, never as a migration, and never without the final `ROLLBACK`.
 - These SQL files were **not executed** while planning (no database is enabled yet). The first G4 is also the first
@@ -1073,3 +1165,11 @@ friendly thrown error (staff). Never show the raw message to parents; never log 
 5. **Owner (G0 Q4)** — may siblings share one package? The DB currently allows any child of the same family to use a family's package.
 6. **Technical (after G2)** — does Lovable's migration tool accept `create extension if not exists pg_cron` and `cron.schedule` in a chat-applied migration, or must Jobs be created another way? (`40-integrations.md` § 7)
 7. **Technical** — does Lovable apply SQL statements on `storage.buckets` / `storage.objects` from chat migrations? If not, create the buckets and the six storage policies through Lovable's Storage UI with the same names and rules.
+8. **Resolved (round two, owner, 14 Oct 2026, brief item 1: option a).** A cancellation with notice on time (at or before the session start minus `cancel_notice_hours`) keeps its credit (`cancelled`). An absence, or a cancellation with late or no notice, uses one credit (`absent` or `cancelled_late`). Implemented in `validate_booking` (0004), `package_balances`, the seat functions, `purge_expired_records` (0007) and the reports (0008). Make-up uses the same notice rule. Open detail for the owner: `cancelled_late` keeps the seat and counts as not attended in the reports.
+9. **Owner and implementer — make-up flow (decision 10), partly resolved.** Notice is given by LINE (staff record channel `line`, with the time the LINE message arrived) or in person (`in_person`). Round two (owner): no web notice form in this scope. Still open: the make-up booking function and screen (20-server-api, 90-task-breakdown). `check_make_up_notice` must receive the ORIGINAL booking's `cancel_notice_at`.
+10. **Builder — class clips (decision 7, G0 Q15): CERTIFIED by the owner on 14 Oct 2026.** The legacy note reads "Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents' LINE group, social, YouTube, print)". G0 Q15 is ticked. The four class clips are still seeded only when `cherrylee.legacy_clip_source_recorded` = `'on'` in the same SQL editor run at G4 · 0005 (the builder's step, never in the file). `src/content/videos.ts` needs no change for this decision.
+11. **Owner (decision 2).** Should the marketing question also appear on `/enrol`? Decision 2 names only P3-04, P3-11 and `/my`, so this draft does not ask it on `/enrol`.
+12. **Owner (decision 3).** Which printed materials the studio really uses. The 0006 `media_print` text names posters, leaflets and promotional handouts as OWNER-APPROVE items; remove any the studio does not use.
+13. **Lawyer (decisions 2 and 3, and brief item 4, G9b).** The `marketing_line` text (0006a): the separate opt-in, the withdrawal promise, the 3-year evidence sentence, and (round two, brief item 4) the child-nickname sentence: the staff list uses the nickname only, for the studio's own follow-up, and is never shown publicly. The `media_print` text (0006) is not changed by this round.
+14. **Resolved (round two, owner, 14 Oct 2026, brief item 5).** The follow-up list has one row per consenting guardian (`marketing_follow_up_list`). A family with two consenting guardians has two rows, each with the same family label; `guardian_name` tells them apart.
+15. **Owner (round two, brief item 4).** A family with no active child is left off the follow-up list (the label needs a nickname). Should such a family get a fallback label instead?

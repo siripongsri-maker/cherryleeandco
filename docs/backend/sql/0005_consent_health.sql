@@ -16,11 +16,17 @@
 --             second review: an unticked /enrol box never withdraws an earlier decision (R-33), a 10+ child's
 --             health "no" blocks a guardian grant with 23514 (R-34), the first health_allergy text only from a
 --             reviewed SQL draft (R-35). Behaviour checks: seed_dev.sql § 7b.
+--             Decisions of 14 Oct 2026: purpose marketing_line (GUARDIAN scope only: table guardian_consent_records,
+--             text in sql/0006a); purpose media_print (same rules as media_social); the four class clips of the
+--             legacy seed are gated by a session setting until G0 Q15 is recorded (decision 7). Checks: seed_dev § 7c.
+--             Round two (14 Oct 2026): allergen key 'flour' (brief item 7); get_child_health takes an
+--             explicit includeHealth (brief item 3); the four class clips' legacy note is the owner's certification
+--             (G0 Q15 ticked). The session-setting gate stays for the builder at G4 · 0005. Checks: seed_dev § 6, § 7d.
 -- Depends on: 0001–0004
 -- Apply via Lovable chat:
 --   "Apply this SQL migration exactly as written. Do not change it."
 -- After applying: git pull --ff-only; types.ts must contain "consent_records", "child_health",
---   "get_child_health", "submit_enrolment" (the WHOLE file is applied at G4 · 0005 in Stage B, including
+--   "get_child_health", "submit_enrolment", "guardian_consent_records" (the WHOLE file is applied at G4 · 0005 in Stage B, including
 --   submit_enrolment; only the P4 screens wait for Stage C). Consent WORDING is seeded separately in 0006 after legal review (G9b).
 -- Rules: additive only. Safe to run twice.
 -- Not legal advice: the children-10+ approach (D11) and the consent wording need a Thai PDPA lawyer.
@@ -36,7 +42,8 @@ begin
   if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
                  where n.nspname = 'public' and t.typname = 'consent_purpose') then
     create type public.consent_purpose as enum
-      ('health_allergy', 'media_parents_group', 'media_website', 'media_social', 'media_youtube');
+      ('health_allergy', 'media_parents_group', 'media_website', 'media_social', 'media_youtube',
+       'marketing_line', 'media_print');
   end if;
   if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
                  where n.nspname = 'public' and t.typname = 'consent_decision') then
@@ -72,6 +79,11 @@ begin
   end if;
 end
 $$;
+
+-- For a database where consent_purpose already existed without the two new values (not a fresh apply).
+-- Each statement is a no-op when the value is present. marketing_line is GUARDIAN scope (see section 5b).
+alter type public.consent_purpose add value if not exists 'marketing_line';
+alter type public.consent_purpose add value if not exists 'media_print';
 
 
 -- -----------------------------------------------------------------------------
@@ -292,7 +304,11 @@ create table if not exists public.consent_records (
   constraint consent_records_web_is_checkbox
     check (channel <> 'web' or method = 'checkbox'),
   constraint consent_records_child_recorded_by_staff
-    check (given_by <> 'child' or (recorded_by is not null and channel in ('in_person', 'paper')))
+    check (given_by <> 'child' or (recorded_by is not null and channel in ('in_person', 'paper'))),
+  -- Decision 2 (14 Oct 2026): the marketing choice is about the parent, never the child. It lives only in
+  -- guardian_consent_records (section 5b), so a child-level row can never carry it.
+  constraint consent_records_no_marketing
+    check (purpose <> 'marketing_line')
 );
 
 comment on table public.consent_records is
@@ -510,6 +526,174 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
+-- 5b. guardian_consent_records — GUARDIAN-scope marketing choice (decision 2, 14 Oct 2026)
+--     Purpose marketing_line: the parent's own opt-in to follow-up messages from the studio about classes,
+--     by LINE, one family at a time (staff contact by hand from the LINE OA chat; no automated bulk sends).
+--     * About the ADULT, never the child: there is no child column here, and no function, view or policy joins
+--       children to this table. consent_records refuses purpose marketing_line (check consent_records_no_marketing).
+--     * "Not now" = no row = not granted. Never pre-ticked. Giving = a 'granted' row; withdrawing = a NEW row with
+--       decision 'withdrawn' (rows are never edited or deleted).
+--     * Append-only like consent_records: UPDATE/DELETE raise 42501, except inside purge_expired_records() and
+--       erase_family() (cherrylee.allow_purge). Erasure detaches the rows (0007 erase_family).
+--     * No PDPA s.20 parental-responsibility rule here: the parent is the person who receives the messages.
+--     * A restricted family (0007) can withdraw, but cannot record a new grant (0007 block_restricted_family).
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.guardian_consent_records (
+  id                      uuid primary key default gen_random_uuid(),
+  family_id               uuid references public.families (id),     -- no action: NULL only after erase
+  guardian_id             uuid references public.guardians (id),    -- no action (an FK action would UPDATE an append-only table)
+  purpose                 public.consent_purpose not null default 'marketing_line',
+  consent_text_id         uuid not null references public.consent_texts (id),
+  decision                public.consent_decision not null,
+  given_at                timestamptz not null default clock_timestamp(),  -- set by trigger; cannot be back-dated
+  channel                 public.consent_channel not null,
+  method                  public.consent_method not null,
+  recorded_by             uuid,                                     -- staff user id (no FK); NULL for the parent's own web choice
+  evidence_path           text check (evidence_path is null
+                                      or evidence_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(jpg|jpeg|png|webp|pdf)$'),
+  family_link_id          uuid,                                     -- the private link used (web); no FK
+  guardian_name_snapshot  text,                                     -- set by trigger
+  retain_until            timestamptz,                              -- NULL while the family exists; erase sets now() + 3 years
+  constraint guardian_consent_records_marketing_only
+    check (purpose = 'marketing_line'),
+  constraint guardian_consent_records_grant_or_withdraw
+    check (decision in ('granted', 'withdrawn')),
+  constraint guardian_consent_records_web_is_checkbox
+    check (channel <> 'web' or method = 'checkbox'),
+  constraint guardian_consent_records_staff_recorded
+    check (channel = 'web' or recorded_by is not null),
+  constraint guardian_consent_records_attached_or_expiring
+    check ((family_id is not null and guardian_id is not null) or retain_until is not null)
+);
+
+comment on table public.guardian_consent_records is
+  'Append-only guardian-scope marketing choice (marketing_line). Current state = latest row per guardian (view current_marketing_consents). Holds no child data. UPDATE/DELETE blocked except inside purge/erase.';
+comment on column public.guardian_consent_records.given_at is
+  'Set by trigger to clock_timestamp() when the row is written. The decision cannot be back-dated. For a paper or LINE choice, the signed form or the message is the evidence (evidence_path).';
+
+create index if not exists guardian_consent_records_guardian_idx
+  on public.guardian_consent_records (guardian_id, given_at desc);
+create index if not exists guardian_consent_records_family_idx on public.guardian_consent_records (family_id);
+create index if not exists guardian_consent_records_retain_until_idx
+  on public.guardian_consent_records (retain_until) where retain_until is not null;
+
+-- BEFORE INSERT: text matches the purpose, a grant needs a text in effect, guardian belongs to the family.
+create or replace function public.validate_guardian_consent_record()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_text_purpose    public.consent_purpose;
+  v_text_retired    timestamptz;
+  v_text_effective  timestamptz;
+  v_guardian_family uuid;
+  v_guardian_name   text;
+begin
+  new.given_at := clock_timestamp();
+  new.retain_until := null;
+
+  select ct.purpose, ct.retired_at, ct.effective_from
+    into v_text_purpose, v_text_retired, v_text_effective
+    from public.consent_texts ct
+   where ct.id = new.consent_text_id;
+  if v_text_purpose is null then
+    raise exception 'Consent text not found' using errcode = '23503';
+  end if;
+  if v_text_purpose <> new.purpose then
+    raise exception 'Consent text purpose does not match the record purpose' using errcode = '23514';
+  end if;
+  if new.decision = 'granted' then
+    if v_text_retired is not null and v_text_retired <= now() then
+      raise exception 'A retired consent text cannot be used for a new grant' using errcode = '23514';
+    end if;
+    if v_text_effective > now() then
+      raise exception 'This consent text is not in effect yet' using errcode = '23514';
+    end if;
+  end if;
+
+  if new.family_id is null or new.guardian_id is null then
+    raise exception 'family_id and guardian_id are required' using errcode = '23502';
+  end if;
+  select g.family_id, g.full_name
+    into v_guardian_family, v_guardian_name
+    from public.guardians g
+   where g.id = new.guardian_id;
+  if v_guardian_family is null or v_guardian_family <> new.family_id then
+    raise exception 'Guardian does not belong to this family' using errcode = '23514';
+  end if;
+
+  new.guardian_name_snapshot := v_guardian_name;
+  return new;
+end;
+$$;
+
+revoke execute on function public.validate_guardian_consent_record() from public, anon, authenticated;
+
+create or replace trigger guardian_consent_records_validate
+  before insert on public.guardian_consent_records
+  for each row execute function public.validate_guardian_consent_record();
+create or replace trigger guardian_consent_records_append_only
+  before update or delete on public.guardian_consent_records
+  for each row execute function public.prevent_update_delete();
+create or replace trigger guardian_consent_records_queue_storage_cleanup
+  after delete on public.guardian_consent_records
+  for each row execute function public.queue_storage_cleanup();
+create or replace trigger guardian_consent_records_audit
+  after insert or update or delete on public.guardian_consent_records
+  for each row execute function public.audit_row_change();
+-- guardian_consent_records_block_restricted is created in 0007 (with the restriction guard).
+
+alter table public.guardian_consent_records enable row level security;
+revoke all on table public.guardian_consent_records from anon, authenticated;
+grant select on table public.guardian_consent_records to authenticated;
+grant insert (family_id, guardian_id, purpose, consent_text_id, decision, channel, method, recorded_by,
+              evidence_path, family_link_id)
+  on table public.guardian_consent_records to authenticated;
+grant all on table public.guardian_consent_records to service_role;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'guardian_consent_records' and policyname = 'guardian_consent_records_staff_select') then
+    create policy "guardian_consent_records_staff_select" on public.guardian_consent_records
+      for select to authenticated using ((select public.is_staff()));
+  end if;
+  -- Staff record a parent's choice made on paper, by LINE or in person; recorded_by must be themselves.
+  -- Web choices (the parent on /my) come from the server through a private link, never from a staff screen.
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'guardian_consent_records' and policyname = 'guardian_consent_records_staff_insert') then
+    create policy "guardian_consent_records_staff_insert" on public.guardian_consent_records
+      for insert to authenticated
+      with check ((select public.is_staff()) and channel <> 'web' and recorded_by = (select auth.uid()));
+  end if;
+end
+$$;
+-- No UPDATE/DELETE policies or grants: append-only.
+
+-- Latest marketing choice per guardian (staff only through RLS). A guardian with no row is not granted.
+create or replace view public.current_marketing_consents
+with (security_invoker = true)
+as
+select distinct on (gcr.guardian_id)
+  gcr.id          as guardian_consent_record_id,
+  gcr.family_id,
+  gcr.guardian_id,
+  gcr.purpose,
+  gcr.decision,
+  gcr.given_at,
+  gcr.channel,
+  gcr.consent_text_id
+from public.guardian_consent_records gcr
+where gcr.guardian_id is not null
+order by gcr.guardian_id, gcr.given_at desc, gcr.id desc;
+
+revoke all on table public.current_marketing_consents from anon, authenticated;
+grant select on table public.current_marketing_consents to authenticated;
+grant select on table public.current_marketing_consents to service_role;
+
+
+-- -----------------------------------------------------------------------------
 -- 6. current_consents — latest decision per child × purpose × given_by
 -- -----------------------------------------------------------------------------
 
@@ -539,15 +723,19 @@ grant select on table public.current_consents to service_role;
 
 -- -----------------------------------------------------------------------------
 -- 7. child_health — allergy / foods to avoid / care notes (PDPA s.26, explicit consent only)
---    No table privileges for staff at all: read via get_child_health() / list_session_health_flags()
+--    No table privileges for staff at all: read via get_child_health(child, includeHealth) / list_session_health_flags()
 --    (both write an audit row), write via upsert_child_health().
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.child_health (
   id               uuid primary key default gen_random_uuid(),
   child_id         uuid not null references public.children (id) on delete cascade,
+  -- Allergen keys (round two, owner, 14 Oct 2026). Labels are in src/content (Thai and English):
+  --   peanut (ถั่วลิสง) and tree_nut (ถั่วเปลือกแข็ง) are one group "ถั่ว" with two choices (both keys kept);
+  --   wheat = "แป้งสาลี / ข้าวสาลี" (kept as its own key);
+  --   flour = "แป้ง (ทุกชนิด และผลิตภัณฑ์จากแป้ง)" / "Flour (all kinds, and products made with flour)".
   allergens        text[] not null default '{}'::text[]
-                     check (allergens <@ array['peanut', 'tree_nut', 'milk', 'egg', 'wheat', 'soy',
+                     check (allergens <@ array['peanut', 'tree_nut', 'milk', 'egg', 'wheat', 'flour', 'soy',
                                                'fish', 'shellfish', 'sesame']::text[]),
   other_allergens  text check (other_allergens is null or char_length(other_allergens) <= 200),
   foods_to_avoid   text check (foods_to_avoid is null or char_length(foods_to_avoid) <= 300),
@@ -662,6 +850,9 @@ declare
   v_age               integer;
 begin
   perform public.require_staff_or_server();
+  if p_purpose = 'marketing_line'::public.consent_purpose then
+    raise exception 'marketing_line is a guardian purpose, not a child purpose' using errcode = '22023';
+  end if;
 
   select cr.decision, cr.consent_text_id
     into v_guardian_decision, v_guardian_text_id
@@ -721,8 +912,12 @@ grant execute on function public.consent_status(uuid, public.consent_purpose) to
 -- 9. Audited health functions (the ONLY way to read or write child_health)
 -- -----------------------------------------------------------------------------
 
--- Full health notes for one child. Staff (or server). Writes ONE audit_log row per call.
-create or replace function public.get_child_health(p_child_id uuid)
+-- Health notes for one child. Staff (or server). Writes ONE audit_log row per call that records the choice.
+-- Round two (brief item 3, 14 Oct 2026): p_include_health is REQUIRED (no default; NULL is refused, 22004).
+-- Allergens and other allergies are always returned (teachers need them in class). foods_to_avoid and care_notes
+-- are returned only when p_include_health is true. The export passes true; the print sheet passes the staff choice.
+drop function if exists public.get_child_health(uuid);
+create or replace function public.get_child_health(p_child_id uuid, p_include_health boolean)
 returns table (
   child_id         uuid,
   allergens        text[],
@@ -740,10 +935,17 @@ as $$
 #variable_conflict use_column
 begin
   perform public.require_staff_or_server();
+  if p_include_health is null then
+    raise exception 'includeHealth must be true or false' using errcode = '22004';
+  end if;
   perform public.log_audit_event('read_health', 'child_health', p_child_id::text,
-                                 jsonb_build_object('function', 'get_child_health'));
+                                 jsonb_build_object('function', 'get_child_health',
+                                                    'include_health', p_include_health));
   return query
-    select h.child_id, h.allergens, h.other_allergens, h.foods_to_avoid, h.care_notes, h.has_allergy, h.updated_at
+    select h.child_id, h.allergens, h.other_allergens,
+           case when p_include_health then h.foods_to_avoid end,
+           case when p_include_health then h.care_notes end,
+           h.has_allergy, h.updated_at
       from public.child_health h
      where h.child_id = p_child_id;
 end;
@@ -849,13 +1051,41 @@ begin
 end;
 $$;
 
-revoke execute on function public.get_child_health(uuid) from public, anon;
+revoke execute on function public.get_child_health(uuid, boolean) from public, anon;
 revoke execute on function public.upsert_child_health(uuid, text[], text, text, text) from public, anon;
 revoke execute on function public.list_session_health_flags(uuid) from public, anon;
-grant execute on function public.get_child_health(uuid) to authenticated, service_role;
+grant execute on function public.get_child_health(uuid, boolean) to authenticated, service_role;
 grant execute on function public.upsert_child_health(uuid, text[], text, text, text) to authenticated, service_role;
 grant execute on function public.list_session_health_flags(uuid) to authenticated, service_role;
 
+
+-- -----------------------------------------------------------------------------
+-- 9b. record_family_print(p_family_id, p_include_health) — the print audit (decision 5, 14 Oct 2026; card P4-25).
+--     Called FIRST by getPrintSheet (20 § 9.16), before any other read. Writes one audit_log row: action 'print_record',
+--     table 'families', row id = the family id, details = { include_health } ONLY (never the content). Staff or server only.
+--     Raises P0002 for a missing family, so nothing is printed for it. Applied with G4 · 0005 (Stage B).
+--     Round two: the same p_include_health is then passed to get_child_health for each child (one choice per print).
+-- -----------------------------------------------------------------------------
+
+create or replace function public.record_family_print(p_family_id uuid, p_include_health boolean)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.require_staff_or_server();
+  if not exists (select 1 from public.families f where f.id = p_family_id) then
+    raise exception 'Family not found' using errcode = 'P0002';
+  end if;
+  perform public.log_audit_event('print_record', 'families', p_family_id::text,
+                                 jsonb_build_object('include_health', coalesce(p_include_health, false)));
+end;
+$$;
+
+revoke execute on function public.record_family_print(uuid, boolean) from public, anon;
+grant execute on function public.record_family_print(uuid, boolean) to authenticated, service_role;
 
 -- -----------------------------------------------------------------------------
 -- 10. media_assets + media_asset_children (D24). We store references and titles only — never files.
@@ -877,6 +1107,7 @@ create table if not exists public.media_assets (
   on_website           boolean not null default false,
   on_social            boolean not null default false,
   on_youtube           boolean not null default false,
+  on_print             boolean not null default false,   -- (decision 3) matches purpose media_print
   status               public.media_asset_status not null default 'active',
   taken_down_at        timestamptz,
   staff_note           text check (staff_note is null or char_length(staff_note) <= 500),
@@ -975,7 +1206,8 @@ declare
   v_level         public.media_level;
 begin
   perform public.require_staff_or_server();
-  if p_purpose = 'health_allergy'::public.consent_purpose then
+  -- Decision 3 (14 Oct 2026): media_print is a media purpose with the same rules as media_social.
+  if p_purpose not in ('media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print') then
     raise exception 'can_publish_media needs a media_* purpose' using errcode = '22023';
   end if;
 
@@ -1023,34 +1255,55 @@ revoke execute on function public.can_publish_media(uuid, public.consent_purpose
 grant execute on function public.can_publish_media(uuid, public.consent_purpose) to authenticated, service_role;
 
 -- Seed: the six clips already on the homepage (src/content/videos.ts, checked 2026-10-13).
--- Public YouTube ids and titles only (not personal data). The four class clips carry the studio's
--- pre-system confirmation; shows_faces defaults to TRUE until staff check each clip.
--- Review R-11 / G0 Q15: BEFORE G4, the builder sets legacy_consent_purposes from the owner's answer to
--- "what did parents agree to for the clips already online?". Default below = website only (the only fact
--- confirmed on 2026-10-13). If the owner confirms YouTube too, use
--- array['media_website','media_youtube']::public.consent_purpose[] and say so in the note. Legacy-only clips
--- are never counted as "needs takedown"; the admin shows "check manually" for channels not covered.
+-- Public YouTube ids and titles only (not personal data). shows_faces defaults to TRUE until staff check each clip.
+-- Two founder clips: seeded now. Four class clips: owner-certified 14 Oct 2026 (G0 Q15 ticked). Their legacy cover is
+-- all five child media channels (website, parents' LINE group, social, YouTube, print). They are seeded only when the
+-- session setting cherrylee.legacy_clip_source_recorded = 'on' (see the block below): the builder sets it at G4 · 0005.
+-- Legacy-only clips are never counted as "needs takedown"; the admin shows "check manually" for channels not covered.
+-- The founder clips show no children: they are seeded at once.
 insert into public.media_assets
   (kind, youtube_id, title, shows_children, shows_faces, legacy_consent_note, legacy_consent_purposes,
    on_website, on_youtube)
 values
-  ('youtube', 'qBoaW6tWiJc', 'Story Playlit: listen to a story, draw it, then act it out', true, true,
-   'Studio confirmed parents'' permission to show this clip on the website on 2026-10-13, before this system.',
-   array['media_website']::public.consent_purpose[], true, true),
-  ('youtube', 'e-WUF2wlGqY', 'In the kitchen with Uncle Lee', true, true,
-   'Studio confirmed parents'' permission to show this clip on the website on 2026-10-13, before this system.',
-   array['media_website']::public.consent_purpose[], true, true),
-  ('youtube', 'AvyI6OT88gQ', 'Shopping at Uncle Lee''s fruit stand', true, true,
-   'Studio confirmed parents'' permission to show this clip on the website on 2026-10-13, before this system.',
-   array['media_website']::public.consent_purpose[], true, true),
-  ('youtube', '9z7-0PwwiI4', 'A real shopping trip, with parents along', true, true,
-   'Studio confirmed parents'' permission to show this clip on the website on 2026-10-13, before this system.',
-   array['media_website']::public.consent_purpose[], true, true),
   ('youtube', '-kH75GL_o9A', 'What would you tell your childhood self? (founders)', false, true, null,
    '{}'::public.consent_purpose[], true, true),
   ('youtube', 'qAx7z_rhIPo', 'Uncle Lee on the Three Jars: saving, spending, giving', false, true, null,
    '{}'::public.consent_purpose[], true, true)
 on conflict (youtube_id) do nothing;
+
+-- The FOUR class clips show children. Owner certification 14 Oct 2026 (G0 Q15 ticked): parents agreed to all five
+-- channels (website, parents' LINE group, social, YouTube, print). The block does nothing unless the session setting
+-- cherrylee.legacy_clip_source_recorded is 'on'. The builder sets it (select set_config('cherrylee.legacy_clip_source_recorded',
+-- 'on', false);) in the SAME SQL editor run at G4 · 0005, and never in this file. Legacy coverage = all five child media channels.
+do $$
+begin
+  if coalesce(current_setting('cherrylee.legacy_clip_source_recorded', true), '') = 'on' then
+    insert into public.media_assets
+      (kind, youtube_id, title, shows_children, shows_faces, legacy_consent_note, legacy_consent_purposes,
+       on_website, on_youtube)
+    values
+      ('youtube', 'qBoaW6tWiJc', 'Story Playlit: listen to a story, draw it, then act it out', true, true,
+       'Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents'' LINE group, social, YouTube, print)',
+       array['media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print']::public.consent_purpose[],
+       true, true),
+      ('youtube', 'e-WUF2wlGqY', 'In the kitchen with Uncle Lee', true, true,
+       'Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents'' LINE group, social, YouTube, print)',
+       array['media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print']::public.consent_purpose[],
+       true, true),
+      ('youtube', 'AvyI6OT88gQ', 'Shopping at Uncle Lee''s fruit stand', true, true,
+       'Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents'' LINE group, social, YouTube, print)',
+       array['media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print']::public.consent_purpose[],
+       true, true),
+      ('youtube', '9z7-0PwwiI4', 'A real shopping trip, with parents along', true, true,
+       'Owner certified 14 Oct 2026: parents agreed to all five channels (website, parents'' LINE group, social, YouTube, print)',
+       array['media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print']::public.consent_purpose[],
+       true, true)
+    on conflict (youtube_id) do nothing;
+  else
+    raise notice 'SKIP the four class clips: the session setting cherrylee.legacy_clip_source_recorded is not on (G0 Q15 ticked 14 Oct 2026; the builder sets it at G4 · 0005)';
+  end if;
+end
+$$;
 
 
 -- -----------------------------------------------------------------------------
@@ -1058,8 +1311,9 @@ on conflict (youtube_id) do nothing;
 --      writes (review R-15). All SECURITY DEFINER ones check require_staff_or_server() first.
 -- -----------------------------------------------------------------------------
 
--- consent_matrix(child ids) — one row per child × purpose (5 purposes) for the family page, the roster
--- and /my/$token. status = consent_status() ('granted' | 'needs_child' | 'not_granted').
+-- consent_matrix(child ids) — one row per child × CHILD purpose (6: health_allergy + 5 media channels) for the
+-- family page, the roster and /my/$token. marketing_line is guardian scope and is never listed here.
+-- status = consent_status() ('granted' | 'needs_child' | 'not_granted').
 create or replace function public.consent_matrix(p_child_ids uuid[])
 returns table (
   child_id              uuid,
@@ -1090,7 +1344,8 @@ begin
            k.decision,
            public.consent_status(c.id, pp.purpose)
       from public.children c
-     cross join unnest(enum_range(null::public.consent_purpose)) as pp(purpose)
+     cross join unnest(array['health_allergy', 'media_parents_group', 'media_website', 'media_social',
+                             'media_youtube', 'media_print']::public.consent_purpose[]) as pp(purpose)
       left join public.current_consents g
              on g.child_id = c.id and g.purpose = pp.purpose and g.given_by = 'guardian'::public.consent_given_by
       left join public.current_consents k
@@ -1100,7 +1355,7 @@ begin
 end;
 $$;
 
--- media_publishability() — every asset × the 4 media purposes, for /admin/media and the dashboard.
+-- media_publishability() — every asset × the 5 media purposes (decision 3 adds media_print), for /admin/media and the dashboard.
 create or replace function public.media_publishability()
 returns table (
   asset_id     uuid,
@@ -1120,7 +1375,7 @@ begin
            pp.purpose,
            public.can_publish_media(ma.id, pp.purpose)
       from public.media_assets ma
-     cross join unnest(array['media_parents_group', 'media_website', 'media_social', 'media_youtube']
+     cross join unnest(array['media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print']
                        ::public.consent_purpose[]) as pp(purpose)
      order by ma.created_at desc, ma.id, pp.purpose;
 end;
@@ -1230,7 +1485,8 @@ grant execute on function public.publish_consent_text(public.consent_purpose, te
 --            "child_id": uuid, "birth_month": "YYYY-MM",
 --            "health": {"decision": "granted"|"refused"|"skipped", "consent_text_id": uuid|null,
 --                       "allergens": [text], "other_allergens": text, "foods_to_avoid": text, "care_notes": text},
---            "media": [{"purpose": "media_website", "on": true|false, "consent_text_id": uuid}, …],  -- ONLY
+--            "media": [{"purpose": "media_website"|"media_parents_group"|"media_social"|"media_youtube"|"media_print",
+--                       "on": true|false, "consent_text_id": uuid}, …],  -- ONLY
 --                      the purposes whose text was shown (R-06); a missing purpose records nothing
 --            "media_level": "face_visible"|"face_hidden"|null }],
 --        "contacts": [{"id": uuid|null, "name": text, "phone": text, "relationship": text,
@@ -1406,8 +1662,11 @@ begin
     v_level := nullif(v_child ->> 'media_level', '')::public.media_level;
     for v_media in select value from jsonb_array_elements(coalesce(v_child -> 'media', '[]'::jsonb)) loop
       v_purpose := (v_media ->> 'purpose')::public.consent_purpose;
-      if v_purpose = 'health_allergy'::public.consent_purpose then
-        raise exception 'invalid_input: health is not a media purpose' using errcode = '22023';
+      -- Only the five child media purposes here (decision 3). Health has its own rules; marketing_line is
+      -- guardian scope and is never part of the enrolment form.
+      if v_purpose is null
+         or v_purpose not in ('media_parents_group', 'media_website', 'media_social', 'media_youtube', 'media_print') then
+        raise exception 'invalid_input: not a child media purpose' using errcode = '22023';
       end if;
       v_prev := null;
       select cr.decision into v_prev

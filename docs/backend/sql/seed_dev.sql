@@ -22,6 +22,10 @@
 -- (R-15, R-38), the consent-change alert queue (D29/R-05), the allergy marker (R-07), the legacy/YouTube media rule
 -- (R-11), set_media_asset_children and publish_consent_text (R-15), set_primary_guardian (R-39), submit_enrolment
 -- (scope, R-21, R-22, R-33, R-34, link_used, health withdrawal) and the restriction guard (D28/R-09/R-36/R-37).
+-- § 7c checks the 14 Oct 2026 decisions: marketing_line (guardian scope, guardian_consent_records, follow-up list),
+-- media_print (same rules as media_social) and cancel_notice_hours with check_make_up_notice (decisions 2, 3, 10).
+-- § 7d checks the round-two decisions of 14 Oct 2026: the credit rule by notice (cancelled vs cancelled_late, absent),
+-- the allergen key flour, get_child_health with includeHealth, and the follow-up label and two-row rule.
 -- Not checkable here: the row LOCK in submit_enrolment (needs two concurrent sessions; the reviewer reads the
 -- FOR UPDATE at card P3-17).
 -- =============================================================================
@@ -298,15 +302,19 @@ begin
     raise notice 'PASS no booking beyond the package credits';
   end;
 
-  -- cancelling returns the credit and the seat
-  update public.bookings set status = 'cancelled' where id = 'b1000000-0000-4000-8000-000000000003';
+  -- round two: cancelled with notice on time (4 hours before N2 starts) returns the credit and the seat
+  update public.bookings
+     set status = 'cancelled', cancel_notice_channel = 'line',
+         cancel_notice_at = (select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' - interval '4 hours'
+                               from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000003')
+   where id = 'b1000000-0000-4000-8000-000000000003';
   select pb.sessions_left into v_left from public.package_balances pb
    where pb.package_purchase_id = 'd0000000-0000-4000-8000-000000000001';
   v_seats := public.session_seats_left('b0000000-0000-4000-8000-000000000003');
   if v_left is distinct from 1 or v_seats is distinct from 1 then
     raise exception 'FAIL cancel should give 1 credit and 1 seat back, got % and %', v_left, v_seats;
   end if;
-  raise notice 'PASS cancel returns credit and seat';
+  raise notice 'PASS cancel with notice on time returns credit and seat (round two)';
 
   -- an emergency-only contact cannot be recorded as the pickup person
   begin
@@ -435,7 +443,7 @@ begin
 
   -- each health read writes exactly one audit row
   select count(*) into v_audit_0 from public.audit_log a where a.action = 'read_health';
-  perform * from public.get_child_health('c0000000-0000-4000-8000-000000000001');
+  perform * from public.get_child_health('c0000000-0000-4000-8000-000000000001', true);
   select count(*) into v_audit_1 from public.audit_log a where a.action = 'read_health';
   if v_audit_1 - v_audit_0 <> 1 then
     raise exception 'FAIL get_child_health wrote % audit rows', v_audit_1 - v_audit_0;
@@ -1055,6 +1063,412 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
+-- 7c. Marketing choice (decision 2), print (decision 3), cancel notice (decision 10), 14 Oct 2026
+-- -----------------------------------------------------------------------------
+-- Two TEST consent texts (version 999; not real wording). The real texts are in 0006 / 0006a.
+insert into public.consent_texts (id, purpose, version, lang, title, body_md, is_explicit, requires_child_consent_from_age)
+values
+  ('60000000-0000-4000-8000-000000000005', 'marketing_line', 999, 'en', 'TEST marketing text',
+   'TEST body — not real wording', false, null),
+  ('60000000-0000-4000-8000-000000000006', 'media_print', 999, 'en', 'TEST print text',
+   'TEST body — not real wording', false, 10);
+
+do $$
+declare
+  v_n     integer;
+  v_start timestamptz;
+begin
+  -- nothing is granted by default: marketing_line (guardian) and media_print (child) start as "not granted"
+  if exists (select 1 from public.current_marketing_consents cm
+              where cm.guardian_id = 'a0000000-0000-4000-8000-000000000001') then
+    raise exception 'FAIL marketing_line is granted by default';
+  end if;
+  if public.consent_status('c0000000-0000-4000-8000-000000000001', 'media_print') <> 'not_granted' then
+    raise exception 'FAIL media_print is granted by default';
+  end if;
+  select count(*) into v_n from public.consent_matrix(array['c0000000-0000-4000-8000-000000000001']::uuid[]);
+  if v_n <> 6 then
+    raise exception 'FAIL consent_matrix should list 6 child purposes, got %', v_n;
+  end if;
+  raise notice 'PASS marketing_line and media_print are not granted by default; consent_matrix lists 6 child purposes';
+
+  -- marketing_line is a guardian purpose: a child-level record is refused
+  begin
+    insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                        given_by, channel, method)
+    values ('f0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
+            'c0000000-0000-4000-8000-000000000001', 'marketing_line', '60000000-0000-4000-8000-000000000005',
+            'withdrawn', 'guardian', 'web', 'checkbox');
+    raise exception 'FAIL a child-level record carried the marketing purpose';
+  exception when check_violation then
+    raise notice 'PASS marketing_line cannot be recorded against a child';
+  end;
+
+  -- a granted choice is on the follow-up list; a later withdrawal takes it off (the latest row wins)
+  insert into public.guardian_consent_records
+    (id, family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
+  values ('6f000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001',
+          'a0000000-0000-4000-8000-000000000001', 'marketing_line', '60000000-0000-4000-8000-000000000005',
+          'granted', 'web', 'checkbox');
+  select count(*) into v_n from public.marketing_follow_up_list fl
+   where fl.guardian_id = 'a0000000-0000-4000-8000-000000000001';
+  if v_n <> 1 then
+    raise exception 'FAIL a granted guardian is missing from the follow-up list (%)', v_n;
+  end if;
+
+  insert into public.guardian_consent_records
+    (id, family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
+  values ('6f000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000001',
+          'a0000000-0000-4000-8000-000000000001', 'marketing_line', '60000000-0000-4000-8000-000000000005',
+          'withdrawn', 'web', 'checkbox');
+  if (select cm.decision from public.current_marketing_consents cm
+       where cm.guardian_id = 'a0000000-0000-4000-8000-000000000001') <> 'withdrawn' then
+    raise exception 'FAIL the latest marketing choice is not the withdrawal';
+  end if;
+  select count(*) into v_n from public.marketing_follow_up_list fl
+   where fl.guardian_id = 'a0000000-0000-4000-8000-000000000001';
+  if v_n <> 0 then
+    raise exception 'FAIL a withdrawn guardian is still on the follow-up list';
+  end if;
+  raise notice 'PASS marketing_line: granted → on the follow-up list; withdrawn → off it (decision 2)';
+
+  -- a guardian choice can be withdrawn, but never deleted or edited (append-only)
+  begin
+    delete from public.guardian_consent_records where id = '6f000000-0000-4000-8000-000000000001';
+    raise exception 'FAIL a guardian consent record was deleted';
+  exception when insufficient_privilege then
+    raise notice 'PASS a guardian consent record can be withdrawn but never deleted';
+  end;
+  begin
+    update public.guardian_consent_records set decision = 'withdrawn'
+     where id = '6f000000-0000-4000-8000-000000000001';
+    raise exception 'FAIL a guardian consent record was edited';
+  exception when insufficient_privilege then
+    raise notice 'PASS a guardian consent record cannot be edited';
+  end;
+
+  -- family 2 is still restricted (section 7b.8): no new marketing grant, but a withdrawal is allowed
+  begin
+    insert into public.guardian_consent_records
+      (family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
+    values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', 'marketing_line',
+            '60000000-0000-4000-8000-000000000005', 'granted', 'web', 'checkbox');
+    raise exception 'FAIL a restricted family recorded a marketing grant';
+  exception when check_violation then null;
+  end;
+  insert into public.guardian_consent_records
+    (family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
+  values ('f0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', 'marketing_line',
+          '60000000-0000-4000-8000-000000000005', 'withdrawn', 'web', 'checkbox');
+  raise notice 'PASS restricted family: marketing grant refused, withdrawal allowed (PDPA s.34)';
+
+  -- decision 3: media_print follows the media_social rules (child level, face level, one channel at a time)
+  insert into public.media_assets (id, kind, title, shows_children, shows_faces, on_print)
+  values ('70000000-0000-4000-8000-000000000002', 'photo', 'TEST print asset', true, true, true);
+  insert into public.media_asset_children (asset_id, child_id)
+  values ('70000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001');
+  if public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_print') then
+    raise exception 'FAIL print use allowed without consent';
+  end if;
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, media_level, channel, method)
+  values ('f0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000001', 'media_print', '60000000-0000-4000-8000-000000000006',
+          'granted', 'guardian', 'face_hidden', 'web', 'checkbox');
+  if public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_print') then
+    raise exception 'FAIL face_hidden print consent still allows an asset that shows faces';
+  end if;
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, media_level, channel, method)
+  values ('f0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000001', 'media_print', '60000000-0000-4000-8000-000000000006',
+          'granted', 'guardian', 'face_visible', 'web', 'checkbox');
+  if not public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_print') then
+    raise exception 'FAIL print asset not publishable after a face_visible print consent';
+  end if;
+  if public.can_publish_media('70000000-0000-4000-8000-000000000002', 'media_social') then
+    raise exception 'FAIL print consent leaked to social';
+  end if;
+  raise notice 'PASS media_print follows the media_social rules (child level, face level, one channel at a time)';
+
+  -- decision 10: cancel_notice_hours defaults to 3, must be 0–72, and the make-up notice rule uses it
+  if (select st.cancel_notice_hours from public.studio_settings st where st.id) <> 3 then
+    raise exception 'FAIL cancel_notice_hours should default to 3';
+  end if;
+  begin
+    update public.studio_settings set cancel_notice_hours = 73 where id;
+    raise exception 'FAIL cancel_notice_hours accepted 73';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.studio_settings set cancel_notice_hours = -1 where id;
+    raise exception 'FAIL cancel_notice_hours accepted -1';
+  exception when check_violation then null;
+  end;
+  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
+    from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000002';
+  perform public.check_make_up_notice('b0000000-0000-4000-8000-000000000002', v_start - interval '3 hours');
+  raise notice 'PASS make-up notice exactly 3 hours before the original session is accepted';
+  begin
+    perform public.check_make_up_notice('b0000000-0000-4000-8000-000000000002', v_start - interval '2 hours');
+    raise exception 'FAIL make-up notice 2 hours before the original session was accepted';
+  exception when check_violation then
+    raise notice 'PASS make-up notice 2 hours before the original session is refused (decision 10)';
+  end;
+end
+$$;
+
+
+-- -----------------------------------------------------------------------------
+-- 7d. Round two (14 Oct 2026): credit rule by notice (brief item 1), allergen 'flour' (item 7), get_child_health with
+--     includeHealth (item 3), follow-up label and the two-row rule (items 4 and 5). FAKE data only.
+--     Family f…0003 is a new test family: one four-pack and two consenting guardians.
+-- -----------------------------------------------------------------------------
+
+do $$
+declare
+  v_today    date := (now() at time zone 'Asia/Bangkok')::date;
+  v_n1       date;
+  v_start    timestamptz;
+  v_left     integer;
+  v_used     integer;
+  v_seats0   integer;
+  v_seats1   integer;
+  v_status   public.booking_status;
+  v_n        integer;
+  v_label    text;
+  v_label_en text;
+begin
+  v_n1 := v_today + ((6 - extract(isodow from v_today)::integer + 7) % 7);
+
+  insert into public.sessions (id, session_date, starts_at, ends_at, capacity, status, public_note_en, staff_note)
+  values
+    ('b0000000-0000-4000-8000-000000000004', v_n1 + 7,  '07:00', '08:00', 10, 'open', 'TEST', 'TEST round two N3'),
+    ('b0000000-0000-4000-8000-000000000005', v_n1 + 14, '07:00', '08:00', 10, 'open', 'TEST', 'TEST round two N4'),
+    ('b0000000-0000-4000-8000-000000000006', v_n1 + 21, '07:00', '08:00', 10, 'open', 'TEST', 'TEST round two N5'),
+    ('b0000000-0000-4000-8000-000000000007', v_n1 + 28, '07:00', '08:00', 10, 'open', 'TEST', 'TEST round two N6');
+
+  insert into public.families (id, display_name, source_request_id)
+  values ('f0000000-0000-4000-8000-000000000003', 'ครอบครัวทดสอบสาม (TEST)', null);
+
+  insert into public.guardians
+    (id, family_id, full_name, phone, is_primary, has_parental_responsibility, responsibility_attested_at,
+     identity_check_method, identity_checked_at)
+  values
+    ('a0000000-0000-4000-8000-0000000000a1', 'f0000000-0000-4000-8000-000000000003', 'ผู้ปกครองทดสอบห้า',
+     '0800000011', true, true, now(), 'line_account', now()),
+    ('a0000000-0000-4000-8000-0000000000a2', 'f0000000-0000-4000-8000-000000000003', 'ผู้ปกครองทดสอบหก',
+     '0800000012', false, true, now(), 'line_account', now());
+
+  -- one active child (the label uses this nickname) and one inactive child (ignored by the label)
+  insert into public.children (id, family_id, nickname, is_active)
+  values ('c0000000-0000-4000-8000-0000000000a1', 'f0000000-0000-4000-8000-000000000003', 'ทดสอบ', true),
+         ('c0000000-0000-4000-8000-0000000000a2', 'f0000000-0000-4000-8000-000000000003', 'ทดสอบเก่า', false);
+
+  insert into public.package_purchases (id, family_id, package_code, sessions_total, price_thb)
+  values ('d0000000-0000-4000-8000-0000000000a1', 'f0000000-0000-4000-8000-000000000003', 'four', 4, 14400);
+
+  -- (1) cancelled with notice EXACTLY cancel_notice_hours (3) before the start: on time, the credit is kept
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000a1', 'b0000000-0000-4000-8000-000000000002',
+          'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
+  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
+    from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000002';
+  update public.bookings
+     set status = 'cancelled', cancel_notice_channel = 'line', cancel_notice_at = v_start - interval '3 hours'
+   where id = 'b1000000-0000-4000-8000-0000000000a1';
+  select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a1';
+  select pb.sessions_left into v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_status is distinct from 'cancelled' or v_left is distinct from 4 then
+    raise exception 'FAIL notice exactly 3 hours before should keep the credit (status %, left %)', v_status, v_left;
+  end if;
+  raise notice 'PASS notice exactly cancel_notice_hours before the session: status cancelled, credit kept';
+
+  -- (2) one second later than the cutoff: cancelled_late, one credit used, the seat stays taken
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000a2', 'b0000000-0000-4000-8000-000000000004',
+          'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
+  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
+    from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000004';
+  v_seats0 := public.session_seats_left('b0000000-0000-4000-8000-000000000004');
+  update public.bookings
+     set status = 'cancelled', cancel_notice_channel = 'in_person',
+         cancel_notice_at = v_start - interval '3 hours' + interval '1 second'
+   where id = 'b1000000-0000-4000-8000-0000000000a2';
+  select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a2';
+  v_seats1 := public.session_seats_left('b0000000-0000-4000-8000-000000000004');
+  select pb.sessions_left into v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_status is distinct from 'cancelled_late' then
+    raise exception 'FAIL one second after the cutoff should be cancelled_late, got %', v_status;
+  end if;
+  if v_seats1 is distinct from v_seats0 then
+    raise exception 'FAIL cancelled_late should keep the seat (% -> %)', v_seats0, v_seats1;
+  end if;
+  if v_left is distinct from 3 then
+    raise exception 'FAIL cancelled_late should use one credit, left %', v_left;
+  end if;
+  raise notice 'PASS notice one second after the cutoff: cancelled_late, one credit used, seat kept';
+
+  -- (3) absent uses one credit (no notice is involved)
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000a3', 'b0000000-0000-4000-8000-000000000005',
+          'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'absent');
+  select pb.sessions_left into v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_left is distinct from 2 then
+    raise exception 'FAIL absent should use one credit, left %', v_left;
+  end if;
+  raise notice 'PASS absent uses one credit';
+
+  -- (4) cancelled with NO notice recorded: cancelled_late, one credit used
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000a4', 'b0000000-0000-4000-8000-000000000006',
+          'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
+  update public.bookings set status = 'cancelled' where id = 'b1000000-0000-4000-8000-0000000000a4';
+  select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a4';
+  select pb.sessions_left into v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_status is distinct from 'cancelled_late' or v_left is distinct from 1 then
+    raise exception 'FAIL cancel without notice should be cancelled_late with one credit used (status %, left %)', v_status, v_left;
+  end if;
+  raise notice 'PASS cancel without notice: cancelled_late, one credit used';
+
+  -- (5) a studio cancellation of the whole session gives the credit back (no notice rule)
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000a5', 'b0000000-0000-4000-8000-000000000007',
+          'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
+  update public.sessions set status = 'cancelled' where id = 'b0000000-0000-4000-8000-000000000007';
+  select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a5';
+  select pb.sessions_left into v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_status is distinct from 'cancelled' or v_left is distinct from 1 then
+    raise exception 'FAIL a studio cancellation should return the credit (status %, left %)', v_status, v_left;
+  end if;
+  raise notice 'PASS studio cancellation of a session returns the credit';
+
+  -- (6) totals: cancelled_late x2 + absent = 3 used, 1 left
+  select pb.sessions_used, pb.sessions_left into v_used, v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_used is distinct from 3 or v_left is distinct from 1 then
+    raise exception 'FAIL totals should be 3 used and 1 left, got % and %', v_used, v_left;
+  end if;
+  raise notice 'PASS package totals agree with the credit rule (3 used, 1 left)';
+
+  -- (7) a notice time without a channel is refused (the notice pair)
+  begin
+    update public.bookings set cancel_notice_at = now() where id = 'b1000000-0000-4000-8000-0000000000a5';
+    raise exception 'FAIL a notice time without a channel was accepted';
+  exception when check_violation then
+    raise notice 'PASS notice channel and notice time are stored together';
+  end;
+
+  -- (8) the reports count cancelled_late the same way
+  select rf.cancelled_late into v_n from public.report_session_fill rf
+   where rf.session_id = 'b0000000-0000-4000-8000-000000000004';
+  if v_n is distinct from 1 then
+    raise exception 'FAIL report_session_fill should show 1 cancelled_late on N3, got %', v_n;
+  end if;
+  raise notice 'PASS report_session_fill counts cancelled_late';
+
+  -- (9) two consenting guardians = two follow-up rows, labelled from the first ACTIVE child's nickname only
+  insert into public.guardian_consent_records
+    (id, family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
+  values ('6f000000-0000-4000-8000-0000000000a1', 'f0000000-0000-4000-8000-000000000003',
+          'a0000000-0000-4000-8000-0000000000a1', 'marketing_line', '60000000-0000-4000-8000-000000000005',
+          'granted', 'web', 'checkbox'),
+         ('6f000000-0000-4000-8000-0000000000a2', 'f0000000-0000-4000-8000-000000000003',
+          'a0000000-0000-4000-8000-0000000000a2', 'marketing_line', '60000000-0000-4000-8000-000000000005',
+          'granted', 'web', 'checkbox');
+  select count(*) into v_n from public.marketing_follow_up_list fl
+   where fl.family_id = 'f0000000-0000-4000-8000-000000000003';
+  if v_n <> 2 then
+    raise exception 'FAIL two consenting guardians should give two follow-up rows, got %', v_n;
+  end if;
+  select min(fl.family_label_th), min(fl.family_label_en) into v_label, v_label_en
+    from public.marketing_follow_up_list fl where fl.family_id = 'f0000000-0000-4000-8000-000000000003';
+  if v_label is distinct from 'ครอบครัวน้องทดสอบ' or v_label_en is distinct from 'Family of ทดสอบ' then
+    raise exception 'FAIL follow-up label should be the first active child''s nickname, got % / %', v_label, v_label_en;
+  end if;
+  if exists (select 1 from information_schema.columns c
+              where c.table_schema = 'public' and c.table_name = 'marketing_follow_up_list'
+                and c.column_name in ('family_display_name', 'nickname', 'child_nickname', 'birth_month',
+                                      'age_years', 'allergens', 'phone', 'line_id')) then
+    raise exception 'FAIL marketing_follow_up_list has a child, health or contact column';
+  end if;
+  raise notice 'PASS follow-up list: one row per consenting guardian, nickname-only label (TH and EN), minimal columns';
+
+  -- (10) a withdrawn guardian drops out; the other guardian keeps one row
+  insert into public.guardian_consent_records
+    (id, family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
+  values ('6f000000-0000-4000-8000-0000000000a3', 'f0000000-0000-4000-8000-000000000003',
+          'a0000000-0000-4000-8000-0000000000a2', 'marketing_line', '60000000-0000-4000-8000-000000000005',
+          'withdrawn', 'web', 'checkbox');
+  select count(*) into v_n from public.marketing_follow_up_list fl
+   where fl.family_id = 'f0000000-0000-4000-8000-000000000003';
+  if v_n <> 1 then
+    raise exception 'FAIL after one withdrawal one row should remain, got %', v_n;
+  end if;
+  raise notice 'PASS a withdrawn guardian drops out of the follow-up list';
+end
+$$;
+
+do $$
+declare
+  v_arr  text[];
+  v_food text;
+  v_care text;
+begin
+  -- Allergy keys: flour is a new key, wheat stays its own key (brief item 7). Rolled back at the end of the block.
+  begin
+    update public.child_health
+       set allergens = array['flour', 'wheat', 'peanut'], foods_to_avoid = 'TEST food', care_notes = 'TEST note'
+     where child_id = 'c0000000-0000-4000-8000-000000000001';
+    select g.allergens into v_arr
+      from public.get_child_health('c0000000-0000-4000-8000-000000000001', false) g;
+    if not ('flour' = any (v_arr) and 'wheat' = any (v_arr)) then
+      raise exception 'FAIL flour and wheat should both be stored and returned';
+    end if;
+    -- includeHealth = false: allergens come back, the notes do not
+    select g.foods_to_avoid, g.care_notes into v_food, v_care
+      from public.get_child_health('c0000000-0000-4000-8000-000000000001', false) g;
+    if v_food is not null or v_care is not null then
+      raise exception 'FAIL includeHealth = false must hide foods_to_avoid and care_notes';
+    end if;
+    -- includeHealth = true: the notes come back
+    select g.foods_to_avoid, g.care_notes into v_food, v_care
+      from public.get_child_health('c0000000-0000-4000-8000-000000000001', true) g;
+    if v_food is distinct from 'TEST food' or v_care is distinct from 'TEST note' then
+      raise exception 'FAIL includeHealth = true must return the notes';
+    end if;
+    raise notice 'PASS get_child_health: allergens always, notes only with includeHealth = true (brief item 3)';
+    raise exception 'TEST_ROLLBACK';
+  exception when raise_exception then
+    if sqlerrm <> 'TEST_ROLLBACK' then
+      raise;
+    end if;
+  end;
+
+  begin
+    perform public.get_child_health('c0000000-0000-4000-8000-000000000001', null);
+    raise exception 'FAIL get_child_health accepted a missing includeHealth';
+  exception when sqlstate '22004' then
+    raise notice 'PASS includeHealth is required (null is refused)';
+  end;
+
+  begin
+    update public.child_health set allergens = array['gluten']
+     where child_id = 'c0000000-0000-4000-8000-000000000001';
+    raise exception 'FAIL an unknown allergen key was accepted';
+  exception when check_violation then
+    raise notice 'PASS allergen keys are a closed list (gluten refused; flour accepted)';
+  end;
+end
+$$;
+
+
+-- -----------------------------------------------------------------------------
 -- 8. Privacy operations (P5): deadlines, export, erase, purge
 -- -----------------------------------------------------------------------------
 
@@ -1116,6 +1530,11 @@ begin
                   where cr.family_id is null and cr.child_nickname_snapshot = 'น้องทดสอบ'
                     and cr.retain_until > now() + interval '1000 days') then
     raise exception 'FAIL consent evidence should be detached and kept ~3 years';
+  end if;
+  if not exists (select 1 from public.guardian_consent_records gcr
+                  where gcr.id = '6f000000-0000-4000-8000-000000000001' and gcr.family_id is null
+                    and gcr.guardian_id is null and gcr.retain_until > now() + interval '1000 days') then
+    raise exception 'FAIL marketing choices should be detached and kept ~3 years';
   end if;
   if not exists (select 1 from public.bookings b
                   where b.id = 'b1000000-0000-4000-8000-000000000002'

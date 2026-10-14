@@ -37,18 +37,19 @@ declare
     'user_roles', 'audit_log', 'studio_settings', 'booking_requests', 'rate_limit_events',
     'staff_notifications', 'sessions', 'families', 'guardians', 'children', 'family_contacts',
     'package_purchases', 'payments', 'bookings', 'storage_cleanup_queue', 'consent_texts',
-    'consent_records', 'child_health', 'family_links', 'media_assets', 'media_asset_children',
-    'dsr_requests', 'breach_incidents',
-    'package_balances', 'current_consents', 'report_requests_weekly', 'report_session_fill',
-    'report_attendance_monthly', 'report_revenue_monthly'];
+    'consent_records', 'guardian_consent_records', 'child_health', 'family_links', 'media_assets',
+    'media_asset_children', 'dsr_requests', 'breach_incidents',
+    'package_balances', 'current_consents', 'current_marketing_consents', 'marketing_follow_up_list',
+    'report_requests_weekly', 'report_session_fill', 'report_attendance_monthly', 'report_revenue_monthly'];
   v_calls text[] := array[
+    'select public.check_make_up_notice(gen_random_uuid(), now())',
     'select public.is_staff()',
     'select public.current_app_role()',
     'select public.check_rate_limit(''booking_request'', repeat(''0'', 64), 5, 20)',
     'select * from public.get_open_sessions(null, null)',
     'select public.session_seats_left(gen_random_uuid())',
     'select public.purge_expired_records()',
-    'select * from public.get_child_health(gen_random_uuid())',
+    'select * from public.get_child_health(gen_random_uuid(), true)',
     'select * from public.list_session_health_flags(gen_random_uuid())',
     'select public.upsert_child_health(gen_random_uuid(), array[]::text[], null, null, null)',
     'select public.consent_status(gen_random_uuid(), ''media_website'')',
@@ -130,16 +131,17 @@ declare
     'user_roles', 'audit_log', 'studio_settings', 'booking_requests', 'rate_limit_events',
     'staff_notifications', 'sessions', 'families', 'guardians', 'children', 'family_contacts',
     'package_purchases', 'payments', 'bookings', 'storage_cleanup_queue', 'consent_texts',
-    'consent_records', 'child_health', 'family_links', 'media_assets', 'media_asset_children',
-    'dsr_requests', 'breach_incidents',
-    'package_balances', 'current_consents', 'report_requests_weekly', 'report_session_fill',
-    'report_attendance_monthly', 'report_revenue_monthly'];
+    'consent_records', 'guardian_consent_records', 'child_health', 'family_links', 'media_assets',
+    'media_asset_children', 'dsr_requests', 'breach_incidents',
+    'package_balances', 'current_consents', 'current_marketing_consents', 'marketing_follow_up_list',
+    'report_requests_weekly', 'report_session_fill', 'report_attendance_monthly', 'report_revenue_monthly'];
   -- Every one of these must be refused with SQLSTATE 42501 for a user without a role.
   v_calls text[] := array[
+    'select public.check_make_up_notice(gen_random_uuid(), now())',
     'select public.check_rate_limit(''booking_request'', repeat(''0'', 64), 5, 20)',
     'select * from public.get_open_sessions(null, null)',
     'select public.purge_expired_records()',
-    'select * from public.get_child_health(gen_random_uuid())',
+    'select * from public.get_child_health(gen_random_uuid(), true)',
     'select * from public.list_session_health_flags(gen_random_uuid())',
     'select public.upsert_child_health(gen_random_uuid(), array[]::text[], null, null, null)',
     'select public.can_publish_media(gen_random_uuid(), ''media_website'')',
@@ -254,8 +256,8 @@ our_tables(t) as (
   values ('user_roles'), ('audit_log'), ('studio_settings'), ('booking_requests'), ('rate_limit_events'),
          ('staff_notifications'), ('sessions'), ('families'), ('guardians'), ('children'),
          ('family_contacts'), ('package_purchases'), ('payments'), ('bookings'), ('storage_cleanup_queue'),
-         ('consent_texts'), ('consent_records'), ('child_health'), ('family_links'), ('media_assets'),
-         ('media_asset_children'), ('dsr_requests'), ('breach_incidents')
+         ('consent_texts'), ('consent_records'), ('guardian_consent_records'), ('child_health'), ('family_links'),
+         ('media_assets'), ('media_asset_children'), ('dsr_requests'), ('breach_incidents')
 ),
 our_functions(f) as (
   values ('has_role'), ('is_staff'), ('is_owner'), ('current_app_role'), ('require_staff_or_server'),
@@ -265,7 +267,7 @@ our_functions(f) as (
          ('generate_weekend_sessions'), ('set_accounting_retain_until'), ('validate_booking'),
          ('sync_child_last_session'), ('queue_storage_cleanup'), ('child_age_years'),
          ('consent_texts_guard'), ('validate_consent_record'), ('apply_consent_withdrawal'),
-         ('enforce_health_consent'), ('has_active_consent'), ('consent_status'), ('get_child_health'),
+         ('enforce_health_consent'), ('has_active_consent'), ('consent_status'), ('get_child_health'), ('record_family_print'),
          ('upsert_child_health'), ('list_session_health_flags'), ('can_publish_media'),
          ('set_dsr_deadlines'), ('set_breach_deadlines'), ('mark_inactive_families'),
          ('export_family_data'), ('erase_family'),
@@ -273,7 +275,9 @@ our_functions(f) as (
          ('cancel_bookings_of_cancelled_session'), ('queue_consent_change_alert'), ('consent_matrix'),
          ('media_publishability'), ('set_media_asset_children'), ('publish_consent_text'),
          ('submit_enrolment'), ('guard_family_restriction_columns'), ('block_restricted_family'),
-         ('set_family_restriction'), ('set_primary_guardian')
+         ('set_family_restriction'), ('set_primary_guardian'),
+         -- added 14 Oct 2026 (decisions 2, 3, 10)
+         ('validate_guardian_consent_record'), ('check_make_up_notice')
 ),
 service_only_functions(f) as (
   values ('check_rate_limit'), ('get_open_sessions'), ('purge_expired_records'), ('log_audit_event'),
@@ -283,7 +287,8 @@ service_only_functions(f) as (
          ('apply_consent_withdrawal'), ('enforce_health_consent'), ('set_dsr_deadlines'), ('set_breach_deadlines'),
          ('has_role'), ('has_active_consent'), ('submit_enrolment'), ('guard_package_purge_counter'),
          ('cancel_bookings_of_cancelled_session'), ('queue_consent_change_alert'),
-         ('guard_family_restriction_columns'), ('block_restricted_family')
+         ('guard_family_restriction_columns'), ('block_restricted_family'),
+         ('validate_guardian_consent_record')
 ),
 privs(p) as (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')),
 part_a(line) as (
@@ -370,6 +375,83 @@ part_a(line) as (
     from pg_class c
    where c.relnamespace = 'public'::regnamespace
      and c.relkind = 'v'
+  union all
+  -- A10 the two purposes added on 14 Oct 2026 exist (decisions 2 and 3)
+  select case
+           when not exists (select 1 from pg_type t where t.typname = 'consent_purpose'
+                                                      and t.typnamespace = 'public'::regnamespace)
+             then 'skip consent_purpose enum: not created yet'
+           when exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                         where t.typname = 'consent_purpose' and e.enumlabel = 'marketing_line')
+            and exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                         where t.typname = 'consent_purpose' and e.enumlabel = 'media_print')
+             then 'ok   consent_purpose has marketing_line and media_print'
+           else 'FAIL consent_purpose is missing marketing_line or media_print'
+         end
+  union all
+  -- A11 guardian_consent_records holds no child data: no column named like a child (children's data must not
+  --     be reachable through the guardian-scope marketing table)
+  select case
+           when not exists (select 1 from pg_class c where c.relname = 'guardian_consent_records'
+                                                       and c.relnamespace = 'public'::regnamespace)
+             then 'skip guardian_consent_records has no child column: not created yet'
+           when exists (select 1 from pg_attribute a join pg_class c on c.oid = a.attrelid
+                         where c.relname = 'guardian_consent_records'
+                           and c.relnamespace = 'public'::regnamespace
+                           and a.attnum > 0 and not a.attisdropped and a.attname like '%child%')
+             then 'FAIL guardian_consent_records has a column that holds child data'
+           else 'ok   guardian_consent_records has no child column'
+         end
+  union all
+  -- A12 round two (14 Oct 2026, brief item 1): the credit rule's status and notice channel exist
+  select case
+           when not exists (select 1 from pg_type t where t.typname = 'booking_status'
+                                                      and t.typnamespace = 'public'::regnamespace)
+             then 'skip booking_status enum: not created yet'
+           when exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                         where t.typname = 'booking_status' and e.enumlabel = 'cancelled_late')
+            and exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                         where t.typname = 'notice_channel' and e.enumlabel = 'line')
+            and exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                         where t.typname = 'notice_channel' and e.enumlabel = 'in_person')
+             then 'ok   booking_status has cancelled_late; notice_channel has line and in_person'
+           else 'FAIL booking_status lacks cancelled_late, or notice_channel lacks line or in_person'
+         end
+  union all
+  -- A13 the follow-up list has no child, health or contact column (brief items 4 and 5: nickname label only)
+  select case
+           when not exists (select 1 from pg_class c where c.relname = 'marketing_follow_up_list'
+                                                       and c.relnamespace = 'public'::regnamespace)
+             then 'skip marketing_follow_up_list: not created yet'
+           when exists (select 1 from pg_attribute a join pg_class c on c.oid = a.attrelid
+                         where c.relname = 'marketing_follow_up_list'
+                           and c.relnamespace = 'public'::regnamespace
+                           and a.attnum > 0 and not a.attisdropped
+                           and a.attname in ('nickname', 'child_nickname', 'birth_month', 'age_years',
+                                             'allergens', 'phone', 'line_id', 'family_display_name'))
+             then 'FAIL marketing_follow_up_list has a child, health or contact column'
+           else 'ok   marketing_follow_up_list has no child, health or contact column'
+         end
+  union all
+  -- A14 the export never reads child_health with a plain join; health only through get_child_health (brief item 2)
+  select case
+           when to_regprocedure('public.export_family_data(uuid)') is null
+             then 'skip export_family_data: not created yet'
+           when pg_get_functiondef('public.export_family_data(uuid)'::regprocedure) ~ 'public\.child_health'
+             then 'FAIL export_family_data reads public.child_health directly'
+           else 'ok   export_family_data reads health only through get_child_health'
+         end
+  union all
+  -- A15 get_child_health takes the explicit includeHealth flag; the allergen check lists flour (brief items 3, 7)
+  select case
+           when to_regprocedure('public.get_child_health(uuid, boolean)') is null
+             then 'skip get_child_health(uuid, boolean): not created yet'
+           when not exists (select 1 from pg_constraint k
+                             where k.conrelid = 'public.child_health'::regclass and k.contype = 'c'
+                               and pg_get_constraintdef(k.oid) like '%flour%')
+             then 'FAIL the child_health allergen check does not list flour'
+           else 'ok   get_child_health(uuid, boolean) exists and the allergen check lists flour'
+         end
 )
 select 'A' as part, line from part_a
 union all
