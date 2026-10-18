@@ -26,3 +26,4 @@
   parents' permission for website use. Never put children's names in copy, alt text or file names.
 - **Accessibility:** touch targets ≥ 44px, visible focus rings, `role="list"` on styled lists, alt text in both languages,
   `prefers-reduced-motion` respected.
+- Sitemap is router-derived (src/lib/sitemap.ts); every route sets staticData.sitemap — keeps /sitemap.xml in sync with routes.
