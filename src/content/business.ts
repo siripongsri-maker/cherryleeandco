@@ -34,18 +34,21 @@ export const PRICES = {
   eight: 26400,
 } as const;
 
+export const SITE_URL = "https://cherryleeandco.com";
+
 export const formatBaht = (n: number) => `฿${n.toLocaleString("en-US")}`;
 
-/** schema.org data for search engines (rendered in <head> by src/routes/__root.tsx). Make image URLs absolute once the domain is known. */
+/** schema.org data for search engines (rendered in <head> by src/routes/__root.tsx).  */
 export const BUSINESS_JSON_LD = {
   "@context": "https://schema.org",
   "@type": ["LocalBusiness", "EducationalOrganization"],
   name: "CherryLee & Co.",
+  url: `${SITE_URL}/`,
   alternateName: "เชอร์รี่ลีแอนด์โค",
   description:
     "พื้นที่การเรียนรู้ทักษะชีวิตสำหรับเด็กและครอบครัวผ่านกระบวนการละคร ก่อตั้งโดยครูเชอร์รี่ ญาณี และอังเคิลลี ลาฟฟึ่น",
-  image: "/images/og-image.jpg",
-  logo: "/images/icon-512.png",
+  image: `${SITE_URL}/images/og-image.jpg`,
+  logo: `${SITE_URL}/images/icon-512.png`,
   email: EMAIL,
   priceRange: "฿฿",
   address: {
@@ -70,14 +73,14 @@ export const BUSINESS_JSON_LD = {
       name: "ญาณี เหล่าวิริยะรัตน์ ลาฟฟึ่น",
       alternateName: "Kru Cherry",
       jobTitle: "Drama Educator",
-      image: "/images/kru-cherry-800.jpg",
+      image: `${SITE_URL}/images/kru-cherry-800.jpg`,
     },
     {
       "@type": "Person",
       name: "Lee Laffan",
       alternateName: "Uncle Lee",
       jobTitle: "Native English teacher, former chef",
-      image: "/images/uncle-lee-800.jpg",
+      image: `${SITE_URL}/images/uncle-lee-800.jpg`,
     },
   ],
   sameAs: [FACEBOOK_URL, YOUTUBE_URL, INSTAGRAM_URL, TIKTOK_URL, "https://mez.ink/cherryleeandco"],
