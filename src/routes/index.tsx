@@ -9,6 +9,7 @@ type HomeSearch = { lang?: Lang | undefined };
 // __root.tsx, and ships no og:image so serve-time hosting can inject the
 // project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  staticData: { sitemap: true },
   // `?lang=en` opens the English version (also server-rendered in English)
   validateSearch: (search: Record<string, unknown>): HomeSearch => {
     const lang = search["lang"];
