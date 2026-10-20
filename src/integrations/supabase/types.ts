@@ -20,6 +20,7 @@ export type Database = {
           image_permission_confirmed_at: string | null
           image_permission_confirmed_by: string | null
           images: Json
+          settings: Json
           texts: Json
           updated_at: string
           version: number
@@ -29,6 +30,7 @@ export type Database = {
           image_permission_confirmed_at?: string | null
           image_permission_confirmed_by?: string | null
           images?: Json
+          settings?: Json
           texts?: Json
           updated_at?: string
           version?: number
@@ -38,6 +40,7 @@ export type Database = {
           image_permission_confirmed_at?: string | null
           image_permission_confirmed_by?: string | null
           images?: Json
+          settings?: Json
           texts?: Json
           updated_at?: string
           version?: number

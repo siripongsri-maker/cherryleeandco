@@ -36,6 +36,13 @@
       "when": 1792473008378,
       "tag": "0004_homepage_public_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792477989873,
+      "tag": "0005_website_business_settings",
+      "breakpoints": true
     }
   ]
 }
