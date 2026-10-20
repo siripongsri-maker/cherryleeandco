@@ -1,0 +1,4 @@
+ALTER TABLE public.homepage_content ADD COLUMN image_permission_confirmed_at timestamptz;
+ALTER TABLE public.homepage_content ADD COLUMN image_permission_confirmed_by uuid;
+CREATE FUNCTION public.check_homepage_image_permission() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$ BEGIN IF (TG_OP = 'INSERT' AND NEW.images <> '{}'::jsonb) OR (TG_OP = 'UPDATE' AND NEW.images IS DISTINCT FROM OLD.images AND NEW.images <> '{}'::jsonb) THEN IF NEW.image_permission_confirmed_at IS NULL OR NEW.image_permission_confirmed_by IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Image publication permission must be confirmed'; END IF; END IF; RETURN NEW; END $$;
+CREATE TRIGGER homepage_image_permission BEFORE INSERT OR UPDATE ON public.homepage_content FOR EACH ROW EXECUTE FUNCTION public.check_homepage_image_permission();

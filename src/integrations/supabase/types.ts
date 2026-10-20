@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      homepage_content: {
+        Row: {
+          id: string
+          image_permission_confirmed_at: string | null
+          image_permission_confirmed_by: string | null
+          images: Json
+          texts: Json
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          id?: string
+          image_permission_confirmed_at?: string | null
+          image_permission_confirmed_by?: string | null
+          images?: Json
+          texts?: Json
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          id?: string
+          image_permission_confirmed_at?: string | null
+          image_permission_confirmed_by?: string | null
+          images?: Json
+          texts?: Json
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           display_name: string

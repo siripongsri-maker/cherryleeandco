@@ -8,6 +8,34 @@
       "when": 1792472542496,
       "tag": "0000_teacher_ai_access",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792472805892,
+      "tag": "0001_homepage_editor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792472840177,
+      "tag": "0002_restrict_homepage_image_reads",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792472967606,
+      "tag": "0003_homepage_image_permission_record",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792473008378,
+      "tag": "0004_homepage_public_columns",
+      "breakpoints": true
     }
   ]
 }
