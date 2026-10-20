@@ -12,7 +12,6 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { content } from "@/content/site";
-import { BUSINESS_JSON_LD } from "@/content/business";
 import { HERO_SIZES } from "@/components/sections/Hero";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
@@ -126,7 +125,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         fetchPriority: "high",
       },
     ],
-    scripts: [{ type: "application/ld+json", children: JSON.stringify(BUSINESS_JSON_LD) }],
   }),
   staticData: { sitemap: false },
   shellComponent: RootShell,

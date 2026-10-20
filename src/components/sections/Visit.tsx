@@ -1,11 +1,10 @@
 import { CalendarDays, Mail, Navigation, SquareArrowOutUpRight } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { EMAIL, LINE_ID, LINE_URL, MAP } from "@/content/business";
 import { LineIcon } from "../icons";
 import { ExternalLink } from "../ExternalLink";
 
 export function Visit() {
-  const { lang, t } = useLanguage();
+  const { lang, t, business } = useLanguage();
   const v = t.visit;
 
   return (
@@ -28,23 +27,23 @@ export function Visit() {
             </li>
             <li className="flex items-center gap-2.5">
               <LineIcon className="h-5 w-5 shrink-0 text-cherry" />
-              <ExternalLink href={LINE_URL} className="inline-flex min-h-11 items-center">
-                LINE {LINE_ID}
+              <ExternalLink href={business.lineUrl} className="inline-flex min-h-11 items-center">
+                LINE {business.lineId}
               </ExternalLink>
             </li>
             <li className="flex items-center gap-2.5">
               <Mail className="h-5 w-5 shrink-0 text-cherry" aria-hidden="true" />
-              <a href={`mailto:${EMAIL}`} className="inline-flex min-h-11 items-center">
-                {EMAIL}
+              <a href={`mailto:${business.email}`} className="inline-flex min-h-11 items-center">
+                {business.email}
               </a>
             </li>
           </ul>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <ExternalLink href={MAP.directionsUrl} className="btn btn-primary">
+            <ExternalLink href={business.directionsUrl} className="btn btn-primary">
               <Navigation aria-hidden="true" />
               {v.directions}
             </ExternalLink>
-            <ExternalLink href={MAP.pinUrl} className="btn btn-ghost">
+            <ExternalLink href={business.mapPin} className="btn btn-ghost">
               <SquareArrowOutUpRight aria-hidden="true" />
               {v.openPin}
             </ExternalLink>
@@ -57,7 +56,7 @@ export function Visit() {
         >
           <iframe
             key={lang}
-            src={MAP.embedUrl(lang)}
+            src={business.embedUrl(lang)}
             title={v.mapTitle}
             loading="lazy"
             referrerPolicy="strict-origin-when-cross-origin"

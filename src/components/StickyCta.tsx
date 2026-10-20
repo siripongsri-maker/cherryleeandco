@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { LINE_URL } from "@/content/business";
 import { LineIcon } from "./icons";
 import { ExternalLink } from "./ExternalLink";
 
 /** Mobile-only booking bar. Hidden while the hero, the big CTA or the footer is on screen. */
 export function StickyCta() {
-  const { t } = useLanguage();
+  const { t, business } = useLanguage();
   const [hidden, setHidden] = useState(true);
 
   useEffect(() => {
@@ -41,7 +40,7 @@ export function StickyCta() {
       }`}
     >
       <ExternalLink
-        href={LINE_URL}
+        href={business.lineUrl}
         tabIndex={hidden ? -1 : undefined}
         className="btn btn-primary w-full"
       >

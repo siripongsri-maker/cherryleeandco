@@ -1,11 +1,10 @@
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { LINE_URL, MESSENGER_URL } from "@/content/business";
 import { LineIcon, MessengerIcon } from "../icons";
 import { ExternalLink } from "../ExternalLink";
 import { Flower, Seaweed } from "../Decor";
 
 export function CtaBand() {
-  const { t } = useLanguage();
+  const { t, business, images } = useLanguage();
   const c = t.cta;
 
   return (
@@ -19,7 +18,7 @@ export function CtaBand() {
       <div className="container-site relative z-10">
         <div data-reveal className="mx-auto max-w-[760px]">
           <img
-            src="/images/logo-mark-white.png"
+            src={images['logo-mark-white'] ?? "/images/logo-mark-white.png"}
             width={215}
             height={226}
             alt=""
@@ -31,11 +30,11 @@ export function CtaBand() {
           </h2>
           <p className="text-lg text-[#FFF1F4]">{c.body}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3">
-            <ExternalLink href={LINE_URL} className="btn btn-light btn-lg">
+            <ExternalLink href={business.lineUrl} className="btn btn-light btn-lg">
               <LineIcon />
               {c.line}
             </ExternalLink>
-            <ExternalLink href={MESSENGER_URL} className="btn btn-outline-light btn-lg">
+            <ExternalLink href={business.messenger} className="btn btn-outline-light btn-lg">
               <MessengerIcon />
               {c.messenger}
             </ExternalLink>

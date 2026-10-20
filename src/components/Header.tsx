@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FocusEvent, type MouseEvent } from "react";
 import { Menu, X } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { LINE_URL } from "@/content/business";
 import { content, type Lang } from "@/content/site";
 import { LineIcon } from "./icons";
 import { ExternalLink } from "./ExternalLink";
@@ -13,7 +12,7 @@ const LANG_OPTIONS: { code: Lang; label: string }[] = [
 const DESKTOP_NAV = "(min-width: 1120px)"; // keep in sync with the `nav` screen in tailwind.config.ts
 
 export function Header() {
-  const { lang, setLang, t } = useLanguage();
+  const { lang, setLang, t, business, images } = useLanguage();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -112,14 +111,14 @@ export function Header() {
           className="mr-auto inline-flex min-h-11 items-center gap-2 no-underline"
         >
           <img
-            src="/images/logo-mark.png"
+            src={images['logo-mark'] ?? "/images/logo-mark.png"}
             width={215}
             height={226}
             alt=""
             className="h-10 w-auto xs:h-11"
           />
           <img
-            src="/images/logo-wordmark.png"
+            src={images['logo-wordmark'] ?? "/images/logo-wordmark.png"}
             width={383}
             height={53}
             alt=""
@@ -155,7 +154,7 @@ export function Header() {
             })}
           </ul>
           <ExternalLink
-            href={LINE_URL}
+            href={business.lineUrl}
             onClick={() => {
               if (!open) return; // desktop: the nav is always visible, leave focus on the link
               setOpen(false);
