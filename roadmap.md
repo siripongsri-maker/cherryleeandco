@@ -1,6 +1,7 @@
 # Website administration
-- [ ] Expand /admin website editing to all existing public content sections and contact destinations, with validated persistence and public readback.
-- [ ] Verify expanded editing coverage and safety tests; keep staff roles owner-controlled and child-media permission intact.
+- [x] Expand /admin editing to every existing bilingual text section, teacher/program details, package copy/prices, FAQs, contact/social links, map/opening settings, logos, video posters and existing video titles/visibility; persist in versioned homepage data with public readback.
+- [x] Verify expanded coverage and safety with 37 passing tests, public Thai/English rendering, current price/search metadata, working image loads and signed-out admin protection; staff roles and child-video consent remain protected.
+- [ ] Verify expanded website edit/save/reload as an authorized teacher (blocked: no registered accounts; session mint unavailable).
 - [x] Add teacher-only Thai announcement drafting from short notes, editable output and copy action.
 - [x] Verify announcement validation and staff-role tests, real Gateway Thai output with date/contact preservation, and signed-out redirect.
 - [ ] Verify announcement generation/edit/copy end-to-end as a teacher (blocked: project has no auth users; session mint confirmed unavailable).
