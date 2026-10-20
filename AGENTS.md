@@ -32,4 +32,5 @@
 - AI Gateway model contracts are CLI-generated and loaded through src/ai-gateway.types.ts; keep SDK inference in authenticated server-function handlers to protect credentials.
 - Staff privileges live in public.user_roles and are assigned explicitly by the owner; signing up never grants a staff role.
 - Homepage edits use allowlisted bilingual plain-text overrides with shipped JSX as fallback; a versioned singleton row prevents stale overwrites and is publicly readable through a server publishable client.
+- Website editing derives text paths from shipped bilingual content excluding structural keys/anchors; validated public business settings share the homepage version and drive contact links, prices, maps and leaf-route structured data together. Existing video titles/visibility may change but video IDs and consent evidence stay code-controlled.
 - Homepage photos are immutable uploads in private storage; public reads/signing are restricted to paths selected in homepage_content, preserving workspace public-bucket restrictions.

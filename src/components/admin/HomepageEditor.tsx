@@ -49,7 +49,7 @@ export function HomepageEditor() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || uploading) return;
-    const parsed = homepageSchema.safeParse(form);
+    const parsed = homepageSchema.safeParse({ texts: form.texts, images: form.images, settings: form.settings, version: form.version });
     if (!parsed.success) { setError("กรุณาตรวจข้อความสองภาษา ลิงก์ติดต่อ ค่าเรียน และเวลาเปิดให้ถูกต้องค่ะ"); return; }
     setBusy(true); setError(""); setNotice("");
     try {
