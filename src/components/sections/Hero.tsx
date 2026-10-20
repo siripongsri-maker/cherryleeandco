@@ -9,7 +9,7 @@ const FACT_ICONS = [Smile, CalendarDays, Users, MapPin];
 export const HERO_SIZES = "(min-width: 1244px) 545px, (min-width: 1024px) 44vw, 92vw";
 
 export function Hero() {
-  const { lang, t } = useLanguage();
+  const { lang, t, images } = useLanguage();
   const h = t.hero;
 
   return (
@@ -82,7 +82,7 @@ export function Hero() {
 
         <figure className="m-0">
           <div className="relative aspect-[1456/1088] rotate-[1.2deg] overflow-hidden rounded-blob border-2 border-ink bg-paper shadow-cut-hero">
-            <picture>
+            {images.hero ? <img src={images.hero} width={1100} height={822} alt={h.artAlt} fetchPriority="high" decoding="async" className="h-full w-full object-cover" /> : <picture>
               <source
                 type="image/webp"
                 srcSet="/images/hero-720.webp 720w, /images/hero-1100.webp 1100w, /images/hero-1456.webp 1456w"
@@ -98,7 +98,7 @@ export function Hero() {
                 decoding="async"
                 className="h-full w-full object-cover"
               />
-            </picture>
+            </picture>}
           </div>
           <figcaption className="mt-6 text-center font-script text-[1.05rem] text-ink-soft">
             {h.caption}

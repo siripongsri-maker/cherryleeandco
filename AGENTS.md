@@ -30,3 +30,5 @@
 - Teacher class drafting lives under the protected /admin route; every AI request validates teacher roles server-side, and drafts never update public site content automatically.
 - AI Gateway model contracts are CLI-generated and loaded through src/ai-gateway.types.ts; keep SDK inference in authenticated server-function handlers to protect credentials.
 - Staff privileges live in public.user_roles and are assigned explicitly by the owner; signing up never grants a staff role.
+- Homepage edits use allowlisted bilingual plain-text overrides with shipped JSX as fallback; a versioned singleton row prevents stale overwrites and is publicly readable through a server publishable client.
+- Homepage photos are immutable uploads in private storage; public reads/signing are restricted to paths selected in homepage_content, preserving workspace public-bucket restrictions.

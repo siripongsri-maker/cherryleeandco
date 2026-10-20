@@ -3,6 +3,10 @@ import { HomePage } from "@/components/HomePage";
 import { LanguageProvider } from "@/i18n/LanguageProvider";
 import type { Lang } from "@/content/site";
 import { content } from "@/content/site";
+import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { getHomepage } from "@/lib/homepage-content.functions";
+
+const homepageQuery = queryOptions({ queryKey: ["homepage-content"], queryFn: () => getHomepage(), staleTime: 0, refetchInterval: 30 * 60 * 1000 });
 
 type HomeSearch = { lang?: Lang | undefined };
 
@@ -18,7 +22,8 @@ export const Route = createFileRoute("/")({
     return { lang: lang === "en" || lang === "th" ? lang : undefined };
   },
   component: Index,
-  head: () => ({
+  loader: ({ context }) => context.queryClient.ensureQueryData(homepageQuery),
+  head: ({ loaderData }) => ({
     meta: [
       { title: content.th.meta.title },
       { name: "description", content: content.th.meta.description },
@@ -27,6 +32,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:url", content: "https://cherryleeandco.com/" },
       { property: "og:type", content: "website" },
+      ...(loaderData?.imageUrls.hero ? [{ property: "og:image", content: loaderData.imageUrls.hero }, { name: "twitter:image", content: loaderData.imageUrls.hero }] : []),
     ],
     links: [{ rel: "canonical", href: "https://cherryleeandco.com/" }],
   }),
@@ -34,8 +40,9 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { lang } = Route.useSearch();
+  const { data: homepage } = useSuspenseQuery(homepageQuery);
   return (
-    <LanguageProvider initialLang={lang}>
+    <LanguageProvider initialLang={lang} homepage={homepage}>
       <HomePage />
     </LanguageProvider>
   );

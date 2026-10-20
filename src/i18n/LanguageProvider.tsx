@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { content, type Lang, type SiteContent } from "@/content/site";
+import { applyHomepage, type HomepageData } from "@/lib/homepage-content";
 
 const STORAGE_KEY = "cherrylee-lang";
 const LANGS: readonly Lang[] = ["th", "en"];
@@ -16,6 +17,7 @@ type LanguageContextValue = {
   lang: Lang;
   setLang: (lang: Lang) => void;
   t: SiteContent;
+  images: Record<string, string>;
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -33,9 +35,10 @@ type LanguageProviderProps = {
   children: ReactNode;
   /** From the `?lang=` search param, so the server and the first client render agree. */
   initialLang?: Lang | undefined;
+  homepage?: HomepageData & { imageUrls: Record<string,string> };
 };
 
-export function LanguageProvider({ children, initialLang }: LanguageProviderProps) {
+export function LanguageProvider({ children, initialLang, homepage }: LanguageProviderProps) {
   const [lang, setLangState] = useState<Lang>(initialLang ?? "th");
 
   // After hydration, honour a saved choice when the URL doesn't pick a language
@@ -64,7 +67,8 @@ export function LanguageProvider({ children, initialLang }: LanguageProviderProp
     }
   }, []);
 
-  const t = content[lang];
+  const t = useMemo(() => applyHomepage(content[lang], lang, homepage?.texts ?? {}), [lang, homepage?.texts]);
+  const images = homepage?.imageUrls ?? {};
 
   // Keep <html lang>, the tab title and the meta description in the active language
   useEffect(() => {
@@ -73,7 +77,7 @@ export function LanguageProvider({ children, initialLang }: LanguageProviderProp
     document.querySelector('meta[name="description"]')?.setAttribute("content", t.meta.description);
   }, [lang, t]);
 
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
+  const value = useMemo(() => ({ lang, setLang, t, images }), [lang, setLang, t, images]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
