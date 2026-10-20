@@ -1,0 +1,16 @@
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RotateCcw } from "lucide-react";
+import { businessDefaults, type WebsiteSettings } from "@/lib/website-settings";
+import { settingFields, dayLabels } from "@/content/admin/settings";
+import { VIDEOS } from "@/content/videos";
+
+export function BusinessSettingsFields({ value, onChange }: { value: WebsiteSettings; onChange: (value: WebsiteSettings) => void }) {
+  return <div className="space-y-8">
+    <div className="grid gap-6 md:grid-cols-2">{settingFields.map(field => <div key={field.key} className="space-y-2"><div className="flex items-center justify-between gap-3"><Label htmlFor={`setting-${field.key}`}>{field.label}</Label><Button type="button" variant="ghost" className="h-11 w-11" title="คืนค่าเดิม" aria-label={`คืนค่าเดิม ${field.label}`} onClick={() => { const next = { ...value }; delete next[field.key]; onChange(next); }}><RotateCcw /></Button></div><Input id={`setting-${field.key}`} type={field.type} step={field.type === "number" ? (field.key === "lat" || field.key === "lng" ? "any" : "1") : undefined} required className="min-h-11 bg-card" value={value[field.key] ?? businessDefaults[field.key]} onChange={event => onChange({ ...value, [field.key]: field.type === "number" ? (event.target.value === "" ? undefined : Number(event.target.value)) : event.target.value })} /></div>)}</div>
+    <div><h3 className="mb-3 font-semibold">วันเปิดสตูดิโอ</h3><div className="flex flex-wrap gap-4">{Object.entries(dayLabels).map(([day,label]) => { const key = day as keyof typeof dayLabels; const days = value.days ?? businessDefaults.days; return <label key={day} className="flex min-h-11 items-center gap-3"><Checkbox checked={days.includes(key)} onCheckedChange={checked => onChange({ ...value, days: checked ? [...days,key] : days.filter(item => item !== key) })} />{label}</label>; })}</div></div>
+    <section className="border-t border-border pt-8"><h3 className="mb-6 text-xl font-semibold">วิดีโอที่มีอยู่บนเว็บไซต์</h3><div className="space-y-8">{Object.entries(VIDEOS).map(([key,video],index) => <div key={key} className="space-y-4 border-b border-border pb-6"><label className="flex min-h-11 items-center gap-3"><Checkbox checked={!value.hiddenVideos?.includes(key)} onCheckedChange={checked => onChange({ ...value, hiddenVideos: checked ? (value.hiddenVideos ?? []).filter(id => id !== key) : [...(value.hiddenVideos ?? []),key] })} />แสดงวิดีโอ {index+1}</label><div className="grid gap-5 md:grid-cols-2">{(["th","en"] as const).map(lang => <div key={lang} className="space-y-2"><Label htmlFor={`video-title-${key}-${lang}`}>{lang === "th" ? "ชื่อวิดีโอภาษาไทย" : "Video title in English"}</Label><Input id={`video-title-${key}-${lang}`} maxLength={300} required className="min-h-11 bg-card" value={value.videoTitles?.[key]?.[lang] ?? video.title[lang]} onChange={event => onChange({ ...value, videoTitles: { ...value.videoTitles, [key]: { ...(value.videoTitles?.[key] ?? video.title), [lang]: event.target.value } } })} /></div>)}</div></div>)}</div></section>
+  </div>;
+}
