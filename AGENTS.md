@@ -28,6 +28,7 @@
   `prefers-reduced-motion` respected.
 - Sitemap is router-derived (src/lib/sitemap.ts); every route sets staticData.sitemap — keeps /sitemap.xml in sync with routes.
 - Teacher class drafting lives under the protected /admin route; every AI request validates teacher roles server-side, and drafts never update public site content automatically.
+- Announcement drafting uses a separate authenticated AI server function and editable local output in /admin; short notes never publish automatically, keeping review separate from website updates.
 - AI Gateway model contracts are CLI-generated and loaded through src/ai-gateway.types.ts; keep SDK inference in authenticated server-function handlers to protect credentials.
 - Staff privileges live in public.user_roles and are assigned explicitly by the owner; signing up never grants a staff role.
 - Homepage edits use allowlisted bilingual plain-text overrides with shipped JSX as fallback; a versioned singleton row prevents stale overwrites and is publicly readable through a server publishable client.
