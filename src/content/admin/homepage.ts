@@ -34,5 +34,5 @@ export const imageSlots = [
   { key: "logo-wordmark", label: "ชื่อโลโก้", fallback: "/images/logo-wordmark.png" },
   { key: "logo-stacked", label: "โลโก้ท้ายหน้า", fallback: "/images/logo-stacked.png" },
   { key: "logo-mark-white", label: "โลโก้บนพื้นสี", fallback: "/images/logo-mark-white.png" },
-  ...["story-playlit-class", "cooking-class", "money-wise-fruit-stand", "money-wise-shopping-trip", "founders-conversation", "uncle-lee-three-jars"].map((poster,index) => ({ key: `videos/${poster}`, label: `ภาพปกวิดีโอ ${index+1}`, fallback: `/images/videos/${poster}-480.jpg` })),
+  ...["story-playlit-class", "cooking-class", "money-wise-fruit-stand", "money-wise-shopping-trip", "founders-conversation", "uncle-lee-three-jars"].map((poster,index) => ({ key: `videos/${poster}`, label: `ภาพปกวิดีโอ ${index+1}`, fallback: `/images/videos/${poster}-${poster === "founders-conversation" ? 960 : 540}.jpg` })),
 ] as const;

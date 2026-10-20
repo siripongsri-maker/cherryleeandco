@@ -4,8 +4,10 @@ import { VIDEOS, type Video } from "@/content/videos";
 import type { Lang, SiteContent } from "@/content/site";
 
 const channelUrl = (hosts: string[]) => z.string().url().max(1000).refine(value => {
-  const url = new URL(value);
-  return url.protocol === "https:" && !url.username && !url.password && hosts.includes(url.hostname);
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && hosts.includes(url.hostname);
+  } catch { return false; }
 }, "Invalid channel URL");
 export const websiteSettingsSchema = z.object({
   lineId: z.string().regex(/^@[A-Za-z0-9._-]{1,80}$/).optional(),
@@ -31,7 +33,15 @@ export const websiteSettingsSchema = z.object({
 export type WebsiteSettings = z.infer<typeof websiteSettingsSchema>;
 export const businessDefaults = { lineId: LINE_ID, email: EMAIL, messenger: MESSENGER_URL, facebook: FACEBOOK_URL, youtube: YOUTUBE_URL, instagram: INSTAGRAM_URL, tiktok: TIKTOK_URL, playlist: CREATIVE_DRAMA_PLAYLIST_URL, mapPin: MAP.pinUrl, lat: MAP.lat, lng: MAP.lng, ...PRICES, opens: "09:00", closes: "15:00", days: ["Saturday", "Sunday"] as NonNullable<WebsiteSettings["days"]> };
 export function resolveBusiness(settings: WebsiteSettings = {}) {
-  const values = { ...businessDefaults, ...settings };
+  const values = {
+    lineId: settings.lineId ?? businessDefaults.lineId, email: settings.email ?? businessDefaults.email,
+    messenger: settings.messenger ?? businessDefaults.messenger, facebook: settings.facebook ?? businessDefaults.facebook,
+    youtube: settings.youtube ?? businessDefaults.youtube, instagram: settings.instagram ?? businessDefaults.instagram,
+    tiktok: settings.tiktok ?? businessDefaults.tiktok, playlist: settings.playlist ?? businessDefaults.playlist,
+    mapPin: settings.mapPin ?? businessDefaults.mapPin, lat: settings.lat ?? businessDefaults.lat, lng: settings.lng ?? businessDefaults.lng,
+    single: settings.single ?? businessDefaults.single, four: settings.four ?? businessDefaults.four, eight: settings.eight ?? businessDefaults.eight,
+    opens: settings.opens ?? businessDefaults.opens, closes: settings.closes ?? businessDefaults.closes, days: settings.days ?? businessDefaults.days,
+  };
   return { ...values,
     lineUrl: `https://line.me/R/ti/p/${values.lineId}`,
     lineMessageUrl: (text: string) => `https://line.me/R/oaMessage/${encodeURIComponent(values.lineId)}/?${encodeURIComponent(text)}`,
@@ -50,7 +60,8 @@ export function applyBusinessCopy(base: SiteContent, lang: Lang, settings: Websi
       const count = index === 1 ? 4 : 8; const price = index === 1 ? b.four : b.eight;
       const saving = b.single * count - price;
       const average = lang === "th" ? `เฉลี่ย ${formatBaht(price/count)} ต่อครั้ง` : `Avg. ${formatBaht(price/count)} per session`;
-      result.pricing.plans[index].note = saving > 0 ? `${average} · ${lang === "th" ? "ประหยัด" : "save"} ${formatBaht(saving)}` : average;
+      const plan = result.pricing.plans[index];
+      if (plan) plan.note = saving > 0 ? `${average} · ${lang === "th" ? "ประหยัด" : "save"} ${formatBaht(saving)}` : average;
     });
   }
   if ((settings.days || settings.opens || settings.closes) && !overridden.includes("visit.hours")) result.visit.hours = `${lang === "th" ? b.days.map(day => thaiDays[day]).join(" / ") : b.days.join(" / ")} ${b.opens}–${b.closes}${lang === "th" ? " น." : ""}`;
