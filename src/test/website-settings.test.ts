@@ -37,7 +37,7 @@ describe("Complete website administration", () => {
   it("keeps existing video ids and consent unchanged when editing titles", () => {
     const result=resolveVideos({videoTitles:{storyPlaylit:{th:"ชื่อคลิปใหม่",en:"Updated title"}}});
     expect(result.storyPlaylit.id).toBe(VIDEOS.storyPlaylit.id); expect(result.storyPlaylit.consent).toEqual(VIDEOS.storyPlaylit.consent);
-    expect(result.storyPlaylit.title.en).toBe("Updated title"); expect(canShow({...result.storyPlaylit,consent:undefined})).toBe(false);
+    expect(result.storyPlaylit.title.en).toBe("Updated title"); const withoutConsent = { ...result.storyPlaylit }; delete withoutConsent.consent; expect(canShow(withoutConsent)).toBe(false);
     expect(websiteSettingsSchema.safeParse({videoTitles:{unknown:{th:"คลิป",en:"Clip"}}}).success).toBe(false);
   });
   it("allows restoring optional fields while requiring existing bilingual text", () => {
