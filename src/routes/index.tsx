@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { HomePage } from "@/components/HomePage";
 import { LanguageProvider } from "@/i18n/LanguageProvider";
 import type { Lang } from "@/content/site";
+import { content } from "@/content/site";
 
 type HomeSearch = { lang?: Lang | undefined };
 
@@ -19,6 +20,11 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
+      { title: content.th.meta.title },
+      { name: "description", content: content.th.meta.description },
+      { property: "og:title", content: content.th.meta.title },
+      { property: "og:description", content: content.th.meta.description },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:url", content: "https://cherryleeandco.com/" },
       { property: "og:type", content: "website" },
     ],
