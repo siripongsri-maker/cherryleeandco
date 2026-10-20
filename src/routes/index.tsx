@@ -32,7 +32,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:url", content: "https://cherryleeandco.com/" },
       { property: "og:type", content: "website" },
-      ...(loaderData?.imageUrls.hero ? [{ property: "og:image", content: loaderData.imageUrls.hero }, { name: "twitter:image", content: loaderData.imageUrls.hero }] : []),
+      ...(loaderData?.imageUrls['hero'] ? [{ property: "og:image", content: loaderData.imageUrls['hero'] }, { name: "twitter:image", content: loaderData.imageUrls['hero'] }] : []),
     ],
     links: [{ rel: "canonical", href: "https://cherryleeandco.com/" }],
   }),

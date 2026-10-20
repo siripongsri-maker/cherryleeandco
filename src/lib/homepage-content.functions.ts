@@ -20,7 +20,7 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
     if (signError) throw new Error("โหลดรูปหน้าแรกไม่สำเร็จค่ะ");
     entries.forEach(([slot], index) => {
       const signedUrl = signed?.[index]?.signedUrl;
-      if (signedUrl) imageUrls[slot] = signedUrl.replace(url, import.meta.env.VITE_SUPABASE_URL);
+      if (signedUrl) imageUrls[slot] = signedUrl.replace(url, import.meta.env['VITE_SUPABASE_URL']);
     });
   }
   return { ...value, imageUrls };

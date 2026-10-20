@@ -17,6 +17,8 @@ export type Database = {
       homepage_content: {
         Row: {
           id: string
+          image_permission_confirmed_at: string | null
+          image_permission_confirmed_by: string | null
           images: Json
           texts: Json
           updated_at: string
@@ -24,6 +26,8 @@ export type Database = {
         }
         Insert: {
           id?: string
+          image_permission_confirmed_at?: string | null
+          image_permission_confirmed_by?: string | null
           images?: Json
           texts?: Json
           updated_at?: string
@@ -31,6 +35,8 @@ export type Database = {
         }
         Update: {
           id?: string
+          image_permission_confirmed_at?: string | null
+          image_permission_confirmed_by?: string | null
           images?: Json
           texts?: Json
           updated_at?: string

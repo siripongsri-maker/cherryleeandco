@@ -22,6 +22,13 @@
       "when": 1792472840177,
       "tag": "0002_restrict_homepage_image_reads",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792472967606,
+      "tag": "0003_homepage_image_permission_record",
+      "breakpoints": true
     }
   ]
 }
