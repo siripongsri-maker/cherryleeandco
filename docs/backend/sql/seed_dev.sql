@@ -23,9 +23,13 @@
 -- (R-11), set_media_asset_children and publish_consent_text (R-15), set_primary_guardian (R-39), submit_enrolment
 -- (scope, R-21, R-22, R-33, R-34, link_used, health withdrawal) and the restriction guard (D28/R-09/R-36/R-37).
 -- § 7c checks the 14 Oct 2026 decisions: marketing_line (guardian scope, guardian_consent_records, follow-up list),
--- media_print (same rules as media_social) and cancel_notice_hours with check_make_up_notice (decisions 2, 3, 10).
+-- media_print (same rules as media_social) and cancel_notice_hours (decisions 2, 3, 10; check_make_up_notice was removed in round three).
 -- § 7d checks the round-two decisions of 14 Oct 2026: the credit rule by notice (cancelled vs cancelled_late, absent),
 -- the allergen key flour, get_child_health with includeHealth, and the follow-up label and two-row rule.
+-- § 7e checks the round-three decisions of 14 Oct 2026: cancel_booking() and booking_cancellation_log (on time, late,
+-- studio; the notice channels line / phone / teacher / in_person), the rebooking rule (no make-up notice check), the
+-- follow-up label for one, two and three children, the print status line (granted / refused / not_asked), the
+-- 6-month clock (cancelled_late counts) and the reports read from the log. § 7c's make-up checks are gone.
 -- Not checkable here: the row LOCK in submit_enrolment (needs two concurrent sessions; the reviewer reads the
 -- FOR UPDATE at card P3-17).
 -- =============================================================================
@@ -302,12 +306,12 @@ begin
     raise notice 'PASS no booking beyond the package credits';
   end;
 
-  -- round two: cancelled with notice on time (4 hours before N2 starts) returns the credit and the seat
-  update public.bookings
-     set status = 'cancelled', cancel_notice_channel = 'line',
-         cancel_notice_at = (select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' - interval '4 hours'
-                               from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000003')
-   where id = 'b1000000-0000-4000-8000-000000000003';
+  -- round two: cancelled with notice on time (4 hours before N2 starts) returns the credit and the seat.
+  -- Round three: cancellations go through cancel_booking() (the only path that writes booking_cancellation_log).
+  perform public.cancel_booking('b1000000-0000-4000-8000-000000000003', 'line',
+         (select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' - interval '4 hours'
+            from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000003'),
+         false);
   select pb.sessions_left into v_left from public.package_balances pb
    where pb.package_purchase_id = 'd0000000-0000-4000-8000-000000000001';
   v_seats := public.session_seats_left('b0000000-0000-4000-8000-000000000003');
@@ -1191,7 +1195,7 @@ begin
   end if;
   raise notice 'PASS media_print follows the media_social rules (child level, face level, one channel at a time)';
 
-  -- decision 10: cancel_notice_hours defaults to 3, must be 0–72, and the make-up notice rule uses it
+  -- decision 10: cancel_notice_hours defaults to 3, must be 0–72, and the cancellation notice rule uses it (round three)
   if (select st.cancel_notice_hours from public.studio_settings st where st.id) <> 3 then
     raise exception 'FAIL cancel_notice_hours should default to 3';
   end if;
@@ -1205,16 +1209,12 @@ begin
     raise exception 'FAIL cancel_notice_hours accepted -1';
   exception when check_violation then null;
   end;
-  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
-    from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000002';
-  perform public.check_make_up_notice('b0000000-0000-4000-8000-000000000002', v_start - interval '3 hours');
-  raise notice 'PASS make-up notice exactly 3 hours before the original session is accepted';
-  begin
-    perform public.check_make_up_notice('b0000000-0000-4000-8000-000000000002', v_start - interval '2 hours');
-    raise exception 'FAIL make-up notice 2 hours before the original session was accepted';
-  exception when check_violation then
-    raise notice 'PASS make-up notice 2 hours before the original session is refused (decision 10)';
-  end;
+  -- Round three (brief 7): check_make_up_notice is removed. The make-up notice checks that stood here are replaced by
+  -- the rebooking checks in § 7e (a rebooking uses the kept or returned credit; no notice check).
+  if to_regprocedure('public.check_make_up_notice(uuid, timestamptz)') is not null then
+    raise exception 'FAIL check_make_up_notice still exists (round three removes it)';
+  end if;
+  raise notice 'PASS check_make_up_notice is removed (round three, brief 7)';
 end
 $$;
 
@@ -1260,7 +1260,8 @@ begin
     ('a0000000-0000-4000-8000-0000000000a2', 'f0000000-0000-4000-8000-000000000003', 'ผู้ปกครองทดสอบหก',
      '0800000012', false, true, now(), 'line_account', now());
 
-  -- one active child (the label uses this nickname) and one inactive child (ignored by the label)
+  -- one child with a booking (the label names this nickname) and one child with no booking (not named: the label
+  -- counts non-cancelled bookings, not is_active; verifier fix, 14 Oct 2026)
   insert into public.children (id, family_id, nickname, is_active)
   values ('c0000000-0000-4000-8000-0000000000a1', 'f0000000-0000-4000-8000-000000000003', 'ทดสอบ', true),
          ('c0000000-0000-4000-8000-0000000000a2', 'f0000000-0000-4000-8000-000000000003', 'ทดสอบเก่า', false);
@@ -1274,9 +1275,7 @@ begin
           'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
   select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
     from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000002';
-  update public.bookings
-     set status = 'cancelled', cancel_notice_channel = 'line', cancel_notice_at = v_start - interval '3 hours'
-   where id = 'b1000000-0000-4000-8000-0000000000a1';
+  perform public.cancel_booking('b1000000-0000-4000-8000-0000000000a1', 'line', v_start - interval '3 hours', false);
   select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a1';
   select pb.sessions_left into v_left from public.package_balances pb
    where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
@@ -1292,10 +1291,8 @@ begin
   select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
     from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000004';
   v_seats0 := public.session_seats_left('b0000000-0000-4000-8000-000000000004');
-  update public.bookings
-     set status = 'cancelled', cancel_notice_channel = 'in_person',
-         cancel_notice_at = v_start - interval '3 hours' + interval '1 second'
-   where id = 'b1000000-0000-4000-8000-0000000000a2';
+  perform public.cancel_booking('b1000000-0000-4000-8000-0000000000a2', 'in_person',
+                                v_start - interval '3 hours' + interval '1 second', false);
   select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a2';
   v_seats1 := public.session_seats_left('b0000000-0000-4000-8000-000000000004');
   select pb.sessions_left into v_left from public.package_balances pb
@@ -1322,18 +1319,32 @@ begin
   end if;
   raise notice 'PASS absent uses one credit';
 
-  -- (4) cancelled with NO notice recorded: cancelled_late, one credit used
+  -- (4) verifier fix (14 Oct 2026): a family cancellation with NO notice is refused (22023). Staff record it as
+  -- 'absent' instead: one credit used, no cancellation log row.
   insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
   values ('b1000000-0000-4000-8000-0000000000a4', 'b0000000-0000-4000-8000-000000000006',
           'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
-  update public.bookings set status = 'cancelled' where id = 'b1000000-0000-4000-8000-0000000000a4';
+  begin
+    perform public.cancel_booking('b1000000-0000-4000-8000-0000000000a4', null, null, false);
+    raise exception 'FAIL a family cancellation without notice was accepted';
+  exception when sqlstate '22023' then
+    raise notice 'PASS a family cancellation without notice is refused (record it as absent)';
+  end;
+  update public.bookings set status = 'absent' where id = 'b1000000-0000-4000-8000-0000000000a4';
   select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a4';
   select pb.sessions_left into v_left from public.package_balances pb
    where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
-  if v_status is distinct from 'cancelled_late' or v_left is distinct from 1 then
-    raise exception 'FAIL cancel without notice should be cancelled_late with one credit used (status %, left %)', v_status, v_left;
+  if v_status is distinct from 'absent' or v_left is distinct from 1 then
+    raise exception 'FAIL a missed class recorded as absent should use one credit (status %, left %)', v_status, v_left;
   end if;
-  raise notice 'PASS cancel without notice: cancelled_late, one credit used';
+  raise notice 'PASS a missed class recorded as absent uses one credit';
+  -- verifier fix: an attended or absent booking cannot be cancelled (23514)
+  begin
+    perform public.cancel_booking('b1000000-0000-4000-8000-0000000000a3', 'phone', now(), false);
+    raise exception 'FAIL an absent booking was cancelled';
+  exception when sqlstate '23514' then
+    raise notice 'PASS an absent booking cannot be cancelled';
+  end;
 
   -- (5) a studio cancellation of the whole session gives the credit back (no notice rule)
   insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
@@ -1343,10 +1354,10 @@ begin
   select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000a5';
   select pb.sessions_left into v_left from public.package_balances pb
    where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
-  if v_status is distinct from 'cancelled' or v_left is distinct from 1 then
-    raise exception 'FAIL a studio cancellation should return the credit (status %, left %)', v_status, v_left;
+  if v_status is distinct from 'cancelled_studio' or v_left is distinct from 1 then
+    raise exception 'FAIL a studio cancellation should give cancelled_studio and return the credit (status %, left %)', v_status, v_left;
   end if;
-  raise notice 'PASS studio cancellation of a session returns the credit';
+  raise notice 'PASS studio cancellation of a session gives cancelled_studio and returns the credit (round three)';
 
   -- (6) totals: cancelled_late x2 + absent = 3 used, 1 left
   select pb.sessions_used, pb.sessions_left into v_used, v_left from public.package_balances pb
@@ -1356,9 +1367,10 @@ begin
   end if;
   raise notice 'PASS package totals agree with the credit rule (3 used, 1 left)';
 
-  -- (7) a notice time without a channel is refused (the notice pair)
+  -- (7) a notice time without a channel is refused (the notice pair). Uses a live booking (absent), because a
+  -- studio-cancelled booking is now refused by the log guard before the pair check.
   begin
-    update public.bookings set cancel_notice_at = now() where id = 'b1000000-0000-4000-8000-0000000000a5';
+    update public.bookings set cancel_notice_at = now() where id = 'b1000000-0000-4000-8000-0000000000a3';
     raise exception 'FAIL a notice time without a channel was accepted';
   exception when check_violation then
     raise notice 'PASS notice channel and notice time are stored together';
@@ -1372,7 +1384,7 @@ begin
   end if;
   raise notice 'PASS report_session_fill counts cancelled_late';
 
-  -- (9) two consenting guardians = two follow-up rows, labelled from the first ACTIVE child's nickname only
+  -- (9) two consenting guardians = two follow-up rows, labelled from the nicknames of every attending child (one here)
   insert into public.guardian_consent_records
     (id, family_id, guardian_id, purpose, consent_text_id, decision, channel, method)
   values ('6f000000-0000-4000-8000-0000000000a1', 'f0000000-0000-4000-8000-000000000003',
@@ -1389,7 +1401,7 @@ begin
   select min(fl.family_label_th), min(fl.family_label_en) into v_label, v_label_en
     from public.marketing_follow_up_list fl where fl.family_id = 'f0000000-0000-4000-8000-000000000003';
   if v_label is distinct from 'ครอบครัวน้องทดสอบ' or v_label_en is distinct from 'Family of ทดสอบ' then
-    raise exception 'FAIL follow-up label should be the first active child''s nickname, got % / %', v_label, v_label_en;
+    raise exception 'FAIL follow-up label should name every attending child (one child here), got % / %', v_label, v_label_en;
   end if;
   if exists (select 1 from information_schema.columns c
               where c.table_schema = 'public' and c.table_name = 'marketing_follow_up_list'
@@ -1467,6 +1479,340 @@ begin
 end
 $$;
 
+
+-- -----------------------------------------------------------------------------
+-- 7e. Round three (14 Oct 2026): cancellations and the cancellation log (briefs 1, 2, 6), the rebooking rule (brief 7),
+--     the follow-up label for one, two and three children (brief 5), the print status line (brief 4), the 6-month
+--     clock (brief 3). Family f…0004 is NEW: four children and one eight-pack, all on session N7 (…0008). FAKE data only.
+--     Cancellations go through cancel_booking(). Cancelling 'cancelled_studio' by session is in § 7d (5).
+-- -----------------------------------------------------------------------------
+
+do $$
+declare
+  v_today    date := (now() at time zone 'Asia/Bangkok')::date;
+  v_n1       date;
+  v_start    timestamptz;
+  v_n        integer;
+  v_status   public.booking_status;
+  v_left     integer;
+  v_outcome  public.cancellation_outcome;
+  v_label_th text;
+  v_label_en text;
+  v_rows     integer;
+  v_status_c text;
+  v_flag     boolean;
+  v_food     text;
+  v_rec      public.booking_cancellation_log%rowtype;
+  v_expect   numeric;
+  v_r        public.report_attendance_monthly%rowtype;
+  v_sess3    date;
+  v_start_n1 timestamptz;
+begin
+  v_n1 := v_today + ((6 - extract(isodow from v_today)::integer + 7) % 7);
+
+  insert into public.sessions (id, session_date, starts_at, ends_at, capacity, status, public_note_en, staff_note)
+  values ('b0000000-0000-4000-8000-000000000008', v_n1 + 35, '07:00', '08:00', 10, 'open', 'TEST', 'TEST round three N7');
+  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' into v_start
+    from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000008';
+
+  insert into public.families (id, display_name)
+  values ('f0000000-0000-4000-8000-000000000004', 'ครอบครัวทดสอบสี่ (TEST)');
+
+  insert into public.guardians
+    (id, family_id, full_name, phone, is_primary, has_parental_responsibility, responsibility_attested_at,
+     identity_check_method, identity_checked_at)
+  values ('a0000000-0000-4000-8000-0000000000b1', 'f0000000-0000-4000-8000-000000000004', 'ผู้ปกครองทดสอบเจ็ด',
+          '0800000013', true, true, now(), 'line_account', now());
+
+  insert into public.children (id, family_id, nickname)
+  values ('c0000000-0000-4000-8000-0000000000b1', 'f0000000-0000-4000-8000-000000000004', 'ทดสอบหนึ่ง'),
+         ('c0000000-0000-4000-8000-0000000000b2', 'f0000000-0000-4000-8000-000000000004', 'ทดสอบสอง'),
+         ('c0000000-0000-4000-8000-0000000000b3', 'f0000000-0000-4000-8000-000000000004', 'ทดสอบสาม'),
+         ('c0000000-0000-4000-8000-0000000000b4', 'f0000000-0000-4000-8000-000000000004', 'ทดสอบสี่');
+
+  insert into public.package_purchases (id, family_id, package_code, sessions_total, price_thb)
+  values ('d0000000-0000-4000-8000-0000000000b1', 'f0000000-0000-4000-8000-000000000004', 'eight', 8, 28800);
+
+  -- (L1) one child with a live booking: the label names one child
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000b1', 'b0000000-0000-4000-8000-000000000008',
+          'c0000000-0000-4000-8000-0000000000b1', 'd0000000-0000-4000-8000-0000000000b1', 'confirmed');
+  select count(*), min(l.label_th), min(l.label_en) into v_rows, v_label_th, v_label_en
+    from public.family_label('f0000000-0000-4000-8000-000000000004') l;
+  if v_rows <> 1 or v_label_th is distinct from 'ครอบครัวน้องทดสอบหนึ่ง' or v_label_en is distinct from 'Family of ทดสอบหนึ่ง' then
+    raise exception 'FAIL one-child label should be ครอบครัวน้องทดสอบหนึ่ง / Family of ทดสอบหนึ่ง, got % rows: % / %', v_rows, v_label_th, v_label_en;
+  end if;
+  raise notice 'PASS follow-up label for one child (TH: ครอบครัว + น้อง + nickname; EN: Family of nickname)';
+
+  -- (L2) verifier fix (14 Oct 2026): a LATE cancellation (notice after the cutoff) is cancelled_late, keeps the seat and
+  -- uses one credit, but the child is NOT named on the label (the label counts non-cancelled bookings only). The
+  -- 6-month health clock still counts the child (D50).
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000b2', 'b0000000-0000-4000-8000-000000000008',
+          'c0000000-0000-4000-8000-0000000000b2', 'd0000000-0000-4000-8000-0000000000b1', 'confirmed');
+  v_outcome := public.cancel_booking('b1000000-0000-4000-8000-0000000000b2', 'line', v_start - interval '2 hours', false);
+  if v_outcome is distinct from 'family_late' then
+    raise exception 'FAIL a late notice should log family_late, got %', v_outcome;
+  end if;
+  select b.status into v_status from public.bookings b where b.id = 'b1000000-0000-4000-8000-0000000000b2';
+  if v_status is distinct from 'cancelled_late' or not public.child_has_recent_booking('c0000000-0000-4000-8000-0000000000b2') then
+    raise exception 'FAIL a cancelled_late child should keep the 6-month clock (status %)', v_status;
+  end if;
+  select count(*), min(l.label_th), min(l.label_en) into v_rows, v_label_th, v_label_en
+    from public.family_label('f0000000-0000-4000-8000-000000000004') l;
+  if v_rows <> 1 or v_label_th is distinct from 'ครอบครัวน้องทดสอบหนึ่ง'
+     or v_label_en is distinct from 'Family of ทดสอบหนึ่ง' then
+    raise exception 'FAIL a late-cancelled child must not be named on the label (one child only), got % / %', v_label_th, v_label_en;
+  end if;
+  raise notice 'PASS a late cancellation is not named on the label, but keeps the 6-month clock (round three, verifier fix)';
+
+  -- (L3) b2 books another session (N4, session 0005) and b3 books N8: three attending children now. The label uses a
+  -- comma for the middle names and "และ" before the last one. b2 is named because of the non-cancelled N4 booking.
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000b5', 'b0000000-0000-4000-8000-000000000005',
+          'c0000000-0000-4000-8000-0000000000b2', 'd0000000-0000-4000-8000-0000000000b1', 'confirmed');
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000b3', 'b0000000-0000-4000-8000-000000000008',
+          'c0000000-0000-4000-8000-0000000000b3', 'd0000000-0000-4000-8000-0000000000b1', 'confirmed');
+  select count(*), min(l.label_th), min(l.label_en) into v_rows, v_label_th, v_label_en
+    from public.family_label('f0000000-0000-4000-8000-000000000004') l;
+  if v_rows <> 1 or v_label_th is distinct from 'ครอบครัวน้องทดสอบหนึ่ง, น้องทดสอบสอง และ น้องทดสอบสาม'
+     or v_label_en is distinct from 'Family of ทดสอบหนึ่ง, ทดสอบสอง and ทดสอบสาม' then
+    raise exception 'FAIL three-child label, got % / %', v_label_th, v_label_en;
+  end if;
+  raise notice 'PASS follow-up label for three children: comma between the first two, และ / and before the last';
+
+  -- (L4) a child whose only booking on N8 is cancelled ON TIME (notice 'phone', exactly at the cutoff) is not counted.
+  -- The label still names the three children who have a non-cancelled booking (b2 via N4).
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status)
+  values ('b1000000-0000-4000-8000-0000000000b4', 'b0000000-0000-4000-8000-000000000008',
+          'c0000000-0000-4000-8000-0000000000b4', 'd0000000-0000-4000-8000-0000000000b1', 'confirmed');
+  v_outcome := public.cancel_booking('b1000000-0000-4000-8000-0000000000b4', 'phone', v_start - interval '3 hours', false);
+  if v_outcome is distinct from 'family_on_time' then
+    raise exception 'FAIL a phone notice exactly cancel_notice_hours before should be family_on_time, got %', v_outcome;
+  end if;
+  if public.child_has_recent_booking('c0000000-0000-4000-8000-0000000000b4') then
+    raise exception 'FAIL a child cancelled on time should not keep the 6-month clock';
+  end if;
+  select count(*) into v_rows from public.family_label('f0000000-0000-4000-8000-000000000004');
+  if v_rows <> 1 or (select l.label_en from public.family_label('f0000000-0000-4000-8000-000000000004') l)
+                    is distinct from 'Family of ทดสอบหนึ่ง, ทดสอบสอง and ทดสอบสาม' then
+    raise exception 'FAIL a child cancelled on time should drop off the label';
+  end if;
+  raise notice 'PASS a phone notice exactly at the cutoff is on time (credit kept); the child drops off the clock';
+
+  -- (L5) the third child cancels with a teacher as the notice: back to two children
+  v_outcome := public.cancel_booking('b1000000-0000-4000-8000-0000000000b3', 'teacher', v_start - interval '5 hours', false);
+  if v_outcome is distinct from 'family_on_time' then
+    raise exception 'FAIL a teacher notice 5 hours before should be family_on_time, got %', v_outcome;
+  end if;
+  select count(*), min(l.label_th), min(l.label_en) into v_rows, v_label_th, v_label_en
+    from public.family_label('f0000000-0000-4000-8000-000000000004') l;
+  if v_rows <> 1 or v_label_th is distinct from 'ครอบครัวน้องทดสอบหนึ่ง และ น้องทดสอบสอง'
+     or v_label_en is distinct from 'Family of ทดสอบหนึ่ง and ทดสอบสอง' then
+    raise exception 'FAIL after the third child cancels, the label should name two children, got % / %', v_label_th, v_label_en;
+  end if;
+  raise notice 'PASS a teacher notice counts as notice (any channel); the label drops that child';
+
+  -- (L6) no attending child (a family id with no children): no row
+  select count(*) into v_rows from public.family_label('f0000000-0000-4000-8000-0000000000ff');
+  if v_rows <> 0 then
+    raise exception 'FAIL a family with no attending child should give no label row';
+  end if;
+  raise notice 'PASS a family with no attending child has no label row';
+
+  -- (C) the cancellation log: one row per cancellation event, with outcome, channel and notice time
+  -- a1 was booked on N1 (…0002) in § 7d; its notice was exactly cancel_notice_hours before N1 starts
+  select (s.session_date + s.starts_at) at time zone 'Asia/Bangkok' - interval '3 hours' into v_start_n1
+    from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000002';
+  select * into v_rec from public.booking_cancellation_log l where l.booking_id = 'b1000000-0000-4000-8000-0000000000a1';
+  if v_rec.outcome is distinct from 'family_on_time' or v_rec.notice_channel is distinct from 'line'
+     or v_rec.notice_at is distinct from v_start_n1 then
+    raise exception 'FAIL log row for the on-time cancel (section 7d) is wrong: % / % / %', v_rec.outcome, v_rec.notice_channel, v_rec.notice_at;
+  end if;
+  select * into v_rec from public.booking_cancellation_log l where l.booking_id = 'b1000000-0000-4000-8000-0000000000a2';
+  if v_rec.outcome is distinct from 'family_late' or v_rec.notice_channel is distinct from 'in_person' then
+    raise exception 'FAIL log row for the late cancel with a notice is wrong: % / %', v_rec.outcome, v_rec.notice_channel;
+  end if;
+  select * into v_rec from public.booking_cancellation_log l where l.booking_id = 'b1000000-0000-4000-8000-0000000000b2';
+  if v_rec.outcome is distinct from 'family_late' or v_rec.notice_channel is distinct from 'line' then
+    raise exception 'FAIL log row for the late cancel on N8 (line) is wrong: % / %', v_rec.outcome, v_rec.notice_channel;
+  end if;
+  -- verifier fix: a missed class recorded as absent (§ 7d (4)) writes no cancellation row
+  select count(*) into v_n from public.booking_cancellation_log l where l.booking_id = 'b1000000-0000-4000-8000-0000000000a4';
+  if v_n <> 0 then
+    raise exception 'FAIL a missed class recorded as absent must not write a cancellation log row';
+  end if;
+  select * into v_rec from public.booking_cancellation_log l where l.booking_id = 'b1000000-0000-4000-8000-0000000000a5';
+  -- recorded_by = auth.uid(); the SQL editor has no signed-in user, so it is NULL in this seed (verifier fix: comment only)
+  if v_rec.outcome is distinct from 'studio' or v_rec.recorded_by is not null then
+    raise exception 'FAIL log row for the studio cancellation is wrong: % / %', v_rec.outcome, v_rec.recorded_by;
+  end if;
+  select count(*) into v_n from public.booking_cancellation_log l where l.booking_id = 'b1000000-0000-4000-8000-0000000000a3';
+  if v_n <> 0 then
+    raise exception 'FAIL an absence must not write a cancellation log row';
+  end if;
+  select l.notice_channel::text into v_status_c from public.booking_cancellation_log l
+   where l.booking_id = 'b1000000-0000-4000-8000-0000000000b4';
+  if v_status_c is distinct from 'phone' then
+    raise exception 'FAIL the phone notice should be stored as phone, got %', v_status_c;
+  end if;
+  select l.notice_channel::text into v_status_c from public.booking_cancellation_log l
+   where l.booking_id = 'b1000000-0000-4000-8000-0000000000b3';
+  if v_status_c is distinct from 'teacher' then
+    raise exception 'FAIL the teacher notice should be stored as teacher, got %', v_status_c;
+  end if;
+  raise notice 'PASS cancellation log: family_on_time / family_late / studio rows with channel and notice time; absences write none';
+
+  -- (G) guards: a direct edit cannot cancel, a second cancel is refused, studio cannot carry a notice, the log is append-only
+  begin
+    update public.bookings set status = 'cancelled' where id = 'b1000000-0000-4000-8000-0000000000a3';
+    raise exception 'FAIL a direct cancel of a booking was accepted';
+  exception when insufficient_privilege then
+    raise notice 'PASS a direct status edit cannot cancel a booking (only cancel_booking() writes the log)';
+  end;
+  begin
+    perform public.cancel_booking('b1000000-0000-4000-8000-0000000000a1', 'line', v_start - interval '3 hours', false);
+    raise exception 'FAIL a booking was cancelled twice';
+  exception when check_violation then
+    raise notice 'PASS a cancelled booking cannot be cancelled again';
+  end;
+  begin
+    perform public.cancel_booking('b1000000-0000-4000-8000-0000000000b1', 'line', now(), true);
+    raise exception 'FAIL a studio cancellation with a notice was accepted';
+  exception when invalid_parameter_value then
+    raise notice 'PASS a studio cancellation carries no notice';
+  end;
+  begin
+    update public.booking_cancellation_log set outcome = 'studio' where booking_id = 'b1000000-0000-4000-8000-0000000000a1';
+    raise exception 'FAIL the cancellation log accepted an update';
+  exception when insufficient_privilege then
+    raise notice 'PASS booking_cancellation_log cannot be updated';
+  end;
+  begin
+    delete from public.booking_cancellation_log where booking_id = 'b1000000-0000-4000-8000-0000000000a1';
+    raise exception 'FAIL the cancellation log accepted a delete';
+  exception when insufficient_privilege then
+    raise notice 'PASS booking_cancellation_log cannot be deleted';
+  end;
+
+  -- (R) brief 7: a rebooking uses the returned credit (child of § 7d, family 3, studio-cancelled on N6), no notice check
+  insert into public.bookings (id, session_id, child_id, package_purchase_id, status, makeup_of_booking_id)
+  values ('b1000000-0000-4000-8000-0000000000c1', 'b0000000-0000-4000-8000-000000000008',
+          'c0000000-0000-4000-8000-0000000000a1', 'd0000000-0000-4000-8000-0000000000a1', 'confirmed',
+          'b1000000-0000-4000-8000-0000000000a5');
+  select pb.sessions_left into v_left from public.package_balances pb
+   where pb.package_purchase_id = 'd0000000-0000-4000-8000-0000000000a1';
+  if v_left is distinct from 0 then
+    raise exception 'FAIL the rebooking should use the returned credit, left %', v_left;
+  end if;
+  raise notice 'PASS a rebooking uses the returned credit (no make-up notice check)';
+  begin
+    insert into public.bookings (session_id, child_id, package_purchase_id, status)
+    values ('b0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-0000000000a1',
+            'd0000000-0000-4000-8000-0000000000a1', 'confirmed');
+    raise exception 'FAIL a booking with no sessions left was accepted';
+  exception when check_violation then
+    raise notice 'PASS no booking beyond the package credits, after the rebooking';
+  end;
+  begin
+    insert into public.bookings (session_id, child_id, package_purchase_id, status, makeup_of_booking_id)
+    values ('b0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-0000000000b1',
+            'd0000000-0000-4000-8000-0000000000b1', 'confirmed', 'b1000000-0000-4000-8000-0000000000a5');
+    raise exception 'FAIL a rebooking linked to another child was accepted';
+  exception when check_violation then
+    raise notice 'PASS a rebooking must replace a booking of the same child';
+  end;
+
+  -- (H) brief 3: the 6-month clock counts cancelled_late, not cancelled or cancelled_studio.
+  -- PROVISIONAL (verifier fix): the cancelled_studio rule is the drafter's reading; the owner has not ruled (00 § 13B c).
+  if not public.child_has_recent_booking('c0000000-0000-4000-8000-0000000000b1')
+     or not public.child_has_recent_booking('c0000000-0000-4000-8000-0000000000b2') then
+    raise exception 'FAIL a live or cancelled_late child should keep the 6-month clock';
+  end if;
+  if public.child_has_recent_booking('c0000000-0000-4000-8000-0000000000b3')
+     or public.child_has_recent_booking('c0000000-0000-4000-8000-0000000000b4') then
+    raise exception 'FAIL a child cancelled on time should not keep the 6-month clock';
+  end if;
+  if public.booking_is_live('cancelled_late'::public.booking_status) is not true
+     or public.booking_is_live('cancelled'::public.booking_status) is not false
+     or public.booking_is_live('cancelled_studio'::public.booking_status) is not false
+     or public.booking_is_live('absent'::public.booking_status) is not true then
+    raise exception 'FAIL booking_is_live truth table is wrong';
+  end if;
+  raise notice 'PASS the 6-month clock counts cancelled_late; cancelled and cancelled_studio do not (brief 3)';
+
+  -- (P) brief 4: the print read model always carries the health consent STATUS; content only with includeHealth
+  -- P1 granted: the guardian grants health for b1, staff stores an allergen and notes
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-0000000000b1',
+          'c0000000-0000-4000-8000-0000000000b1', 'health_allergy', '60000000-0000-4000-8000-000000000001',
+          'granted', 'guardian', 'web', 'checkbox');
+  perform public.upsert_child_health('c0000000-0000-4000-8000-0000000000b1', array['flour'], null, 'TEST food', 'TEST note');
+  select g.health_consent_status into v_status_c
+    from public.get_child_health('c0000000-0000-4000-8000-0000000000b1', false) g;
+  if v_status_c is distinct from 'granted' then
+    raise exception 'FAIL print status should be granted, got %', v_status_c;
+  end if;
+  -- P2 not asked: no consent row at all (b2 has none)
+  select g.health_consent_status, g.has_health_record into v_status_c, v_flag
+    from public.get_child_health('c0000000-0000-4000-8000-0000000000b2', false) g;
+  if v_status_c is distinct from 'not_asked' or v_flag then
+    raise exception 'FAIL print status should be not_asked with no health record, got % / %', v_status_c, v_flag;
+  end if;
+  -- P3 refused: a guardian refusal for b4 (no health row)
+  insert into public.consent_records (family_id, guardian_id, child_id, purpose, consent_text_id, decision,
+                                      given_by, channel, method)
+  values ('f0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-0000000000b1',
+          'c0000000-0000-4000-8000-0000000000b4', 'health_allergy', '60000000-0000-4000-8000-000000000001',
+          'refused', 'guardian', 'web', 'checkbox');
+  select g.health_consent_status into v_status_c
+    from public.get_child_health('c0000000-0000-4000-8000-0000000000b4', false) g;
+  if v_status_c is distinct from 'refused' then
+    raise exception 'FAIL print status should be refused, got %', v_status_c;
+  end if;
+  -- P4 the status is shown with includeHealth false; the content is not; with true the content comes back
+  select g.foods_to_avoid into v_food
+    from public.get_child_health('c0000000-0000-4000-8000-0000000000b1', false) g;
+  if v_food is not null then
+    raise exception 'FAIL includeHealth = false must not return the food notes';
+  end if;
+  select g.foods_to_avoid into v_food
+    from public.get_child_health('c0000000-0000-4000-8000-0000000000b1', true) g;
+  if v_food is distinct from 'TEST food' then
+    raise exception 'FAIL includeHealth = true must return the food notes';
+  end if;
+  perform public.record_family_print('f0000000-0000-4000-8000-000000000004', false);
+  perform public.record_family_print('f0000000-0000-4000-8000-000000000004', true);
+  raise notice 'PASS print read model: health consent status on every sheet (granted, not_asked, refused); content only with includeHealth';
+
+  -- (RP) brief 2: the reports count cancellations from the log
+  if (select rf.cancelled from public.report_session_fill rf where rf.session_id = 'b0000000-0000-4000-8000-000000000008') is distinct from 2
+     or (select rf.cancelled_late from public.report_session_fill rf where rf.session_id = 'b0000000-0000-4000-8000-000000000008') is distinct from 1
+     or (select rf.seats_booked from public.report_session_fill rf where rf.session_id = 'b0000000-0000-4000-8000-000000000008') is distinct from 3 then
+    raise exception 'FAIL N7 fill should be cancelled 2, cancelled_late 1, seats_booked 3 (live: b1, b2, rebook)';
+  end if;
+  if (select rf.cancelled from public.report_session_fill rf where rf.session_id = 'b0000000-0000-4000-8000-000000000002') is distinct from 1
+     or (select rf.cancelled_studio from public.report_session_fill rf where rf.session_id = 'b0000000-0000-4000-8000-000000000007') is distinct from 1 then
+    raise exception 'FAIL report_session_fill should count one on-time cancel on N1 and one studio cancel on N6 from the log';
+  end if;
+  raise notice 'PASS report_session_fill counts cancellations from booking_cancellation_log (on time, late, studio)';
+
+  -- attendance rate: a late cancellation is not an absence (left out of numerator and denominator)
+  select (s.session_date) into v_sess3 from public.sessions s where s.id = 'b0000000-0000-4000-8000-000000000004';
+  select r.* into v_r from public.report_attendance_monthly r
+   where r.month = (date_trunc('month', v_sess3::timestamp))::date;
+  if v_r.cancelled_late < 1 then
+    raise exception 'FAIL the month of N3 should show the late cancellation';
+  end if;
+  v_expect := round(100.0 * v_r.attended / nullif(v_r.attended + v_r.absent, 0), 1);
+  if v_r.attendance_rate_pct is distinct from v_expect then
+    raise exception 'FAIL attendance rate should be attended / (attended + absent), got % expected %', v_r.attendance_rate_pct, v_expect;
+  end if;
+  raise notice 'PASS attendance rate leaves cancelled_late out (not an absence)';
+end
+$$;
 
 -- -----------------------------------------------------------------------------
 -- 8. Privacy operations (P5): deadlines, export, erase, purge
@@ -1549,10 +1895,19 @@ begin
                     and gcr.guardian_id is null and gcr.retain_until > now() + interval '1000 days') then
     raise exception 'FAIL marketing choices should be detached and kept ~3 years';
   end if;
+  -- verifier fix (14 Oct 2026): erase keeps the round-two behaviour. The future booking keeps its status (confirmed)
+  -- and its credit, is anonymised, and erase writes NO cancellation row. Only the family id is detached from log rows.
   if not exists (select 1 from public.bookings b
                   where b.id = 'b1000000-0000-4000-8000-000000000002'
-                    and b.status = 'cancelled' and b.child_id is null and b.family_id is null) then
-    raise exception 'FAIL future booking should be cancelled and anonymised';
+                    and b.status = 'confirmed'::public.booking_status and b.child_id is null and b.family_id is null) then
+    raise exception 'FAIL erase should keep the future booking confirmed (no studio cancellation) and anonymise it';
+  end if;
+  if exists (select 1 from public.booking_cancellation_log l
+              where l.booking_id = 'b1000000-0000-4000-8000-000000000002') then
+    raise exception 'FAIL erase must not write a cancellation log row for a future booking';
+  end if;
+  if exists (select 1 from public.booking_cancellation_log l where l.family_id = 'f0000000-0000-4000-8000-000000000001') then
+    raise exception 'FAIL the cancellation log should drop the family id on erase';
   end if;
   if exists (select 1 from public.booking_requests br where br.id = '90000000-0000-4000-8000-000000000001') then
     raise exception 'FAIL the family''s booking request should be deleted';

@@ -1,6 +1,6 @@
 # 40 · Integrations and setup runbooks
 
-Planning document, October 2026. Names (gates G0–G13 + G-MVP/G-HEALTH/G-PARK, decisions D1–D39, secrets, tables, functions, files) come from
+Planning document, October 2026. Names (gates G0–G13 + G-MVP/G-HEALTH/G-PARK, decisions D1–D55, secrets, tables, functions, files) come from
 [`00-overview.md`](00-overview.md) §§ 5, 9, 10, 11. If this file disagrees with `00-overview.md`, `10-data-model.md` or
 `20-server-api.md`, those files win; fix this one.
 
@@ -524,6 +524,7 @@ the alert OA to a paid plan (Basic ฿1,280/month + VAT, 15,000 messages; prices
   the Messaging API.
 - **Round two (14 Oct 2026, item 8): D26 is kept, no change.** The owner answered "คงไว้" (keep it). This confirms the reading of D35 that the owner was asked to confirm: parents message `@cherryleeandco` first or add the OA themselves, and staff never copy a parent's LINE ID.
 - **Exports and print do not leave the system (D33, D42).** The export and the signing sheet are made on request and go only to the staff member's browser. Nothing is sent to LINE, e-mail or any third party, and the signing sheet is not stored on the server. A PDF saved from the browser is a file on the staff member's own device, so the device rules in `50-security-privacy.md` § 23 item 7 apply.
+- **Notice time from the channel that received it (D53, round three; D26 unchanged).** A cancellation notice can arrive by phone, on LINE, by telling a teacher, or in person (`cancel_notice_channel` = `line`, `phone`, `teacher` or `in_person`). The system receives nothing from any of these: no webhook, no call log and no LINE push (D6). Staff type the time the notice reached the studio into the booking screen (`cancel_notice_at`): the call time for `phone`, the message time shown in the OA chat for `line`, the time the teacher was told for `teacher`, and the time of the visit for `in_person`. The LINE rule stays as it is (D26, D35, D47). **Confirmed:** the notice time is recorded from the channel that received it, and no integration is needed for it.
 
 ---
 

@@ -21,7 +21,16 @@
 --             Round two (14 Oct 2026, brief items 2, 4, 5): export_family_data reads health ONLY through
 --             get_child_health(child, includeHealth) (the plain join is removed); marketing_follow_up_list has one row
 --             per granted guardian and the label 'ครอบครัวน้อง' + the first active child's nickname (+ English label).
---             erase_family keeps credits (cherrylee.studio_cancel). Checks: seed_dev § 7d.
+--             [Superseded in round three: the label names every attending child, see family_label(), D52.]
+--             erase_family keeps credits (round two). Checks: seed_dev § 7d.
+--             Round three (14 Oct 2026, briefs 1, 2, 3, 5, 8): erase_family keeps the round-two behaviour (verifier fix:
+--             the round-three draft cancelled the family's future bookings and returned credits; removed). It no longer
+--             writes a 'studio' log row or changes any booking status, and it still detaches the family id from existing
+--             booking_cancellation_log rows (family_id NULL). The erase path uses cherrylee.allow_purge only; the
+--             cherrylee.studio_cancel setting is gone. Purge v4 counts live bookings (cancelled_late counts for the
+--             6-month health clock and for the credit; cancelled on time and cancelled_studio do not) and purges the
+--             cancellation log by retain_until. marketing_follow_up_list takes its label
+--             from family_label() (section 9): every attending child, nicknames only. Checks: seed_dev § 7e.
 -- Delivery (review R-12): 0007 must be applied BEFORE family records (P3) go live, because retention,
 --             export, erasure and restriction for families live here. It depends on 0005, so the order is
 --             0004 → 0005 → 0007 → (Stage B publish); 0006/0006b wait for G9b.
@@ -412,7 +421,8 @@ create or replace trigger family_contacts_block_restricted
 
 -- -----------------------------------------------------------------------------
 -- 5. mark_inactive_families() — run daily by purge_expired_records (v4); owner may also call it.
---    last activity = latest of: family created, non-cancelled booking session date, payment,
+--    last activity = latest of: family created, live booking session date (booking_is_live; round three: a late
+--    cancellation counts, a cancellation on time or by the studio does not), payment,
 --    package purchase, consent record, link use. (Profile edits are NOT counted: system jobs touch
 --    updated_at too. The privacy notice says exactly this list, review R-25.) Inactive = no activity for
 --    12 months → status 'inactive' and retain_until = now() + 30 days (notice window shown in the admin).
@@ -442,7 +452,7 @@ begin
                 from public.bookings b
                 join public.sessions s on s.id = b.session_id
                where b.family_id = f.id
-                 and b.status <> 'cancelled'::public.booking_status),
+                 and public.booking_is_live(b.status)),
              (select max(coalesce(p.paid_at, p.created_at)) from public.payments p where p.family_id = f.id),
              (select max(pp.created_at) from public.package_purchases pp where pp.family_id = f.id),
              (select max(cr.created_at) from public.consent_records cr where cr.family_id = f.id),
@@ -574,7 +584,9 @@ grant execute on function public.export_family_data(uuid, boolean) to authentica
 
 -- -----------------------------------------------------------------------------
 -- 7. erase_family(p_family_id) — owner (erasure request) or the nightly purge (retention).
---    1. cancels the family's future held/confirmed bookings (frees seats)
+--    1. (verifier fix, round three) no booking status changes and no credit is returned: the round-two behaviour.
+--       Future bookings keep their status and credit. No 'studio' log row is written. The family id is detached
+--       from existing booking_cancellation_log rows (counts stay for statistics).
 --    2. detaches consent_records: ids → NULL, retain_until = now() + 3 years (snapshots stay)
 --    3. anonymises bookings (child/family/pickup → NULL, staff_note → NULL)
 --    4. anonymises payments and package purchases (family_id → NULL, note → NULL);
@@ -609,18 +621,9 @@ begin
   v_prev_flag := current_setting('cherrylee.allow_purge', true);
   perform set_config('cherrylee.allow_purge', 'on', true);
 
-  -- Round two: a system cancellation gives the credit back (validate_booking skips the notice rule).
-  perform set_config('cherrylee.studio_cancel', 'on', true);
-  update public.bookings b
-     set status = 'cancelled'::public.booking_status
-    from public.sessions s
-   where s.id = b.session_id
-     and b.family_id = p_family_id
-     and b.status in ('held'::public.booking_status, 'confirmed'::public.booking_status)
-     and s.session_date >= (now() at time zone 'Asia/Bangkok')::date;
-  get diagnostics v_n = row_count;
-  v_counts := v_counts || jsonb_build_object('future_bookings_cancelled', v_n);
-  perform set_config('cherrylee.studio_cancel', 'off', true);
+  -- Verifier fix (14 Oct 2026): erase keeps the round-two behaviour. Future bookings and their credits are NOT
+  -- cancelled and no status changes; no 'studio' log row is written. (Decision: erase and other non-cancellation
+  -- paths keep their current behaviour, D48.) Only the family id is detached from earlier cancellation log rows below.
 
   update public.consent_records
      set family_id = null,
@@ -649,6 +652,14 @@ begin
    where family_id = p_family_id;
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('bookings_anonymised', v_n);
+
+  -- Round three: the cancellation log keeps counts only. The family id goes here (the log is append-only;
+  -- the allow_purge flag set at the top of this function is the only bypass).
+  update public.booking_cancellation_log
+     set family_id = null
+   where family_id = p_family_id;
+  get diagnostics v_n = row_count;
+  v_counts := v_counts || jsonb_build_object('cancellation_log_detached', v_n);
 
   update public.payments
      set family_id = null,
@@ -735,18 +746,13 @@ begin
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('booking_requests', v_n);
 
-  -- 3. Health: 6 months after the child's last (or next) non-cancelled session; mark the child (R-07).
+  -- 3. Health: 6 months after the child's last (or next) live booking; mark the child (R-07).
+  --    Round three (brief 3): child_has_recent_booking (0005) — a cancelled_late booking COUNTS for this clock;
+  --    a cancellation on time and a studio cancellation do not.
   with purged as (
     delete from public.child_health h
      where h.updated_at < now() - interval '6 months'
-       and not exists (
-         select 1
-           from public.bookings b
-           join public.sessions s on s.id = b.session_id
-          where b.child_id = h.child_id
-            and b.status <> 'cancelled'::public.booking_status
-            and s.session_date >= ((now() at time zone 'Asia/Bangkok') - interval '6 months')::date
-       )
+       and not public.child_has_recent_booking(h.child_id)
     returning h.child_id
   )
   update public.children c
@@ -765,15 +771,16 @@ begin
 
   -- 4. Attendance, then money (bookings are always younger than packages/payments).
   --    R-10: count the credits of expiring bookings first, so balances never "get credits back".
-  -- Round two: a credit is used when consumes_credit and status is not 'cancelled' (absent and cancelled_late count;
-  -- a cancellation with notice on time does not), the same rule as validate_booking and package_balances.
+  -- Round two/three: a credit is used when consumes_credit and the booking is live (booking_is_live: absent and
+  -- cancelled_late count; cancelled on time and cancelled_studio do not), the same rule as validate_booking and
+  -- package_balances.
   update public.package_purchases pp
      set sessions_used_purged = least(pp.sessions_total, pp.sessions_used_purged + x.n)
     from (select b.package_purchase_id, count(*)::smallint as n
             from public.bookings b
            where b.retain_until < now()
              and b.consumes_credit
-             and b.status <> 'cancelled'::public.booking_status
+             and public.booking_is_live(b.status)
              and b.package_purchase_id is not null
            group by b.package_purchase_id) as x
    where pp.id = x.package_purchase_id;
@@ -781,6 +788,12 @@ begin
   delete from public.bookings where retain_until < now();
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('bookings', v_n);
+
+  -- Round three (brief 2): the cancellation statistics expire with the bookings they describe (retain_until,
+  -- 24 months after the session). The flag set at the top of this function allows the delete.
+  delete from public.booking_cancellation_log where retain_until < now();
+  get diagnostics v_n = row_count;
+  v_counts := v_counts || jsonb_build_object('booking_cancellation_log', v_n);
 
   delete from public.payments where retain_until < now();
   get diagnostics v_n = row_count;
@@ -831,35 +844,93 @@ grant execute on function public.purge_expired_records() to service_role;
 --    consenting guardians has two rows, each with the same family label; brief item 5).
 --    Columns (minimum to reach a family by hand from the studio's LINE OA chat):
 --      family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at.
---    Family label (brief item 4): 'ครอบครัวน้อง' + the NICKNAME of the family's first ACTIVE child (ordered by
---    created_at, then id); English: 'Family of ' + the same nickname. Nickname only: never a full name, age or health data.
---    The nickname is stored without the word น้อง, because the label adds it.
---    A family with no active child is not listed (no label to show); staff look at it on the family page.
+--    Family label (round three, brief 5; verifier fix): family_label(family_id) (below) names EVERY child who attends: a
+--    child with a non-cancelled booking in the 6-month window (cancelled, cancelled_late, cancelled_studio do not count).
+--    Nicknames only, in creation order.
+--      Thai:    'ครอบครัว' + 'น้อง' + nickname;  two: 'ครอบครัวน้องA และ น้องB';  three or more: 'ครอบครัวน้องA, น้องB และ น้องC'
+--      English: 'Family of A' · 'Family of A and B' · 'Family of A, B and C'
+--    The nickname is stored without the word น้อง, because the label adds it. Nickname only: never a full name, age or health data.
+--    A family with no attending child is not listed (no label to show); staff look at it on the family page.
 --    Excluded: inactive families and restricted families (PDPA s.34: no new processing, marketing included).
 --    Built on current_marketing_consents (0005), so the caller's RLS applies (staff only). No phone, e-mail or
 --    LINE ID. No child data is shown to anyone outside staff. The guardian_name tells apart the two rows of one family.
 -- -----------------------------------------------------------------------------
 
+-- family_label(family_id) — the follow-up label, written once so that the view and the tests share it (round three, brief 5).
+-- Children counted (verifier fix, 14 Oct 2026): a child counts when at least one of their bookings in the window has a
+-- status that is NOT a cancellation: cancelled, cancelled_late and cancelled_studio do not count; held, confirmed,
+-- attended and absent do (D52: "non-cancelled booking"). A child whose only booking was cancelled late is NOT named.
+-- The window is the one the health clock uses: session date from 6 months back onwards. The SQL has no upper bound, so
+-- future bookings count too. The notice says "last 6 months". This wording gap is an OPEN owner question (00 § 13B).
+-- child_has_recent_booking (0005) is for the health clock only and is NOT used here.
+-- Nicknames only, in creation order (created_at, then id). No attending child → no row (the function returns nothing).
+-- is_active is NOT used (D52 counts bookings only). Staff or server only.
+create or replace function public.family_label(p_family_id uuid)
+returns table (label_th text, label_en text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_nicks     text[];
+  v_th_items  text[];
+  v_n         integer;
+  v_th        text;
+  v_en        text;
+begin
+  perform public.require_staff_or_server();
+
+  select array_agg(c.nickname order by c.created_at, c.id)
+    into v_nicks
+    from public.children c
+   where c.family_id = p_family_id
+     and exists (
+       select 1
+         from public.bookings b
+         join public.sessions s on s.id = b.session_id
+        where b.child_id = c.id
+          and b.status not in ('cancelled'::public.booking_status, 'cancelled_late'::public.booking_status,
+                               'cancelled_studio'::public.booking_status)
+          and s.session_date >= ((now() at time zone 'Asia/Bangkok') - interval '6 months')::date
+     );
+
+  v_n := coalesce(array_length(v_nicks, 1), 0);
+  if v_n = 0 then
+    return;
+  end if;
+
+  -- Thai: each nickname gets the word น้อง. One child: 'ครอบครัวน้องA'. Two: 'ครอบครัวน้องA และ น้องB'.
+  -- Three or more: 'ครอบครัวน้องA, น้องB และ น้องC'. English: the nicknames only, 'Family of A, B and C'.
+  v_th_items := array(select 'น้อง' || x from unnest(v_nicks) as x);
+  if v_n = 1 then
+    v_th := 'ครอบครัว' || v_th_items[1];
+    v_en := 'Family of ' || v_nicks[1];
+  else
+    v_th := 'ครอบครัว' || array_to_string(v_th_items[1:v_n - 1], ', ') || ' และ ' || v_th_items[v_n];
+    v_en := 'Family of ' || array_to_string(v_nicks[1:v_n - 1], ', ') || ' and ' || v_nicks[v_n];
+  end if;
+
+  return query select v_th, v_en;
+end;
+$$;
+
+revoke execute on function public.family_label(uuid) from public, anon;
+grant execute on function public.family_label(uuid) to authenticated, service_role;
+
 create or replace view public.marketing_follow_up_list
 with (security_invoker = true)
 as
-select f.id                                 as family_id,
-       g.id                                 as guardian_id,
-       g.full_name                          as guardian_name,
-       ('ครอบครัวน้อง' || first_child.nickname) as family_label_th,
-       ('Family of ' || first_child.nickname)   as family_label_en,
-       cm.given_at                          as consented_at
+select f.id                  as family_id,
+       g.id                  as guardian_id,
+       g.full_name           as guardian_name,
+       fl.label_th           as family_label_th,
+       fl.label_en           as family_label_en,
+       cm.given_at           as consented_at
   from public.current_marketing_consents cm
   join public.guardians g on g.id = cm.guardian_id
   join public.families f on f.id = cm.family_id
-  join lateral (
-    select c.nickname
-      from public.children c
-     where c.family_id = f.id
-       and c.is_active
-     order by c.created_at, c.id
-     limit 1
-  ) as first_child on true
+  cross join lateral public.family_label(f.id) as fl     -- no row when the family has no attending child
  where cm.decision = 'granted'
    and f.status = 'active'
    and f.processing_restricted_at is null;

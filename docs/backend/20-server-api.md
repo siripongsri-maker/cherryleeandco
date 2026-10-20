@@ -221,7 +221,6 @@ export type AdminErrorCode =
   | "file_type"
   | "confirm_mismatch"
   | "family_restricted"
-  | "make_up_notice_short"
   | "server_error";
 
 export function adminError(code: AdminErrorCode): Error {
@@ -243,7 +242,6 @@ const ADMIN_CODES: readonly AdminErrorCode[] = [
   "file_type",
   "confirm_mismatch",
   "family_restricted",
-  "make_up_notice_short",
   "server_error",
 ];
 
@@ -306,11 +304,7 @@ Parent-facing messages for `PublicErrorCode` (the copy itself lives in `src/cont
 | `link_used` | enrol link already submitted | ส่งข้อมูลผ่านลิงก์นี้เรียบร้อยแล้วค่ะ ถ้าต้องการแก้ไข ทักทีมงานทาง LINE ได้เลยนะคะ | This form has already been sent. To change anything, message us on LINE. |
 | `server_error` | anything else | ขออภัยค่ะ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้ง หรือทักเราทาง LINE ได้เลยค่ะ | Sorry, something went wrong on our side. Please try again, or message us on LINE. |
 
-`make_up_notice_short` (added 14 October 2026, owner decision 10; round two, option ก): a make-up was asked for, but the original
-booking was cancelled with notice that came less than `cancel_notice_hours` before the original session started (its status is
-`cancelled_late`, § 9.7). The same rule decides `cancelled` (credit kept) against `cancelled_late` (credit used) when staff record a
-cancellation. Staff copy: TH "แจ้งไม่ทันเวลาค่ะ ต้องแจ้งอย่างน้อย {n} ชั่วโมงก่อนเวลาเรียนเดิม" ·
-EN "Notice came too late. Notice of at least {n} hours before the original class is needed."
+Removed in round three (decision 1): `make_up_notice_short` goes with the make-up rule, so no code replaces it. The on-time rule is decided by the database, not by an error code. A notice at or before (session start − `cancel_notice_hours`) keeps the credit (`cancelled`). A later notice uses one credit (`cancelled_late`). The server only reads back the status the database now holds (§ 9.7).
 
 Staff-facing messages for `AdminErrorCode` live in `src/content/admin/core.tsx` → `errors` (used as
 `adminContent[lang].errors`; full text in `30-ui.md` § 5 and § 5.1).
@@ -1595,7 +1589,7 @@ export const isWeekendDate = (isoDate: string): boolean => [0, 6].includes(weekd
 
 /**
  * Start of a session as an instant (rev 14 Oct 2026, decision 10). `sessions.starts_at` is a Bangkok wall-clock `time`
- * with no zone, and Thailand has no daylight saving, so the offset +07:00 is fixed. Used by the make-up notice check.
+ * with no zone, and Thailand has no daylight saving, so the offset +07:00 is fixed. Used by the on-time tests (§ 9.7); the cancel path never compares times itself.
  * Unit test: sessionStartsAt("2026-10-20", "09:00:00") is 2026-10-20T02:00:00.000Z.
  */
 export function sessionStartsAt(sessionDate: string, startsAt: string): Date {
@@ -1887,7 +1881,13 @@ export const ThaiPhoneSchema = z
     return n;
   });
 export const PersonName = z.string().trim().min(1).max(80);
-export const Nickname = z.string().trim().min(1).max(30);
+// Verifier fix (round three): the nickname is typed WITHOUT the word น้อง; the label adds it (decision 5).
+export const Nickname = z
+  .string()
+  .trim()
+  .min(1)
+  .max(30)
+  .refine((v) => !v.startsWith("น้อง"), "nickname_prefix");
 /** Free-text search: strips characters that have meaning in PostgREST filters. */
 export const SearchQuery = z
   .string()
@@ -2018,7 +2018,13 @@ import { normaliseThaiPhone } from "./thai-phone";
 import { IsoDate, LangSchema, LINE_ID_PATTERN, PackageCodeSchema, Uuid } from "./common.schema";
 
 export const BookingChildInput = z.object({
-  nickname: z.string().trim().max(30, "too_long").optional(),
+  // Verifier fix (round three): the nickname is the name only, typed without the word น้อง (the label adds it).
+  nickname: z
+    .string()
+    .trim()
+    .max(30, "too_long")
+    .refine((v) => !v.startsWith("น้อง"), "nickname_prefix")
+    .optional(),
   ageYears: z
     .number({ invalid_type_error: "age_required" })
     .int("age_required")
@@ -2196,7 +2202,7 @@ export const UpdateStudioSettingsInput = z
     bookingFormOpen: z.boolean().optional(),
     staffAlertsEnabled: z.boolean().optional(),
     defaultSessionCapacity: z.number().int().min(1).max(60).nullable().optional(),
-    /** rev 14 Oct 2026 (decision 10): notice, in hours before the ORIGINAL session, for a make-up. Owner only. */
+    /** rev 14 Oct 2026 (decision 10): notice in hours before a session starts (round three, decision 6): a notice at or before the cutoff keeps the credit. Owner only. */
     cancelNoticeHours: z.number().int().min(0).max(72).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "nothing_to_update");
@@ -2646,9 +2652,9 @@ seats_left, public_note_th, public_note_en` for `status = 'open'` sessions in th
 | Function | Method | Input | Steps | Returns / errors |
 |---|---|---|---|---|
 | `listSessions` | GET | `ListSessionsInput { from, to }` (max 93 days apart; add a `.refine`) | **one** `rpc("get_sessions_with_seats", { p_from, p_to })` (R-18; no per-row RPC). Skeleton § 14.2. | `SessionRow[]` (§ 14.2) |
-| `saveSession` | POST | `SaveSessionInput` | insert when no `id`, else update by `id`; `starts_at`/`ends_at` keep their DB defaults (09:00/15:00). From 0004 on, setting `status = 'cancelled'` also cancels the session's held/confirmed bookings (SQL trigger, R-23): the UI shows an `AlertDialog` with the booked count first. The trigger sets each booking to `status = 'cancelled'` (the credit returns, as the view ignores cancelled bookings). It writes no notice: `validate_booking()` keeps the credit for a studio cancellation and sets `cancelled_at` (`0004`). A studio cancellation is not a family notice (§ 9.7 open question 1). | `{ id }`; `23505` → `conflict` (date already exists) |
+| `saveSession` | POST | `SaveSessionInput` | insert when no `id`, else update by `id`; `starts_at`/`ends_at` keep their DB defaults (09:00/15:00). From 0004 on, setting `status = 'cancelled'` on a session also cancels its held/confirmed bookings (SQL trigger, R-23): the UI shows an `AlertDialog` with the booked count first. Round three (decision 1): each booking becomes `status = 'cancelled_studio'`. Its credit goes back into the balance, and the family can rebook it into a new session. The trigger writes one `booking_cancellation_log` row per booking, with outcome `studio` and no notice. It writes them directly in the same transaction (verifier fix: it does not call `cancelBooking` / `cancel_booking`; both paths write the same row shape). A studio cancellation is not a family notice, so no notice rule applies. | `{ id }`; `23505` → `conflict` (date already exists) |
 | `generateWeekendSessions` | POST | `GenerateWeekendSessionsInput { from, weeks 1–12, capacity }` | `rpc("generate_weekend_sessions", { p_from, p_weeks, p_capacity })`; existing dates are skipped by SQL | `{ created: number }` |
-| `getSessionRoster` (P3) | GET | `GetSessionRosterInput { sessionId }` | session row + `session_seats_left`; bookings with `status <> 'cancelled'` (so `cancelled_late` stays on the roster, round two) with child, family and pickup options in **three** queries (bookings → guardians of those families → active authorised contacts of those families); P4 adds **one** `rpc("consent_matrix", { p_child_ids })` for the photo badge (R-18). Skeleton § 14.3. | `SessionRoster` (§ 14.3); health flags come separately from `getSessionHealthFlags` |
+| `getSessionRoster` (P3) | GET | `GetSessionRosterInput { sessionId }` | session row + `session_seats_left`; every booking of the session, whatever its status (round three: cancelled rows stay on the roster in grey, so staff can offer a rebooking; `cancelled` and `cancelled_studio` hold no seat, `cancelled_late` keeps its seat) with child, family and pickup options in **three** queries (bookings → guardians of those families → active authorised contacts of those families); P4 adds **one** `rpc("consent_matrix", { p_child_ids })` for the photo badge (R-18). Skeleton § 14.3. | `SessionRoster` (§ 14.3); health flags come separately from `getSessionHealthFlags` |
 
 ### 9.5 `families.functions.ts` (P3, needs `0004_families.sql`)
 
@@ -2883,10 +2889,10 @@ returns only guardians whose current `marketing_line` choice is `granted` (`curr
 **Scope (decision 5): one row per granted guardian.** A family with two guardians who both said yes has two rows. Each row carries the
 same family label, and staff contact each guardian by hand, so the family may be contacted twice. The view is the contract.
 
-**Label (decision 4): "ครอบครัวน้อง" + the child's nickname** (Thai, for example "ครอบครัวน้องมะลิ"), and "Family of <nickname>" (English).
-The **view builds the label** (`family_label_th`, `family_label_en`, 0007), so the screen only shows it, with the copy in `30-ui.md` § 5.2.
-**Nickname only**: never a full name, never an age, never health data. The view takes the nickname of one active child of the family: the
-first registered active child (lowest `children.created_at`, then `id`). A family with no active child is **not listed**: there is no
+**Label (round three, decision 5): built by the SQL function `family_label(p_family_id)`** (`0007`, cross-file), so the screen never rebuilds it. The label lists the nickname of **every attending child** of the family, in registration order (`children.created_at`, then `id`). A child is attending when the family has at least one non-cancelled booking for that child (`held`, `confirmed`, `attended` or `absent`) with a session date in the 6-month window, the same window as the child_health clock. Thai: "ครอบครัว" then each nickname prefixed with "น้อง". Two children are joined with " และ ". Three or more are joined with ", ", and the last one with " และ ". One child: "ครอบครัวน้องมะลิ". Two: "ครอบครัวน้องมะลิ และ น้องดาว". Three: "ครอบครัวน้องมะลิ, น้องดาว และ น้องแก้ว". English: "Family of A", "Family of A and B", "Family of A, B and C". Four or more follow the same pattern. The nickname is the only child data used.
+The view `marketing_follow_up_list` (0007) calls `family_label` for each row. The screen only shows the two strings it receives (`30-ui.md` § 4.3) and has no label copy function.
+**Nickname only**: never a full name, never an age, never health data. Verifier fix (round three): a child with no nickname is **not** left out of the label. `create_family_from_request` (0004) refuses the conversion with error 22023 ("Each child needs a nickname…"), because `children.nickname` is NOT NULL. The enrolment and booking forms still say the nickname is optional, so this is an open owner question (a): required on intake, or a fallback label (`10-data-model.md` open question 27; `00-overview.md` § 13B). A family with no attending child is **not listed**: there is no label to show, and staff see that family on its own page. The label never stops at the first child.
+The view's columns are the contract (cross-file, 0007): `family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at`. There is no separate child-nickname column: the nickname appears only inside the label.
 label to show, and staff see that family on its own page. The view's columns are the contract (cross-file, 0007): `family_id, guardian_id,
 guardian_name, family_label_th, family_label_en, consented_at`. There is no separate child-nickname column: the nickname appears only
 inside the label.
@@ -2894,9 +2900,9 @@ inside the label.
 ```ts
 export type FollowUpRow = {
   familyId: string;
-  /** "ครอบครัวน้อง" + the nickname of one active child, built by the view. The nickname appears only inside this label. */
+  /** `family_label` (SQL): "ครอบครัว" + "น้อง" + the nickname of every attending child, built by the database. Nicknames only. */
   familyLabelTh: string;
-  /** "Family of " + the same nickname, built by the view. */
+  /** "Family of" + the same nicknames, built by the database (`family_label`, en). */
   familyLabelEn: string;
   guardianId: string;
   /** the guardian's full name, for a hand contact from the studio's LINE chat */
@@ -2940,12 +2946,12 @@ does not throw, so staff are not told that a created family failed.
 - Guardian id from another family → `not_found`.
 - Insert fails after the RPC succeeded → `createFamilyFromRequest` returns the family id with `marketingStatus: "not_saved"`.
 - `getGuardianMarketing` returns `text: null` when no text is published, and `guardians: []` without a `familyId`.
-- `listFollowUpFamilies` maps exactly the `FollowUpRow` keys (no extra keys). Two granted guardians of one family → two rows with the same `familyLabelTh` and `familyLabelEn`. A family with no active child → no row.
+- `listFollowUpFamilies` maps exactly the `FollowUpRow` keys (no extra keys). Two granted guardians of one family → two rows with the same `familyLabelTh` and `familyLabelEn`. A family with no attending child (no non-cancelled booking in the 6-month window) → no row.
 - SQL check (`sql/tests/rls_smoke.sql`, cross-file): no role can update or delete `guardian_consent_records`; `anon` cannot read it; `marketing_follow_up_list` leaves out an inactive family and a restricted family.
 
-**Open questions in this section (not decided here):** (1) Round two decided the label (nickname only) and the scope (one row per
-granted guardian). Still open: which child's nickname is used when a family has two active children. The view uses the first registered
-one; the owner should confirm, or ask for a staff-chosen label nickname on the family record (a SQL change). (2) A LINE-path request with neither a phone nor a LINE ID still cannot become a family
+**Open questions in this section (not decided here):** (1) Round three decided the label (decision 5: every attending child, see above) and the scope (one row per
+granted guardian). Still open: a child with a blank nickname (the conversion refuses it with 22023; see the Nickname note above), and `is_active` is not checked (decision 5 counts bookings only). The owner should confirm both. A family whose attending children all lack a nickname is not listed; whether it gets a fallback label is an owner question (`10-data-model.md`).
+(2) A LINE-path request with neither a phone nor a LINE ID still cannot become a family
 (`contact_required`, R-38). The owner should say whether the OA chat alone may be a family's contact. (3) This spec refuses
 granting for a restricted family (D28). The owner should confirm. (4) A phone-call answer has no value in `consent_channel`
 (`web`, `line`, `paper`, `in_person`), so this spec accepts only `in_person`, `line` and `web`. The owner or the SQL owner should
@@ -3083,8 +3089,6 @@ export const CreateBookingInput = z.object({
   /** null = booked without a package credit (agreed with the family on LINE); consumes_credit = false */
   packagePurchaseId: Uuid.nullable(),
   status: z.enum(["held", "confirmed"]).default("confirmed"),
-  /** rev 14 Oct 2026 (decision 10): set when this booking makes up a cancelled booking (see the make-up subsection) */
-  makeUpOfBookingId: Uuid.nullable().default(null),
 });
 
 const PickedUpBy = z.discriminatedUnion("kind", [
@@ -3100,28 +3104,40 @@ export const UpdateBookingStatusInput = z.discriminatedUnion("action", [
 ]);
 
 /**
- * rev 14 Oct 2026, round two (decisions 1 and 2): every cancellation staff record for a family carries the family's notice. 'line' = the message in the
- * studio's LINE OA chat; 'in_person' = told at the studio. There is no web notice form.
+ * Notice channels (round three, decision 6): any of these four counts as notice. 'line' = the message reached the studio's
+ * LINE OA chat; 'phone' = the phone call; 'teacher' = the family told a teacher; 'in_person' = at the studio desk. No web form.
  */
-export const NoticeChannelSchema = z.enum(["line", "in_person"]);
+export const NoticeChannelSchema = z.enum(["line", "phone", "teacher", "in_person"]);
 
-export const CancelBookingInput = z
-  .object({
-    id: Uuid,
-    noticeChannel: NoticeChannelSchema,
-    /** when the notice arrived. For 'line', the time the message arrived in the OA chat (not the time staff typed it). */
-    noticeAt: IsoDateTime,
-  })
-  .strict()
-  .refine((v) => Date.parse(v.noticeAt) <= Date.now() + 60_000, "notice_in_future");
+/**
+ * Who cancels (round three, decisions 1 and 2). 'family' carries the family's notice. 'studio' carries no notice: the studio
+ * cancelled. The server sends these inputs only. It never sends or picks a cancellation status: the database decides it.
+ */
+export const CancelBookingInput = z.discriminatedUnion("by", [
+  z
+    .object({
+      by: z.literal("family"),
+      id: Uuid,
+      noticeChannel: NoticeChannelSchema,
+      /** when the notice reached the studio: the phone call time, the LINE message time, or the time the teacher was told */
+      noticeAt: IsoDateTime,
+    })
+    .strict()
+    .refine((v) => Date.parse(v.noticeAt) <= Date.now() + 60_000, "notice_in_future"),
+  z.object({ by: z.literal("studio"), id: Uuid }).strict(),
+]);
 
-export type CancelBookingResult = { status: "cancelled" | "cancelled_late" };
+/** What the database now holds. `credit` says what happened to the package credit. */
+export type CancelBookingResult = {
+  status: "cancelled" | "cancelled_late" | "cancelled_studio";
+  credit: "kept" | "used" | "returned";
+};
 
-/** Pure rule (round two, option ก), unit-tested. True = the notice came at or before (session start − cancel_notice_hours). */
-export function noticeInTime(input: { noticeAt: Date; sessionStartsAt: Date; noticeHours: number }): boolean {
-  const cutoff = input.sessionStartsAt.getTime() - input.noticeHours * 3_600_000;
-  return input.noticeAt.getTime() <= cutoff; // "at least": exactly at the cutoff is in time
-}
+/*
+ * No on-time comparison in TypeScript. The database decides it: a family notice at or before
+ * (session start - studio_settings.cancel_notice_hours) gives 'cancelled' (credit kept); a later notice gives
+ * 'cancelled_late' (one credit used). The tests live in sql/seed_dev.sql (cross-file).
+ */
 ```
 
 ✅ `createBooking`:
@@ -3192,75 +3208,39 @@ export const createBooking = createServerFn({ method: "POST" })
 
 | Function | Steps | Errors |
 |---|---|---|
-| `updateBookingStatus` | Pickup options come only from **active** authorised contacts (R-22). `confirm`: `held → confirmed`. `check_in`: `checked_in_at = now()`, `status = 'attended'`. `check_out`: requires `checked_in_at`; the pickup person must belong to the booking's family (guardian) or be a `family_contacts` row with `is_authorised_pickup = true` of that family; set `checked_out_at`, `picked_up_by_guardian_id` **or** `picked_up_by_contact_id`. `mark_absent` (no notice given, round two option ก): `status = 'absent'` only. **An absence uses one credit**, as booked: `consumes_credit` is not written and stays as it was. This replaces the decision 10 wording that a missed day deducts nothing. Only `held` or `confirmed` bookings can become absent. The package balance view is unchanged (it counts non-cancelled `consumes_credit` bookings, so `absent` and `cancelled_late` keep their credit used). The update writes `status` and nothing else. Don't write `families.last_activity_at` or `children.last_session_on`: SQL triggers keep them. The DB also checks the pickup person (`23514` "Pickup contact is not an authorised…" → `adminErrorFromDb` → `invalid_state`). | `not_found`, `invalid_state` (wrong family pickup, check-out before check-in, cancelled booking) |
-| `cancelBooking` (round two, options ก and LINE) | `CancelBookingInput { id, noticeChannel, noticeAt }` (schema above, in this section). Steps: (1) load the booking (`id, session_id, status, child_id, family_id`); missing → `not_found`. (2) Only `held` or `confirmed` may be cancelled; anything else → `invalid_state` (attended, absent, cancelled, cancelled_late). (3) Load the session (`session_date, starts_at`) and read `cancel_notice_hours` from `studio_settings` (one select, never a hard-coded 3). (4) `noticeInTime({ noticeAt, sessionStartsAt, noticeHours })`: in time → `status = 'cancelled'` (credit kept); late → `status = 'cancelled_late'` (one credit used). (5) One update of `status`, `cancel_notice_channel = noticeChannel`, `cancel_notice_at = noticeAt`, guarded by `status in ('held','confirmed')`. The server never writes `cancelled_at`. The database decides the final status: `validate_booking()` (`0004`) repeats the same rule and may change the status the server sent (for example, a `cancelled` with a late notice becomes `cancelled_late`), so the function reads the row back and returns the status the row now has. The credit is not written by this function: the view counts `cancelled_late` as used and `cancelled` as not used. `23514` → `invalid_state`. Returns `{ status: "cancelled" \| "cancelled_late" }`. The session-cancel trigger (`cancel_bookings_of_cancelled_session`, `0004`) sets `status = 'cancelled'` only; `validate_booking()` then sets `cancelled_at` and keeps the credit, and writes no notice, because a studio cancellation has none. | `not_found`, `invalid_state`, `server_error`; the zod refine `notice_in_future` for a `noticeAt` later than now (validator error, not an AdminErrorCode) |
+| `updateBookingStatus` | Pickup options come only from **active** authorised contacts (R-22). `confirm`: `held → confirmed`. `check_in`: `checked_in_at = now()`, `status = 'attended'`. `check_out`: requires `checked_in_at`; the pickup person must belong to the booking's family (guardian) or be a `family_contacts` row with `is_authorised_pickup = true` of that family; set `checked_out_at`, `picked_up_by_guardian_id` **or** `picked_up_by_contact_id`. `mark_absent` (no notice given, round two option ก): `status = 'absent'` only. **An absence uses one credit**, as booked: `consumes_credit` is not written and stays as it was. This replaces the decision 10 wording that a missed day deducts nothing. Only `held` or `confirmed` bookings can become absent. The package balance view counts `consumes_credit` bookings whose status is not `cancelled` or `cancelled_studio` (round three), so `absent` and `cancelled_late` keep their credit used, and `cancelled` and `cancelled_studio` give it back. The update writes `status` and nothing else. Don't write `families.last_activity_at` or `children.last_session_on`: SQL triggers keep them. The DB also checks the pickup person (`23514` "Pickup contact is not an authorised…" → `adminErrorFromDb` → `invalid_state`). | `not_found`, `invalid_state` (wrong family pickup, check-out before check-in, cancelled booking) |
+| `cancelBooking` (round three: decisions 1, 2 and 6) | `CancelBookingInput` (above; `by` = `family` with `noticeChannel` and `noticeAt`, or `by` = `studio` with no notice). **The server never writes a cancellation status, a notice decision or `cancelled_at`.** Steps: (1) zod checks the input; a family notice later than now + 1 minute → `notice_in_future`. (2) One call: `context.supabase.rpc("cancel_booking", { p_booking_id, p_notice_channel, p_notice_at, p_studio })`, with `p_studio = (by === "studio")` and the notice fields null for `by = 'studio'`. (Verifier fix: the SQL function takes the boolean `p_studio`, not a `p_by` text; see 0004 § 19.) A family cancel with no notice is never sent: the zod input requires the notice, and the RPC refuses a family cancel without it (22023). A missed class is recorded with `mark_absent` instead. (3) SQL `cancel_booking` (cross-file, `0004`) runs in one transaction: lock the row; missing → `not_found`; only `held` or `confirmed` may be cancelled, anything else → `invalid_state`. A family notice stores `cancel_notice_channel` and `cancel_notice_at`, and `validate_booking()` sets `cancelled` when the notice is at or before (session start − `studio_settings.cancel_notice_hours`), otherwise `cancelled_late`. A studio cancellation sets `cancelled_studio` and stores no notice. The package view decides the credit from the status, so the function never writes `consumes_credit`. The function then inserts **one** `booking_cancellation_log` row: outcome `family_on_time` (cancelled), `family_late` (cancelled_late) or `studio` (cancelled_studio); booking, family and session ids; `notice_channel` and `notice_at` (null for studio); `recorded_by = auth.uid()` and `recorded_at = now()`, never sent by the client. The log is append-only for every role. (4) It returns the status the row now holds and the credit state (`kept`, `used` or `returned`). The server passes that answer on unchanged. `23514` → `invalid_state` (attended, absent or already cancelled). `22023` (a family cancel without notice, or a studio cancel with a notice) → `invalid_state`. `P0002` → `not_found`. The session cancel in `saveSession` is a database trigger (see § 9.4, `saveSession`): it does not call this RPC. It writes the same log shape (`outcome` `studio`) directly, in the same transaction. | `not_found`, `invalid_state`, `server_error`; `notice_in_future` (zod, not an AdminErrorCode). Returns `CancelBookingResult`. Used by the cancel dialog on a roster row (`30-ui.md` § 4.3). |
 
 Race note: two staff booking the last seat at the same second could overbook by one. Acceptable for 1–2 staff; the
 roster shows seats left, and SQL may add a check later.
 
-#### Make-up booking, through `createBooking` (rev 14 Oct 2026, owner decision 10; card P3-06)
+Tests (`cancelBooking`, verifier fix, round three): (a) `by: "family"` sends `p_studio: false` with the channel and time; `by: "studio"` sends `p_studio: true` and null notice fields. (b) A family input with no `noticeChannel` or `noticeAt` fails zod; no RPC call is made. (c) A notice on an unknown channel (not one of `line`, `phone`, `teacher`, `in_person`) fails zod. (d) A notice at or before the cutoff returns `{ status: "cancelled", credit: "kept" }`; a later notice returns `{ status: "cancelled_late", credit: "used" }` (the database decides; the test reads back the status). (e) An `attended` or `absent` booking, or one already cancelled, returns `invalid_state` (SQL 23514). (f) The server never writes `bookings.status` itself (the test spies on the table write).
 
-A make-up is a normal booking that also points at the cancelled booking it replaces (`makeUpOfBookingId`). It is created by
-the same function, so every seat, credit and duplicate check still runs. The rules: packages never expire; siblings share a
-package of the same family; an absence uses one credit (round two, option ก), so only a class that was cancelled with notice can be
-made up; the notice must be at least `cancel_notice_hours` (default 3, SQL range 0–72) **before the ORIGINAL session starts**. The
-notice is `bookings.cancel_notice_at`, recorded by `cancelBooking`: the time the LINE message arrived in the OA chat, or the time the parent
-told the studio in person (`cancel_notice_channel` `line` or `in_person`). An absence has no notice, so it has no make-up.
+#### Rebooking, through `createBooking` (round three, decision 1; brief item 2)
 
-**The make-up dialog runs in two steps (`MakeUpDialog`, `30-ui.md` § 4.3):** (a) when the original is `held` or `confirmed`, staff
-record the notice (channel and time) and call `cancelBooking`. `cancelled` continues to (b); `cancelled_late` stops the dialog with
-`make_up_notice_short`. (b) `createBooking` with `makeUpOfBookingId`. When the original is already `cancelled`, the dialog skips (a).
-The make-up step never takes a second notice: it reads the `cancel_notice_at` that `cancelBooking` stored.
+The make-up rule is removed. A family rebooks with the credit it has: a credit kept on `cancelled` (the family cancelled in time), a credit returned on `cancelled_studio` (the studio cancelled), or any other credit in the package balance. A rebooking is an ordinary booking. It is not linked to the cancelled booking, and no notice or original status is checked. `CreateBookingInput` no longer has `makeUpOfBookingId`. Zod strips the field if an old client still sends it.
 
-The notice rule is the single pure function `noticeInTime` (`bookings.schema.ts`, § 9.7 above), used by `cancelBooking` and by the
-make-up. It has no server imports and is unit-tested.
+**Replacement for `check_make_up_notice`: the rebooking rule.** There is no separate check function. The SQL that named it is removed in `0004` (cross-file: the function). Verifier fix (choice made here): the column `makeup_of_booking_id` and its index `bookings_one_makeup_per_original` stay in the database as an optional reference, but this server never sends or reads them (10-data-model § 6.14, open question 20; P3-06 step 4). `createBooking` runs its normal checks and nothing else:
 
-When `makeUpOfBookingId` is set, `createBooking` runs these steps after the child lookup and before the normal checks:
+1. Child (`not_found`) and session (`not_found`). A session that is `cancelled` or `draft` → `invalid_state`.
+2. Seat free (`session_full`), using `session_seats_left`.
+3. The package belongs to the child's family (`invalid_state`), and `sessions_left > 0` (`no_credit_left`). The package balance counts a credit as used for `consumes_credit` bookings with status `held`, `confirmed`, `attended`, `absent` or `cancelled_late`. It does not count `cancelled` or `cancelled_studio`, so a kept or returned credit is available again.
+4. The same child is not already booked in this session (`already_booked`, from `23505`).
 
-1. Load the original booking (`id, child_id, family_id, session_id, status, cancel_notice_at`). Missing → `not_found`. Its `child_id`
-   must equal `childId` and its `family_id` the child's family, else `invalid_state`.
-2. `status = 'cancelled_late'` → `make_up_notice_short`. Any other status except `cancelled` → `invalid_state` (`absent` has no
-   notice; an attended day is not missed; `held` or `confirmed` must be cancelled with notice first, which is step (a) of the dialog).
-3. Load the original session (`session_date, starts_at`) and compute `originalStartsAt = sessionStartsAt(session_date, starts_at)` (§ 8.5).
-4. Read `cancel_notice_hours` from `studio_settings` (one select, never a hard-coded 3). If `cancel_notice_at` is null, or
-   `noticeInTime({ noticeAt: cancel_notice_at, sessionStartsAt: originalStartsAt, noticeHours })` is false → `make_up_notice_short`.
-   (A `cancelled` row with a family notice is in time by construction. A studio-cancelled row has no notice, so it is refused here;
-   open question 1 below is the owner's decision on that.)
-5. Already made up: a non-cancelled booking with `makeup_of_booking_id = originalBookingId` → `conflict`. The partial unique index `bookings_one_makeup_per_original` (`0004`) is the backstop (`23505` on that index → `conflict`).
-6. Then the normal `createBooking` steps: open session (`cancelled` or `draft` → `invalid_state`), seats (`session_full`), package of the same family (`invalid_state`), credit (`no_credit_left`). The insert sets `makeup_of_booking_id`. `23505` on child and session → `already_booked`.
+Packages never expire, so there is no date check. Siblings share a package of the same family.
 
-Cross-file (`0004`, `10-data-model.md` § 6.14), added in round two: `bookings.cancelled_at` (set by `validate_booking()`, never by the
-server), `bookings.cancel_notice_at`, `bookings.cancel_notice_channel` (`'line' | 'in_person' | null`; null only for a studio
-cancellation, and then `cancel_notice_at` is null too, the pair CHECK `bookings_notice_pair`), the status value `cancelled_late`, and
-`bookings.makeup_of_booking_id uuid references bookings (id)`. `validate_booking()` decides the status of every row set to `cancelled`
-or `cancelled_late` (unless the studio-cancel flag is on): `cancelled` needs `cancel_notice_at` at or before the cutoff, otherwise the row
-becomes `cancelled_late`, so a cancellation with no notice is `cancelled_late`. For an insert with `makeup_of_booking_id`, it refuses
-(`23514`) unless the original is a `cancelled` booking of the same child with a notice time. Both the server check (step 4) and the
-database check apply (card P3-06 step 6).
-
-Errors: `make_up_notice_short` (added to `AdminErrorCode`, § 4), `not_found`, `invalid_state`, `conflict`, `session_full`, `already_booked`, `no_credit_left`, `server_error`. No public copy: the rule stays off the website unless the owner asks (decision 10).
+**Rebook dialog (`RebookDialog`, `30-ui.md` § 4.3):** offered on every cancelled row (`cancelled`, `cancelled_late`, `cancelled_studio`), on the session roster. Step 1: pick an open session. Step 2: pick one of the family's packages (`package_balances`). Then `createBooking`. There is no notice step.
 
 Tests:
-- `noticeInTime` (`bookings.schema.test.ts`): session start `2026-10-20 09:00 +07:00`, `noticeHours` 3. Notice exactly 3 hours before → true (`cancelled`). Notice 2 h 59 min before → false (`cancelled_late`). `noticeHours` 0 and notice one minute before the start → true. Notice after the start → false.
-- `CancelBookingInput`: a `noticeAt` later than now + 1 minute → `notice_in_future`. `noticeChannel` `"web"` → rejected (only `line` and `in_person`).
-- `cancelBooking` with mocked Supabase: `held` or `confirmed` with a notice in time → `{ status: "cancelled" }` and one update with `cancel_notice_channel`, `cancel_notice_at` and `status`, and no `cancelled_at`. Notice late → `{ status: "cancelled_late" }`. `attended`, `absent`, `cancelled` or `cancelled_late` → `invalid_state`. No `consumes_credit` in the update.
-- `createBooking` with `makeUpOfBookingId` and the original `cancelled_late` → `make_up_notice_short`; the original `absent` → `invalid_state`.
-- `createBooking` with mocked Supabase: original `absent`, `attended` or `held` → `invalid_state`. Second make-up for the same original → `conflict`. A booking of another child → `invalid_state`. Package of another family → `invalid_state`. `sessions_left = 0` → `no_credit_left`. A sibling of the same family using the family's package → allowed. A make-up booked on a date after the original session → allowed (no expiry check exists).
-- `updateBookingStatus` with `mark_absent` writes exactly `{ status: "absent" }`. SQL check (cross-file, `sql/tests`): an absent booking keeps `consumes_credit = true` (when it was booked on a package) and the package balance counts it as used.
-- `sessionStartsAt("2026-10-20", "09:00:00")` is `2026-10-20T02:00:00.000Z`.
+- Rebooking with a kept credit (`cancelled`): the balance is back to its earlier value, so `createBooking` succeeds. SQL check: the balance view does not count `cancelled`.
+- Rebooking with a returned credit (`cancelled_studio`): succeeds the same way.
+- `cancelled_late` with no other credit (`sessions_left = 0`) → `no_credit_left`. With one other credit → allowed.
+- Session `cancelled` or `draft` → `invalid_state`. Package of another family → `invalid_state`. The same child in the same session → `already_booked`. A sibling of the same family using the family's package → allowed. A rebooking dated after the cancelled session → allowed (no expiry check exists).
+- `CreateBookingInput` with `makeUpOfBookingId` → the field is stripped, no notice check runs, and `make_up_notice_short` is never returned.
 
-**Decided in round two (14 Oct 2026, option ก, `decisions-2026-10-14-b`):** a booking cancelled with notice in time (`cancelled`) keeps its
-credit. An absence (`absent`) or a late notice (`cancelled_late`) uses one credit. Make-up follows the same notice rule. The earlier
-"missed day deducts no credit" wording is withdrawn, and so is D16's "absent" wording: the staff choice absent vs cancelled (D16) stays
-as the record.
+**Decided in round three (14 Oct 2026, `decisions-2026-10-14-c`):** a studio cancellation returns the credit, and the family rebooks it (decision 1). `cancelled_late` keeps the seat, is not an absence, and uses one credit (decision 2). Every cancellation writes one `booking_cancellation_log` row, and the reports count from that table (decision 2). Phone, LINE, teacher and in-person notices all count as notice (decision 6). The lawyer sign-off for the changed wording is done (owner report, 14 Oct 2026, decision 8). The written sign-off is stored with the decision record.
 
-**Open questions in § 9.7 (not decided here):** (1) A session the **studio** cancels: does a make-up of that class need any notice? The
-spec writes no notice for a studio cancellation (the notice pair allows none), so the make-up is refused. The owner must decide whether
-such a make-up should be allowed; if it is, the rule and the SQL check change together. (2) A `cancelled_late` booking still takes its seat in the roster and the seat count (like `absent`), because the
-studio cannot refill the seat on the day. The owner should confirm this. (3) The owner's round-two answers name LINE and in person only.
-A notice by phone call has no channel in this spec (`cancel_notice_channel` is `line` or `in_person`). The owner should say whether a phone
-call counts, and as which channel.
-
+**Open questions in § 9.7:** none after round three. For a `phone` or `teacher` notice, the staff member enters the time the studio was told: the call time, or the time the teacher passed the message on.
 
 ### 9.8 `enrolment.functions.ts` (P4, needs `0005_consent_health.sql` + `0006` texts)
 
@@ -4502,16 +4482,18 @@ export type Reports = {
     booked: number;
     heldOffline: number;
   }>;
-  /** round two (option ก): cancelledLate = a cancellation with late notice, which uses a credit like an absence (0008, cross-file) */
-  attendanceMonthly: Array<{ month: string; attended: number; absent: number; cancelledLate: number }>;
+  /** round three (decision 2, brief item 3): cancellation counts come from booking_cancellation_log, one count per cancellation event */
+  cancellationsMonthly: Array<{ month: string; familyOnTime: number; familyLate: number; studio: number }>;
+  /** attended and absent only. cancelled_late is NOT an absence, so it is left out. rate = attended / (attended + absent), null when 0. */
+  attendanceMonthly: Array<{ month: string; attended: number; absent: number; rate: number | null }>;
   /** null for staff (owner only) */
   revenueMonthly: Array<{ month: string; amountThb: number }> | null;
   outstandingCredits: number;
 };
 ```
 
-📝 `getReports` · staff · GET · `GetReportsInput { from, to }`. Read the four `security_invoker` views filtered to the
-range (column names per `10-data-model.md`), `booking_requests` counts for conversion (`converted` ÷ all, excluding
+📝 `getReports` · staff · GET · `GetReportsInput { from, to }`. Read the `security_invoker` views filtered to the
+range (column names per `10-data-model.md`): the attendance view, and the cancellation counts from `booking_cancellation_log` (round three, decision 2: cancellation counts come only from that table, never from `bookings`). The real names (verifier fix; 0008 has no separate cancellation view): `report_session_fill` (per session: `cancelled`, `cancelled_late`, `cancelled_studio`) and `report_attendance_monthly` (per month: `cancelled`, `cancelled_late`, `cancelled_studio`, `attendance_rate_pct`). Attendance rate per month is `attended / (attended + absent)`, returned as `rate` (null when the denominator is 0). `cancelled_late` is not an absence and is left out of both numbers. Also `booking_requests` counts for conversion (`converted` ÷ all, excluding
 `spam`), and `outstandingCredits = sum(package_balances.sessions_left)` for `active` purchases.
 `revenueMonthly` only when `context.role === "owner"`; staff get `null` (RLS on payments also hides it).
 No names, phones or health anywhere in the result. CSV export is built in the browser from this result (`30-ui.md`).
@@ -4568,7 +4550,9 @@ export type PrintSheet = {
     birthMonth: string | null;
     reportedAgeYears: number | null;
     isActive: boolean;
-    /** child-level purposes from consent_matrix plus the latest record. health_allergy is present ONLY when includeHealth is true. */
+    /** round three (decision 4): the health consent status line, printed on EVERY sheet. Status only: no date, text or version. needs_child and no record both show as not_asked. */
+    healthConsent: "granted" | "refused" | "not_asked";
+    /** child-level purposes from consent_matrix plus the latest record. health_allergy is NOT in this list: its status is in `healthConsent`. */
     consents: Array<{
       purpose: ConsentPurpose;
       status: "granted" | "needs_child" | "not_granted";
@@ -4580,7 +4564,7 @@ export type PrintSheet = {
       textVersion: number | null;
       textHashPrefix: string | null;
     }>;
-    /** null = no health record for this child. `allergens` (ticked keys only) and `otherAllergens` always print (the checklist is the list teachers use in class). `foodsToAvoid` and `careNotes` are null unless includeHealth is true. */
+    /** null = no health record for this child. `allergens` (ticked keys only) always print (the checklist is the list teachers use in class). `otherAllergens` (free text), `foodsToAvoid` and `careNotes` are null unless includeHealth is true (verifier fix; the owner has not ruled on the free text, 10 open question 26). */
     health: { allergens: Allergen[]; otherAllergens: string | null; foodsToAvoid: string | null; careNotes: string | null } | null;
   }>;
   /** active contacts with an authorised-pickup or emergency role only */
@@ -4605,7 +4589,7 @@ export type PrintSheet = {
    `marketing_line` rows (`current_marketing_consents`, one query).
 4. Children (`id, nickname, birth_month, reported_age_years, is_active`), **one** `rpc("consent_matrix", { p_child_ids })`, and the
    latest `consent_records` row per child and purpose (one select, newest first, first per key) with its `consent_texts` title,
-   version and `sha256` prefix. When `includeHealth` is false, the query leaves out the `health_allergy` rows, so they are never fetched.
+   version and `sha256` prefix. The `health_allergy` cell is read from the same matrix for every sheet, whatever `includeHealth` says, and only its status is kept (round three, decision 4): `granted` → `granted`; `not_granted` → `refused`; `needs_child` or no row → `not_asked`. No title, version or hash is printed for health, and no `consent_records` text row is read for health. `includeHealth` never changes this line.
 5. Active contacts with `is_authorised_pickup` or `is_emergency_contact` (`family_contacts`, `is_active`).
 6. For **every** child, in sequence, `rpc("get_child_health", { p_child_id, p_include_health: includeHealth })`, whatever the staff choice.
    This is the same audited SQL as `getChildHealth` (one audit row per child). Map it as in § 9.10. **This is the only health route of the
@@ -4624,8 +4608,9 @@ state only (no React Query cache, `gcTime: 0`).
 
 Tests:
 - `record_family_print` is the first call. When it fails, no other call runs and the function throws.
-- `includeHealth: false` → `get_child_health` is called once per child with `p_include_health: false`; each child's `health` keeps `allergens` and `otherAllergens`, and `foodsToAvoid` and `careNotes` are `null`. No `health_allergy` consent row is returned.
+- `includeHealth: false` → `get_child_health` is called once per child with `p_include_health: false`; each child's `health` keeps `allergens`, and `otherAllergens`, `foodsToAvoid` and `careNotes` are `null` (verifier fix). No `health_allergy` text row is returned. `healthConsent` is set in both cases (status only).
 - `includeHealth: true` → exactly one `get_child_health` per child with `p_include_health: true`, and no other health read.
+- `healthConsent` is set for every child in both cases: `granted`, `refused` or `not_asked`. A child with no health record gets its status line too (`health: null`).
 - The allergen checklist (all ten keys, with `flour`) is in the sheet data for both values of `includeHealth`.
 - Key-set test: the result has no `lineId`, `email`, `staffNote`, `restrictionNote`, `token_hash`, `evidence_path`, `slip_path` keys.
 - The audit detail contains only `include_health`, and the audit action is `print_record`.
@@ -4853,14 +4838,15 @@ These are additions the architect didn't name. Use them exactly; `90-task-breakd
 | `FollowUpRow` (`familyLabelTh`, `familyLabelEn`; no `familyDisplayName`, no child field), `ListFollowUpFamiliesInput`, `listFollowUpFamilies` | `follow-up.schema.ts`, `follow-up.functions.ts` | Round two (14 Oct 2026): follow-up list, one row per granted guardian, nickname-only label (decisions 4 and 5; P3-19) |
 | `SaveGuardianInput.preferredContact`, `CreateFamilyFromRequestInput.marketingLine`, `marketingStatus`, `GuardianView.preferredContact` / `marketingLine` | `families.schema.ts`, `families.functions.ts` | Rev 14 Oct 2026: contact preference for follow-up; marketing step after create |
 | `UpdateMyMarketingConsentInput`, `UpdateMyMarketingConsentRaw`, `GuardianMarketingMine`, `updateMyMarketingConsent`, `MyConsents.guardianMarketing` | `my.schema.ts`, `my.functions.ts` | Rev 14 Oct 2026: `/my` marketing control (P4-13, P4-22) |
-| `CreateBookingInput.makeUpOfBookingId`, `noticeInTime` (replaces `makeUpNoticeOk`), `NoticeChannelSchema`, `CancelBookingInput` `{ id, noticeChannel, noticeAt }`, `CancelBookingResult` | `bookings.schema.ts`, `bookings.functions.ts` | Round two (14 Oct 2026): notice channel `line` / `in_person`; `cancelled` keeps the credit, `cancelled_late` uses it (decisions 1 and 2); make-up with notice through `createBooking` (decision 10, P3-06) |
+| `CancelBookingInput` (`by`: family or studio), `NoticeChannelSchema` (`line`, `phone`, `teacher`, `in_person`), `CancelBookingResult` (`status`, `credit`), `cancelBooking` (RPC `cancel_booking`) | `bookings.schema.ts`, `bookings.functions.ts` | Round three (14 Oct 2026, decisions 1, 2 and 6): four notice channels; a studio cancel returns the credit; every cancellation writes `booking_cancellation_log`. `noticeInTime` is removed from TypeScript (the database decides) |
+| `CreateBookingInput` (`makeUpOfBookingId` removed) | `bookings.schema.ts` | Round three (decision 1): a rebooking is an ordinary booking; the server no longer sends the make-up link (the SQL column stays, unused) and its check is gone |
 | `ExportFamilyDataInput.includeHealth` | `privacy.schema.ts` | Round two (decision 3): health in an export only through `get_child_health` |
 | `sessionStartsAt` | `dates.ts` | Rev 14 Oct 2026: session start as an instant (Bangkok, +07:00) |
-| `make_up_notice_short` | `result.ts` | Rev 14 Oct 2026: make-up notice refused |
+| `make_up_notice_short` | — | Removed in round three (decision 1): the make-up rule is gone, so no code replaces it |
 | `StudioSettings.cancelNoticeHours`, `UpdateStudioSettingsInput.cancelNoticeHours` | `staff.schema.ts` | Rev 14 Oct 2026: `studio_settings.cancel_notice_hours` (default 3, 0–72, owner only) |
 | `SaveMediaAssetInput.onPrint` | `media.schema.ts` | Rev 14 Oct 2026: print channel (decision 3) |
-| `PrintSheetInput`, `PrintSheet`, `getPrintSheet` | `print.schema.ts`, `print.functions.ts` | Rev 14 Oct 2026: print sheet for signing (decision 5, P4-25). Audited inside `getPrintSheet`; there is no separate `logFamilyPrint` |
-| SQL names this file calls (cross-file, for `0004`, `0005`, `0006a`, `0007`, `0008` and `10-data-model.md`): `guardian_consent_records` (exists in `0005`); views `current_marketing_consents` and `marketing_follow_up_list` (columns `family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at`); RPC `record_family_print` (0005 § 9b); audit action `print_record` (the only print audit name); `export_family_data(family, includeHealth)` with no plain `child_health` join (0007); columns `bookings.cancelled_at`, `bookings.cancel_notice_at`, `bookings.cancel_notice_channel` (`line` / `in_person` / null), `bookings.makeup_of_booking_id`, status `cancelled_late`, `guardians.preferred_contact`, `media_assets.on_print` (exists in `0005`); `studio_settings.cancel_notice_hours` (exists in `0004`); enum values `marketing_line`, `media_print` | SQL and `10-data-model.md` | Names the server code depends on |
+| `PrintSheetInput`, `PrintSheet`, `getPrintSheet` | `print.schema.ts`, `print.functions.ts` | Rev 14 Oct 2026: print sheet for signing (decision 5, P4-25). Audited inside `getPrintSheet`; there is no separate `logFamilyPrint`. Round three (decision 4): the `healthConsent` status line on every sheet; `health_allergy` is left out of `consents` |
+| SQL names this file calls (cross-file, for `0004`, `0005`, `0006a`, `0007`, `0008` and `10-data-model.md`): `guardian_consent_records` (exists in `0005`); views `current_marketing_consents` and `marketing_follow_up_list` (columns `family_id, guardian_id, guardian_name, family_label_th, family_label_en, consented_at`; the label is built by the function `family_label(p_family_id)`, round three); RPC `cancel_booking(p_booking_id, p_by, p_notice_channel, p_notice_at)`, which returns the status and the credit state and writes `booking_cancellation_log` (round three); table `booking_cancellation_log` (append-only, `outcome` `family_on_time` / `family_late` / `studio`); booking statuses `cancelled`, `cancelled_late`, `cancelled_studio`; `bookings.cancel_notice_channel` (`line` / `phone` / `teacher` / `in_person` / null) and `bookings.cancel_notice_at`; the package view counting a credit as used for every `consumes_credit` booking except `cancelled` and `cancelled_studio`; RPC `record_family_print` (0005 § 9b); audit action `print_record` (the only print audit name); `export_family_data(family, includeHealth)` with no plain `child_health` join (0007); `consent_matrix` returning the `health_allergy` cell for the print sheet (status only); `get_child_health(child, includeHealth)`; `guardians.preferred_contact`; `media_assets.on_print` (exists in `0005`); `studio_settings.cancel_notice_hours` (exists in `0004`); enum values `marketing_line`, `media_print` | SQL and `10-data-model.md` | Names the server code depends on |
 
 ---
 
@@ -5014,7 +5000,7 @@ export type SessionRow = {
   staffNote: string | null;
   /** null = capacity not set */
   seatsLeft: number | null;
-  /** held + confirmed + attended + absent + cancelled_late bookings (a late cancellation keeps its seat, § 9.7 open question 2; 0 before 0004) */
+  /** held + confirmed + attended + absent + cancelled_late bookings (a late cancellation keeps its seat, § 9.7; 0 before 0004) */
   booked: number;
 };
 ```
@@ -5074,8 +5060,8 @@ export type PickupOption =
   | { kind: "contact"; id: string; name: string; phone: string; relationship: string };
 export type RosterRow = {
   bookingId: string;
-  /** round two: 'cancelled' = cancelled with notice (credit kept); 'cancelled_late' = late notice (credit used) */
-  status: "held" | "confirmed" | "attended" | "absent" | "cancelled" | "cancelled_late";
+  /** round three: 'cancelled' = family notice in time (credit kept); 'cancelled_late' = late notice (one credit used); 'cancelled_studio' = the studio cancelled (credit returned). Cancelled rows are listed grey and hold no seat. */
+  status: "held" | "confirmed" | "attended" | "absent" | "cancelled" | "cancelled_late" | "cancelled_studio";
   childId: string;
   nickname: string;
   /** from birth_month (ageFromBirthMonth) or, until enrolment, the age reported on the request */
@@ -5097,8 +5083,8 @@ export type SessionRoster = { session: SessionRow; rows: RosterRow[] };
 
 Skeleton (three queries + one RPC, no per-row calls):
 1. `sessions` row by id (`not_found`) + `rpc("session_seats_left", { p_session_id })` → build `SessionRow` with
-   `booked = rows.length` (non-cancelled).
-2. `bookings` where `session_id = id` and `status <> 'cancelled'`, selecting
+   `booked` = the rows with status held, confirmed, attended, absent or cancelled_late.
+2. `bookings` where `session_id = id` (every status: round three, cancelled rows are listed grey and hold no seat), selecting
    `id, status, checked_in_at, checked_out_at, picked_up_by_guardian_id, picked_up_by_contact_id, child_id, family_id,
    children(nickname, birth_month, reported_age_years), families(display_name)` (PostgREST embeds through the FKs).
    Skip rows whose `child_id` or `family_id` is null (erased families).
@@ -5176,7 +5162,7 @@ export type BookingHistoryRow = {
   id: string;
   sessionDate: string;
   childNickname: string | null;
-  status: "held" | "confirmed" | "attended" | "absent" | "cancelled" | "cancelled_late";
+  status: "held" | "confirmed" | "attended" | "absent" | "cancelled" | "cancelled_late" | "cancelled_studio";
   checkedInAt: string | null;
   checkedOutAt: string | null;
   pickedUpByName: string | null;

@@ -22,6 +22,11 @@
 --             Round two (14 Oct 2026): allergen key 'flour' (brief item 7); get_child_health takes an
 --             explicit includeHealth (brief item 3); the four class clips' legacy note is the owner's certification
 --             (G0 Q15 ticked). The session-setting gate stays for the builder at G4 · 0005. Checks: seed_dev § 6, § 7d.
+--             Round three (14 Oct 2026): get_child_health(child, includeHealth) always returns health_consent_status
+--             ('granted' | 'refused' | 'not_asked') and has_health_record, even with no health row (brief 4); content
+--             only with includeHealth. child_has_recent_booking(child) is the 6-month health clock: a cancelled_late
+--             booking counts, cancelled and cancelled_studio do not (brief 3). The roster and the purge use booking_is_live.
+--             Checks: seed_dev § 7e; tests/rls_smoke.sql A15.
 -- Depends on: 0001–0004
 -- Apply via Lovable chat:
 --   "Apply this SQL migration exactly as written. Do not change it."
@@ -914,18 +919,29 @@ grant execute on function public.consent_status(uuid, public.consent_purpose) to
 
 -- Health notes for one child. Staff (or server). Writes ONE audit_log row per call that records the choice.
 -- Round two (brief item 3, 14 Oct 2026): p_include_health is REQUIRED (no default; NULL is refused, 22004).
--- Allergens and other allergies are always returned (teachers need them in class). foods_to_avoid and care_notes
--- are returned only when p_include_health is true. The export passes true; the print sheet passes the staff choice.
+-- Allergen checklist items are always returned (teachers need them in class). foods_to_avoid, care_notes and the
+-- free-text other_allergens are returned only when p_include_health is true (verifier fix, see below). The export
+-- passes true; the print sheet passes the staff choice.
+-- Round three (brief 4, 14 Oct 2026): the print read model ALWAYS gets the health consent STATUS, and the child's row
+-- even when no health record exists yet. health_consent_status is one of 'granted' | 'refused' | 'not_asked' (status
+-- only, never content). A withdrawn consent is shown as 'refused'. Content (foods_to_avoid, care_notes) comes back only
+-- when p_include_health is true. Allergens are always returned (the allergen checklist prints on every sheet).
+-- Verifier fix (14 Oct 2026): other_allergens (free text) is health content too, so it is returned only when
+-- p_include_health is true, like foods_to_avoid and care_notes. The owner has not ruled on the free-text field
+-- (open question); the decisions only fix the allergen checklist as always-on (D42, D51).
 drop function if exists public.get_child_health(uuid);
+drop function if exists public.get_child_health(uuid, boolean);
 create or replace function public.get_child_health(p_child_id uuid, p_include_health boolean)
 returns table (
-  child_id         uuid,
-  allergens        text[],
-  other_allergens  text,
-  foods_to_avoid   text,
-  care_notes       text,
-  has_allergy      boolean,
-  updated_at       timestamptz
+  child_id                uuid,
+  health_consent_status   text,
+  has_health_record       boolean,
+  allergens               text[],
+  other_allergens         text,
+  foods_to_avoid          text,
+  care_notes              text,
+  has_allergy             boolean,
+  updated_at              timestamptz
 )
 language plpgsql
 volatile
@@ -933,6 +949,8 @@ security definer
 set search_path = ''
 as $$
 #variable_conflict use_column
+declare
+  v_consent text;
 begin
   perform public.require_staff_or_server();
   if p_include_health is null then
@@ -941,13 +959,30 @@ begin
   perform public.log_audit_event('read_health', 'child_health', p_child_id::text,
                                  jsonb_build_object('function', 'get_child_health',
                                                     'include_health', p_include_health));
+  if not exists (select 1 from public.children c where c.id = p_child_id) then
+    return;
+  end if;
+  v_consent := public.consent_status(p_child_id, 'health_allergy'::public.consent_purpose);
   return query
-    select h.child_id, h.allergens, h.other_allergens,
+    select c.id,
+           case
+             when v_consent = 'granted' then 'granted'
+             when exists (select 1 from public.consent_records cr
+                           where cr.child_id = c.id
+                             and cr.purpose = 'health_allergy'::public.consent_purpose
+                             and cr.given_by = 'guardian'::public.consent_given_by) then 'refused'
+             else 'not_asked'
+           end,
+           (h.id is not null),
+           h.allergens,
+           case when p_include_health then h.other_allergens end,   -- verifier fix: free text is health content
            case when p_include_health then h.foods_to_avoid end,
            case when p_include_health then h.care_notes end,
-           h.has_allergy, h.updated_at
-      from public.child_health h
-     where h.child_id = p_child_id;
+           h.has_allergy,
+           h.updated_at
+      from public.children c
+      left join public.child_health h on h.child_id = c.id
+     where c.id = p_child_id;
 end;
 $$;
 
@@ -1046,10 +1081,36 @@ begin
       join public.children c on c.id = b.child_id
       left join public.child_health h on h.child_id = c.id
      where b.session_id = p_session_id
-       and b.status <> 'cancelled'::public.booking_status
+       and public.booking_is_live(b.status)      -- round three: cancelled and cancelled_studio are off the roster
      order by c.nickname;
 end;
 $$;
+
+-- Round three (brief 3): the 6-month child_health clock. A child is "still with us" when a live booking (booking_is_live:
+-- held, confirmed, attended, absent, cancelled_late) falls in the window from 6 months ago (Bangkok time) onwards,
+-- past or next. A late cancellation COUNTS (its seat was kept, decision D50). cancelled (on time) and cancelled_studio do not.
+-- PROVISIONAL (verifier fix, 14 Oct 2026): the rule that cancelled_studio does not count is the drafter's reading. The
+-- owner has NOT ruled on it (00 § 13B c; 50 § 28). Owner must confirm before G4 · 0005; until then this comment is the record.
+-- Used by purge_expired_records (v3 here, v4 in 0007) and by the tests. Service role only (purge and tests).
+create or replace function public.child_has_recent_booking(p_child_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.bookings b
+      join public.sessions s on s.id = b.session_id
+     where b.child_id = p_child_id
+       and public.booking_is_live(b.status)
+       and s.session_date >= ((now() at time zone 'Asia/Bangkok') - interval '6 months')::date
+  );
+$$;
+
+revoke execute on function public.child_has_recent_booking(uuid) from public, anon, authenticated;
+grant execute on function public.child_has_recent_booking(uuid) to service_role;
 
 revoke execute on function public.get_child_health(uuid, boolean) from public, anon;
 revoke execute on function public.upsert_child_health(uuid, text[], text, text, text) from public, anon;
@@ -1065,6 +1126,8 @@ grant execute on function public.list_session_health_flags(uuid) to authenticate
 --     table 'families', row id = the family id, details = { include_health } ONLY (never the content). Staff or server only.
 --     Raises P0002 for a missing family, so nothing is printed for it. Applied with G4 · 0005 (Stage B).
 --     Round two: the same p_include_health is then passed to get_child_health for each child (one choice per print).
+--     Round three (brief 4): unchanged in behaviour. The health consent STATUS line is on EVERY sheet (it comes from
+--     get_child_health.health_consent_status); p_include_health only decides whether the health content is printed.
 -- -----------------------------------------------------------------------------
 
 create or replace function public.record_family_print(p_family_id uuid, p_include_health boolean)
@@ -1817,20 +1880,14 @@ begin
   get diagnostics v_n = row_count;
   v_counts := v_counts || jsonb_build_object('booking_requests', v_n);
 
-  -- Health: delete 6 months after the child's last (or next) non-cancelled session; rows changed
-  -- in the last 6 months are kept (e.g. a newly enrolled child who has not booked yet).
+  -- Health: delete 6 months after the child's last (or next) live booking (round three: child_has_recent_booking,
+  -- where a cancelled_late booking counts); rows changed in the last 6 months are kept (e.g. a newly enrolled child
+  -- who has not booked yet).
   -- Review R-07: mark those children so the roster says "info removed — check with the family".
   with purged as (
     delete from public.child_health h
      where h.updated_at < now() - interval '6 months'
-       and not exists (
-         select 1
-           from public.bookings b
-           join public.sessions s on s.id = b.session_id
-          where b.child_id = h.child_id
-            and b.status <> 'cancelled'::public.booking_status
-            and s.session_date >= ((now() at time zone 'Asia/Bangkok') - interval '6 months')::date
-       )
+       and not public.child_has_recent_booking(h.child_id)
     returning h.child_id
   )
   update public.children c
@@ -1854,7 +1911,7 @@ begin
             from public.bookings b
            where b.retain_until < now()
              and b.consumes_credit
-             and b.status <> 'cancelled'::public.booking_status
+             and public.booking_is_live(b.status)
              and b.package_purchase_id is not null
            group by b.package_purchase_id) as x
    where pp.id = x.package_purchase_id;

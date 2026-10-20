@@ -6,7 +6,8 @@
 --     privileges and cannot execute our functions; authenticated cannot execute service-only
 --     functions or touch child_health / rate_limit_events; no policy targets anon/public;
 --     buckets are private; every SECURITY DEFINER function pins search_path; views are
---     security_invoker; the pg_cron jobs exist.
+--     security_invoker; the pg_cron jobs exist. Round three (14 Oct 2026): the cancellation log is append-only
+--     and staff-read-only, check_make_up_notice is gone, and family_label / cancel_booking are not open to anon (A16–A18).
 --   Part B (live, as role anon): every table/view returns permission denied or 0 rows;
 --     every function call is refused.
 --   Part C (live, as a signed-in user WITHOUT a staff role): same expectations.
@@ -39,10 +40,12 @@ declare
     'package_purchases', 'payments', 'bookings', 'storage_cleanup_queue', 'consent_texts',
     'consent_records', 'guardian_consent_records', 'child_health', 'family_links', 'media_assets',
     'media_asset_children', 'dsr_requests', 'breach_incidents',
-    'package_balances', 'current_consents', 'current_marketing_consents', 'marketing_follow_up_list',
+    'booking_cancellation_log', 'package_balances', 'current_consents', 'current_marketing_consents', 'marketing_follow_up_list',
     'report_requests_weekly', 'report_session_fill', 'report_attendance_monthly', 'report_revenue_monthly'];
   v_calls text[] := array[
-    'select public.check_make_up_notice(gen_random_uuid(), now())',
+    'select public.cancel_booking(gen_random_uuid(), null, null, false)',
+    'select * from public.family_label(gen_random_uuid())',
+    'select public.child_has_recent_booking(gen_random_uuid())',
     'select public.is_staff()',
     'select public.current_app_role()',
     'select public.check_rate_limit(''booking_request'', repeat(''0'', 64), 5, 20)',
@@ -133,11 +136,13 @@ declare
     'package_purchases', 'payments', 'bookings', 'storage_cleanup_queue', 'consent_texts',
     'consent_records', 'guardian_consent_records', 'child_health', 'family_links', 'media_assets',
     'media_asset_children', 'dsr_requests', 'breach_incidents',
-    'package_balances', 'current_consents', 'current_marketing_consents', 'marketing_follow_up_list',
+    'booking_cancellation_log', 'package_balances', 'current_consents', 'current_marketing_consents', 'marketing_follow_up_list',
     'report_requests_weekly', 'report_session_fill', 'report_attendance_monthly', 'report_revenue_monthly'];
   -- Every one of these must be refused with SQLSTATE 42501 for a user without a role.
   v_calls text[] := array[
-    'select public.check_make_up_notice(gen_random_uuid(), now())',
+    'select public.cancel_booking(gen_random_uuid(), null, null, false)',
+    'select * from public.family_label(gen_random_uuid())',
+    'select public.child_has_recent_booking(gen_random_uuid())',
     'select public.check_rate_limit(''booking_request'', repeat(''0'', 64), 5, 20)',
     'select * from public.get_open_sessions(null, null)',
     'select public.purge_expired_records()',
@@ -255,7 +260,8 @@ with
 our_tables(t) as (
   values ('user_roles'), ('audit_log'), ('studio_settings'), ('booking_requests'), ('rate_limit_events'),
          ('staff_notifications'), ('sessions'), ('families'), ('guardians'), ('children'),
-         ('family_contacts'), ('package_purchases'), ('payments'), ('bookings'), ('storage_cleanup_queue'),
+         ('family_contacts'), ('package_purchases'), ('payments'), ('bookings'), ('booking_cancellation_log'),
+         ('storage_cleanup_queue'),
          ('consent_texts'), ('consent_records'), ('guardian_consent_records'), ('child_health'), ('family_links'),
          ('media_assets'), ('media_asset_children'), ('dsr_requests'), ('breach_incidents')
 ),
@@ -277,7 +283,9 @@ our_functions(f) as (
          ('submit_enrolment'), ('guard_family_restriction_columns'), ('block_restricted_family'),
          ('set_family_restriction'), ('set_primary_guardian'),
          -- added 14 Oct 2026 (decisions 2, 3, 10)
-         ('validate_guardian_consent_record'), ('check_make_up_notice')
+         ('validate_guardian_consent_record'),
+         -- added 14 Oct 2026, round three (briefs 1–8): check_make_up_notice is removed (A17)
+         ('cancel_booking'), ('family_label'), ('booking_is_live'), ('child_has_recent_booking')
 ),
 service_only_functions(f) as (
   values ('check_rate_limit'), ('get_open_sessions'), ('purge_expired_records'), ('log_audit_event'),
@@ -288,7 +296,7 @@ service_only_functions(f) as (
          ('has_role'), ('has_active_consent'), ('submit_enrolment'), ('guard_package_purge_counter'),
          ('cancel_bookings_of_cancelled_session'), ('queue_consent_change_alert'),
          ('guard_family_restriction_columns'), ('block_restricted_family'),
-         ('validate_guardian_consent_record')
+         ('validate_guardian_consent_record'), ('child_has_recent_booking')
 ),
 privs(p) as (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')),
 part_a(line) as (
@@ -408,14 +416,15 @@ part_a(line) as (
            when not exists (select 1 from pg_type t where t.typname = 'booking_status'
                                                       and t.typnamespace = 'public'::regnamespace)
              then 'skip booking_status enum: not created yet'
-           when exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
-                         where t.typname = 'booking_status' and e.enumlabel = 'cancelled_late')
-            and exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
-                         where t.typname = 'notice_channel' and e.enumlabel = 'line')
-            and exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
-                         where t.typname = 'notice_channel' and e.enumlabel = 'in_person')
-             then 'ok   booking_status has cancelled_late; notice_channel has line and in_person'
-           else 'FAIL booking_status lacks cancelled_late, or notice_channel lacks line or in_person'
+           -- round three (brief 1, 6): cancelled_studio is a status; the four notice channels all exist
+           when (select count(*) from pg_enum e join pg_type t on t.oid = e.enumtypid
+                  where t.typname = 'booking_status'
+                    and e.enumlabel in ('cancelled', 'cancelled_late', 'cancelled_studio')) = 3
+            and (select count(*) from pg_enum e join pg_type t on t.oid = e.enumtypid
+                  where t.typname = 'notice_channel'
+                    and e.enumlabel in ('line', 'phone', 'teacher', 'in_person')) = 4
+             then 'ok   booking_status has cancelled, cancelled_late, cancelled_studio; notice_channel has line, phone, teacher, in_person'
+           else 'FAIL booking_status lacks a cancellation status, or notice_channel lacks line, phone, teacher or in_person'
          end
   union all
   -- A13 the follow-up list has no child, health or contact column (brief items 4 and 5: nickname label only)
@@ -451,6 +460,37 @@ part_a(line) as (
                                and pg_get_constraintdef(k.oid) like '%flour%')
              then 'FAIL the child_health allergen check does not list flour'
            else 'ok   get_child_health(uuid, boolean) exists and the allergen check lists flour'
+         end
+  union all
+  -- A16 round three (brief 2): the cancellation log is append-only and staff read only: no app role may insert,
+  -- update or delete it, and anon may not read it (the cancel functions write it as owner)
+  select case
+           when to_regclass('public.booking_cancellation_log') is null
+             then 'skip booking_cancellation_log: not created yet'
+           when has_table_privilege('anon', 'public.booking_cancellation_log', 'SELECT')
+             or has_table_privilege('authenticated', 'public.booking_cancellation_log', 'INSERT')
+             or has_table_privilege('authenticated', 'public.booking_cancellation_log', 'UPDATE')
+             or has_table_privilege('authenticated', 'public.booking_cancellation_log', 'DELETE')
+             then 'FAIL booking_cancellation_log: anon can read, or an app role can insert, update or delete'
+           else 'ok   booking_cancellation_log: staff read only; no insert, update or delete for app roles'
+         end
+  union all
+  -- A17 round three (brief 7): check_make_up_notice is removed; a rebooking has no separate notice check
+  select case
+           when to_regprocedure('public.check_make_up_notice(uuid, timestamptz)') is not null
+             then 'FAIL check_make_up_notice still exists (round three removes it)'
+           else 'ok   check_make_up_notice is removed (rebooking uses the credit)'
+         end
+  union all
+  -- A18 round three: the label and the cancel function are not executable by anon
+  select case
+           when to_regprocedure('public.family_label(uuid)') is null
+             or to_regprocedure('public.cancel_booking(uuid, public.notice_channel, timestamptz, boolean)') is null
+             then 'skip family_label / cancel_booking: not created yet'
+           when has_function_privilege('anon', 'public.family_label(uuid)', 'EXECUTE')
+             or has_function_privilege('anon', 'public.cancel_booking(uuid, public.notice_channel, timestamptz, boolean)', 'EXECUTE')
+             then 'FAIL anon can execute family_label or cancel_booking'
+           else 'ok   family_label and cancel_booking are not executable by anon'
          end
 )
 select 'A' as part, line from part_a

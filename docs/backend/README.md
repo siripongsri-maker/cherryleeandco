@@ -11,19 +11,30 @@ legal review **G9b** → **C** = P4 → **D** = P6 (optional); parked items need
 the database before its human gates (`00-overview.md` § 9, tracked in `90-task-breakdown.md` § 2) are done.
 
 **Domain:** `https://cherryleeandco.com` (live; G13 done, D37). The owner's decisions of 14 October 2026 are in
-`00-overview.md` § 5 (D31–D39, and the second set of answers D40–D47) and §§ 13A–13B. New cards from those decisions: **P3-19** (staff follow-up list for families who
-opted in), **P3-20** (apply the marketing text, `0006a`) and **P4-25** (signature print sheet). Card P4-09 gets the print
+`00-overview.md` § 5 (D31–D39, the second set of answers D40–D47, and the third set D48–D55) and §§ 13A–13B. New cards from those decisions: **P3-19** (staff follow-up list for families who
+opted in), **P3-20** (apply the marketing text, `0006a`) and **P4-25** (signature print sheet). Card P4-09 gets the print checkbox (`media_print`); P3-04 and P3-11 get the marketing checkbox; P4-13 and P4-22 get the marketing control on `/my`.
 
 **Round two (the owner's second set of answers, 14 Oct 2026), by number** (details in `00-overview.md` § 5):
-- **D40** credit rule with notice: cancelled with notice keeps the credit; absent or late cancellation uses one (`absent`, `cancelled_late`).
-- **D41** notice by LINE (`cancel_notice_at` = the time the LINE message arrived) or in person; no paper, no web form.
+- **D40** credit rule with notice: cancelled with notice keeps the credit; absent or late cancellation uses one (`absent`, `cancelled_late`). Studio path: D48; report source: D49.
+- **D41** notice by LINE (`cancel_notice_at` = the time the LINE message arrived) or in person; no paper, no web form. Widened to four channels by D53.
 - **D42** one health route for export and print: `get_child_health` with includeHealth; the allergen checklist prints on every sheet.
-- **D43** follow-up label "ครอบครัวน้อง" + the child's nickname (EN "Family of <nickname>"), staff only; lawyer checks it (G9b).
-- **D44** one follow-up row per granted guardian.
+- **D43** follow-up label "ครอบครัวน้อง" + the child's nickname (EN "Family of <nickname>"), staff only; lawyer checks it (G9b). Widened to all attending children by D52.
+- **D44** one follow-up row per granted guardian. Stays in round three.
 - **D45** class clips certified by the owner (G0 Q15 ☑; all five channels).
 - **D46** allergen `flour` added; nuts as one group "ถั่ว" (`peanut`, `tree_nut`).
 - **D47** LINE OA rule kept (D26 and D35, no change).
-checkbox (`media_print`); P3-04 and P3-11 get the marketing checkbox; P4-13 and P4-22 get the marketing control on `/my`.
+
+**Round three (the owner's third set of answers, 14 Oct 2026), by number** (details in `00-overview.md` § 5):
+- **D48** studio cancels a session: the credit is returned (status `cancelled_studio`); the make-up check is removed, and a rebooking uses the credit.
+- **D49** family cancels late or misses: the seat stays booked, not an absence, one credit is used; every cancellation goes to `booking_cancellation_log`.
+- **D50** a `cancelled_late` booking counts for the 6-month `child_health` clock.
+- **D51** the health consent status line is on every print sheet; `includeHealth` controls the content only.
+- **D52** follow-up label: the nicknames of all attending children ("ครอบครัวน้องมะลิ และ น้องดาว"; "Family of A and B"); D44 stays.
+- **D53** four notice channels count: `line`, `phone`, `teacher`, `in_person`.
+- **D54** identifiers in the docs are kept; nothing is removed.
+- **D55** lawyer sign-off for the changed wording is recorded as done (owner's report); the written note is to be filed.
+
+Round three overrides D40 (studio path, D48; report source, D49), D41 (channels, D53), D43 (label, D52) and D36 (make-up rule, D48). Cards: P3-06, P3-13, P3-19, P3-20, P4-25.
 
 ## Files
 
@@ -112,7 +123,7 @@ asks Lovable to add it; afterwards use `npm install --no-package-lock` only if t
   Log only an error code and a row id.
 - Never pre-tick a consent checkbox, and never combine two purposes in one checkbox.
 - Marketing is a guardian-only opt-in, default off (`marketing_line`, D31), contacted by hand only. Never send bulk or
-  automated marketing, and never use a child's information for it, except the nickname as a staff-only label (D43).
+  automated marketing, and never use a child's information for it, except the nicknames of the attending children as a staff-only label (D43, widened by D52).
 - Health/allergy data is read only through the audited database functions (`get_child_health` for export and print too, D42), never with a plain `select`.
 - No cookies, no tracking pixels, no new third-party scripts unless the task card says so.
 
@@ -122,6 +133,6 @@ asks Lovable to add it; afterwards use `npm install --no-package-lock` only if t
   never "money game".
 - Wrap Thai compound words and names in `<Nobr>` (or U+2060 in plain strings); mark English inside Thai with `<En>`.
 - Don't invent facts: no refund rules, deposits, outcomes or guarantees. Copy may state only facts the owner has approved
-  for publishing (`00-overview.md` § 13A, for example 8 seats per session) or facts from the studio's own Facebook page. Don't publish the make-up or cancellation rule unless the owner asks (D36). The credit rule and the notice-by-LINE wording (D40, D41) are drafts in `50-security-privacy.md` § 3.11 and stay unpublished unless the owner asks.
+  for publishing (`00-overview.md` § 13A, for example 8 seats per session) or facts from the studio's own Facebook page. Don't publish the cancellation, credit or make-up rule unless the owner asks (D36, D48, D49). The credit rule and the notice wording (D40, D41, D48, D49, D53) are drafts in `50-security-privacy.md` § 3.11 and stay unpublished unless the owner asks.
   Unknown policy → a field staff fill in, or "ask us on LINE".
 - Touch targets ≥ 44 px, visible focus rings, labels on every input, errors announced (`aria-live`), text contrast ≥ 4.5:1.
