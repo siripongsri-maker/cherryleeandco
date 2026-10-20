@@ -2,8 +2,7 @@ import type { ComponentType } from "react";
 import { Check, ChefHat, Hand, MessageCircle, ShieldCheck } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import type { SiteContent } from "@/content/site";
-import { CREATIVE_DRAMA_PLAYLIST_URL } from "@/content/business";
-import { VIDEOS, formatPosted, type Video } from "@/content/videos";
+import { formatPosted, canShow, type Video } from "@/content/videos";
 import { DramaIcon } from "../icons";
 import { Flower } from "../Decor";
 import { ExternalLink } from "../ExternalLink";
@@ -109,6 +108,7 @@ function VideoCaption({ video }: { video: Video }) {
 
 /** The founders' conversation (16:9) beside Uncle Lee's short (9:16), at the same height. */
 function TeacherVoices({ voices }: { voices: SiteContent["approach"]["voices"] }) {
+  const { videos, hiddenVideos, business } = useLanguage();
   return (
     <div
       data-reveal
@@ -116,26 +116,26 @@ function TeacherVoices({ voices }: { voices: SiteContent["approach"]["voices"] }
     >
       <h3 className="mb-6 text-h3">{voices.title}</h3>
       <div className="grid items-start gap-8 sm:grid-cols-[minmax(0,3.16fr)_minmax(0,1fr)] sm:gap-6">
-        <figure className="m-0">
+        {!hiddenVideos.includes("founders") && canShow(videos.founders) && <figure className="m-0">
           <YouTubeVideo
-            video={VIDEOS.founders}
+            video={videos.founders}
             sizes="(min-width: 1244px) 780px, (min-width: 640px) 68vw, 88vw"
             frameClassName="rounded-[18px] border-2 border-ink"
           />
-          <VideoCaption video={VIDEOS.founders} />
-        </figure>
-        <figure className="m-0 mx-auto w-full max-w-[240px] sm:max-w-none">
+          <VideoCaption video={videos.founders} />
+        </figure>}
+        {!hiddenVideos.includes("threeJars") && canShow(videos.threeJars) && <figure className="m-0 mx-auto w-full max-w-[240px] sm:max-w-none">
           <YouTubeVideo
-            video={VIDEOS.threeJars}
+            video={videos.threeJars}
             sizes="(min-width: 1244px) 250px, (min-width: 640px) 22vw, 240px"
             frameClassName="rounded-[18px] border-2 border-ink"
           />
-          <VideoCaption video={VIDEOS.threeJars} />
-        </figure>
+          <VideoCaption video={videos.threeJars} />
+        </figure>}
       </div>
       <p className="mb-0 mt-6 border-t-2 border-dashed border-peach-deep pt-5">
         {voices.series.lead}{" "}
-        <ExternalLink href={CREATIVE_DRAMA_PLAYLIST_URL} className="font-semibold">
+        <ExternalLink href={business.playlist} className="font-semibold">
           {voices.series.link}
         </ExternalLink>{" "}
         {voices.series.note}
@@ -152,7 +152,7 @@ const PRINCIPLE_STYLE = [
 ];
 
 export function Approach() {
-  const { t } = useLanguage();
+  const { t, images } = useLanguage();
   const a = t.approach;
 
   return (
@@ -171,7 +171,7 @@ export function Approach() {
           <TeacherCard id="cherry" teacher={a.cherry} />
           <div aria-hidden="true" className="hidden place-items-center lg:grid">
             <img
-              src="/images/logo-mark.png"
+              src={images['logo-mark'] ?? "/images/logo-mark.png"}
               width={215}
               height={226}
               alt=""

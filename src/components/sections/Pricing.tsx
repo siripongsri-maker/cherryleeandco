@@ -1,15 +1,15 @@
 import { CalendarDays, Check, Clock, MapPin, Smile } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { PRICES, formatBaht, lineMessageUrl } from "@/content/business";
+import { formatBaht } from "@/content/business";
 import { LineIcon } from "../icons";
 import { ExternalLink } from "../ExternalLink";
 import { Sprig } from "../Decor";
 
 const DETAIL_ICONS = [Smile, CalendarDays, Clock, MapPin];
-const PLAN_PRICES = [PRICES.single, PRICES.four, PRICES.eight];
 
 export function Pricing() {
-  const { t } = useLanguage();
+  const { t, business } = useLanguage();
+  const planPrices = [business.single, business.four, business.eight];
   const p = t.pricing;
 
   return (
@@ -72,7 +72,7 @@ export function Pricing() {
                 )}
                 <p className="mb-6 text-[0.9375rem] text-ink-soft">{plan.sub}</p>
                 <p className="mb-1 font-display text-[clamp(2.2rem,1.8rem+1.5vw,2.8rem)] font-bold leading-none tracking-[-0.02em]">
-                  {formatBaht(PLAN_PRICES[i] ?? PRICES.single)}
+                  {formatBaht(planPrices[i] ?? business.single)}
                 </p>
                 <p
                   className={`mb-6 min-h-[1.6em] text-[0.9375rem] lg:max-xl:min-h-[3.5em] ${best ? "font-medium text-ink" : "text-ink-soft"}`}
@@ -80,7 +80,7 @@ export function Pricing() {
                   {plan.note}
                 </p>
                 <ExternalLink
-                  href={lineMessageUrl(plan.lineMessage)}
+                  href={business.lineMessageUrl(plan.lineMessage)}
                   className={`btn mt-auto w-full ${best ? "btn-primary" : "btn-ghost"}`}
                 >
                   <LineIcon />

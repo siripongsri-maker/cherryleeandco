@@ -1,12 +1,28 @@
+import { isValidElement } from "react";
+import { content } from "@/content/site";
+
+function textPaths(value: unknown, prefix: string): string[] {
+  if (typeof value === "string" || isValidElement(value)) return [prefix];
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, child]) => ["href", "key"].includes(key) ? [] : textPaths(child, `${prefix}.${key}`));
+}
+function paths(...keys: string[]) {
+  return [...new Set(keys.flatMap(key => ["th", "en"].flatMap(lang => textPaths(Reflect.get(content[lang as "th" | "en"], key), key))))];
+}
 export const homepageSections = [
-  { label: "ส่วนบนของหน้า", paths: ["hero.script", "hero.title", "hero.lead", "hero.ctaPrimary", "hero.ctaSecondary", "hero.teachers", "hero.caption", "hero.artAlt", "hero.facts.0", "hero.facts.1", "hero.facts.2", "hero.facts.3"] },
-  { label: "แนวคิดการเรียนรู้", paths: ["why.eyebrow", "why.title", "why.lead", "why.punch", ...[0,1,2].flatMap(i => [`why.cards.${i}.title`, `why.cards.${i}.body`])] },
-  { label: "คุณครู", paths: ["approach.eyebrow", "approach.title", "approach.lead", ...["cherry", "lee"].flatMap(id => ["role", "name", "fullName", "photoAlt", ...[0,1,2,3].map(i => `points.${i}`)].map(key => `approach.${id}.${key}`))] },
-  { label: "กิจกรรม", paths: ["programs.eyebrow", "programs.title", "programs.lead", ...[0,1,2].flatMap(i => ["kicker", "title", "body", "ledBy", "imgAlt"].map(key => `programs.items.${i}.${key}`))] },
-  { label: "คำถามที่พบบ่อย", paths: ["faq.title", ...[0,1,2,3,4,5].flatMap(i => [`faq.items.${i}.q`, `faq.items.${i}.a`])] },
-  { label: "ที่ตั้งและการติดต่อ", paths: ["visit.title", "visit.address", "visit.hours", "visit.directions", "cta.title", "cta.body", "footer.tagline"] },
-] as const;
-export const fieldLabels: Record<string, string> = { script: "ข้อความเกริ่น", title: "หัวข้อ", lead: "คำอธิบาย", body: "รายละเอียด", caption: "คำบรรยาย", artAlt: "คำอธิบายรูป", imgAlt: "คำอธิบายรูป", photoAlt: "คำอธิบายรูป", ctaPrimary: "ปุ่มหลัก", ctaSecondary: "ปุ่มรอง", teachers: "ข้อความแนะนำคุณครู", eyebrow: "ข้อความเหนือหัวข้อ", punch: "ข้อความสรุป", role: "บทบาท", name: "ชื่อ", fullName: "ชื่อเต็ม", kicker: "ชื่อกิจกรรมย่อย", ledBy: "ผู้สอน", q: "คำถาม", a: "คำตอบ", address: "ที่อยู่", hours: "เวลาเปิด", directions: "การเดินทาง", tagline: "ข้อความท้ายหน้า" };
+  { label: "ส่วนบนของหน้า", paths: paths("hero") },
+  { label: "แนวคิดการเรียนรู้", paths: paths("why") },
+  { label: "คุณครูและแนวทาง", paths: paths("approach") },
+  { label: "กิจกรรมและทักษะ", paths: paths("programs") },
+  { label: "ค่าเรียนและแพ็กเกจ", paths: paths("pricing") },
+  { label: "วิดีโอ", paths: paths("videos") },
+  { label: "ข้อความแนวคิด", paths: paths("quote") },
+  { label: "คำถามที่พบบ่อย", paths: paths("faq") },
+  { label: "ที่ตั้งและการติดต่อ", paths: paths("visit", "cta") },
+  { label: "เมนูและท้ายหน้า", paths: paths("nav", "brand", "footer", "sticky", "skipLink", "newTab", "langChanged") },
+  { label: "ข้อมูลสำหรับ Google", paths: paths("meta") },
+];
+export const fieldLabels: Record<string, string> = { script: "ข้อความเกริ่น", title: "หัวข้อ", lead: "คำอธิบาย", body: "รายละเอียด", caption: "คำบรรยาย", artAlt: "คำอธิบายรูป", imgAlt: "คำอธิบายรูป", photoAlt: "คำอธิบายรูป", ctaPrimary: "ปุ่มหลัก", ctaSecondary: "ปุ่มรอง", teachers: "ข้อความแนะนำคุณครู", eyebrow: "ข้อความเหนือหัวข้อ", punch: "ข้อความสรุป", role: "บทบาท", name: "ชื่อ", fullName: "ชื่อเต็ม", kicker: "ชื่อกิจกรรมย่อย", ledBy: "ผู้สอน", q: "คำถาม", a: "คำตอบ", address: "ที่อยู่", hours: "เวลาเปิด", directions: "การเดินทาง", tagline: "ข้อความท้ายหน้า", term: "คำภาษาอังกฤษ", skillsTitle: "หัวข้อทักษะ", label: "ชื่อกำกับ", list: "รายชื่อนิทาน", sub: "คำอธิบายแพ็กเกจ", note: "หมายเหตุ", badge: "ป้ายแพ็กเกจ", lineMessage: "ข้อความเริ่มแชต LINE", book: "ปุ่มจอง", includedTitle: "หัวข้อสิ่งที่รวม", finePrint: "หมายเหตุค่าเรียน", nameSuffix: "ชื่อเพิ่มเติม", openPin: "ปุ่มเปิดแผนที่", mapTitle: "คำอธิบายแผนที่", line: "ปุ่ม LINE", messenger: "ปุ่ม Messenger", navLabel: "ชื่อเมนูท้ายหน้า", follow: "หัวข้อติดตาม", email: "ชื่อปุ่มอีเมล", credit: "เครดิตภาพ", text: "ข้อความแนวคิด", source: "ที่มาข้อความ", description: "คำอธิบายสำหรับ Google", cta: "ปุ่มจองในเมนู", menuOpen: "ปุ่มเปิดเมนู", menuClose: "ปุ่มปิดเมนู", langGroup: "ชื่อปุ่มเลือกภาษา", homeLabel: "คำอธิบายโลโก้หน้าแรก", topLabel: "คำอธิบายปุ่มกลับด้านบน", play: "ปุ่มเล่นวิดีโอ", posted: "คำกำกับวันที่วิดีโอ", more: "ปุ่มดูวิดีโอเพิ่มเติม", skipLink: "ปุ่มข้ามไปเนื้อหา", newTab: "คำกำกับลิงก์หน้าต่างใหม่", langChanged: "ข้อความเปลี่ยนภาษา", sticky: "ปุ่มจองด้านล่าง", th: "ข้อความไทย", en: "ข้อความอังกฤษ", "th-en": "ข้อความสองภาษา" };
 export const imageSlots = [
   { key: "hero", label: "รูปหลัก", fallback: "/images/hero-1100.jpg" },
   { key: "story-playlit", label: "ละครนิทาน", fallback: "/images/story-playlit-800.jpg" },
@@ -14,4 +30,9 @@ export const imageSlots = [
   { key: "money-wise", label: "บอร์ดเกมการเงิน", fallback: "/images/money-wise-800.jpg" },
   { key: "kru-cherry", label: "ครูเชอร์รี่", fallback: "/images/kru-cherry-800.jpg" },
   { key: "uncle-lee", label: "อังเคิลลี", fallback: "/images/uncle-lee-800.jpg" },
+  { key: "logo-mark", label: "สัญลักษณ์โลโก้", fallback: "/images/logo-mark.png" },
+  { key: "logo-wordmark", label: "ชื่อโลโก้", fallback: "/images/logo-wordmark.png" },
+  { key: "logo-stacked", label: "โลโก้ท้ายหน้า", fallback: "/images/logo-stacked.png" },
+  { key: "logo-mark-white", label: "โลโก้บนพื้นสี", fallback: "/images/logo-mark-white.png" },
+  ...["story-playlit-class", "cooking-class", "money-wise-fruit-stand", "money-wise-shopping-trip", "founders-conversation", "uncle-lee-three-jars"].map((poster,index) => ({ key: `videos/${poster}`, label: `ภาพปกวิดีโอ ${index+1}`, fallback: `/images/videos/${poster}-${poster === "founders-conversation" ? 960 : 540}.jpg` })),
 ] as const;

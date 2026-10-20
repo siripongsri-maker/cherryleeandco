@@ -5,6 +5,8 @@ import type { Lang } from "@/content/site";
 import { content } from "@/content/site";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { getHomepage } from "@/lib/homepage-content.functions";
+import { applyHomepage } from "@/lib/homepage-content";
+import { applyBusinessCopy, websiteJsonLd } from "@/lib/website-settings";
 
 const homepageQuery = queryOptions({ queryKey: ["homepage-content"], queryFn: () => getHomepage(), staleTime: 0, refetchInterval: 30 * 60 * 1000 });
 
@@ -23,19 +25,24 @@ export const Route = createFileRoute("/")({
   },
   component: Index,
   loader: ({ context }) => context.queryClient.ensureQueryData(homepageQuery),
-  head: ({ loaderData }) => ({
+  head: ({ loaderData }) => {
+    const settings = loaderData?.settings ?? {};
+    const texts = loaderData?.texts ?? {};
+    const t = applyHomepage(applyBusinessCopy(content.th, "th", settings, Object.keys(texts)), "th", texts);
+    return {
     meta: [
-      { title: content.th.meta.title },
-      { name: "description", content: content.th.meta.description },
-      { property: "og:title", content: content.th.meta.title },
-      { property: "og:description", content: content.th.meta.description },
+      { title: t.meta.title },
+      { name: "description", content: t.meta.description },
+      { property: "og:title", content: t.meta.title },
+      { property: "og:description", content: t.meta.description },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:url", content: "https://cherryleeandco.com/" },
       { property: "og:type", content: "website" },
       ...(loaderData?.imageUrls['hero'] ? [{ property: "og:image", content: loaderData.imageUrls['hero'] }, { name: "twitter:image", content: loaderData.imageUrls['hero'] }] : []),
     ],
     links: [{ rel: "canonical", href: "https://cherryleeandco.com/" }],
-  }),
+    scripts: [{ type: "application/ld+json", children: JSON.stringify(websiteJsonLd(settings, t, loaderData?.imageUrls ?? {})).replace(/</g, "\\u003c") }],
+  }; },
 });
 
 function Index() {

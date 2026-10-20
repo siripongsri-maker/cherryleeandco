@@ -10,7 +10,7 @@ export const getHomepage = createServerFn({ method: "GET" }).handler(async () =>
   const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
   if (!url || !key) throw new Error("ไม่สามารถโหลดข้อมูลเว็บไซต์ได้ค่ะ");
   const client = createClient<Database>(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: (input, init) => { const headers = new Headers(init?.headers); if (key.startsWith("sb_") && headers.get("Authorization") === `Bearer ${key}`) headers.delete("Authorization"); headers.set("apikey", key); return fetch(input, { ...init, headers }); } } });
-  const { data, error } = await client.from("homepage_content").select("texts,images,version").eq("id", "homepage").maybeSingle();
+  const { data, error } = await client.from("homepage_content").select("texts,images,settings,version").eq("id", "homepage").maybeSingle();
   if (error) throw new Error("โหลดข้อมูลหน้าแรกไม่สำเร็จค่ะ");
   const value = data ? homepageSchema.parse(data) : emptyHomepage;
   const imageUrls: Record<string, string> = {};
@@ -39,7 +39,7 @@ export const saveHomepage = createServerFn({ method: "POST" }).middleware([requi
       const { data: files, error } = await context.supabase.storage.from("homepage-images").list("", { search: path });
       if (error || !files?.some(file => file.name === path)) return { ok: false as const, error: "ไม่พบรูปที่อัปโหลด กรุณาอัปโหลดใหม่ค่ะ" };
     }
-    const row = { id: "homepage", texts: data.texts, images: data.images, version: data.version + 1, updated_at: new Date().toISOString(), ...(changedImages ? { image_permission_confirmed_at: new Date().toISOString(), image_permission_confirmed_by: context.userId } : {}) };
+    const row = { id: "homepage", texts: data.texts, images: data.images, settings: data.settings, version: data.version + 1, updated_at: new Date().toISOString(), ...(changedImages ? { image_permission_confirmed_at: new Date().toISOString(), image_permission_confirmed_by: context.userId } : {}) };
     const result = data.version === 0 ? await context.supabase.from("homepage_content").insert(row).select("version").single() : await context.supabase.from("homepage_content").update(row).eq("id", "homepage").eq("version", data.version).select("version").maybeSingle();
     if (result.error || !result.data) return { ok: false as const, error: "บันทึกไม่สำเร็จ หรือมีคุณครูท่านอื่นแก้ไขแล้ว กรุณาโหลดข้อมูลล่าสุดก่อนบันทึกค่ะ" };
     return { ok: true as const, version: result.data.version };

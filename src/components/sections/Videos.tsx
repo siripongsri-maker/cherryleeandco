@@ -1,6 +1,5 @@
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { YOUTUBE_URL } from "@/content/business";
-import { CLASS_VIDEOS, formatPosted } from "@/content/videos";
+import { canShow, formatPosted } from "@/content/videos";
 import { ExternalLink } from "../ExternalLink";
 import { YouTubeVideo } from "../YouTubeVideo";
 import { YouTubeIcon } from "../icons";
@@ -14,10 +13,11 @@ const FRAME_STYLE = [
 ];
 
 export function Videos() {
-  const { lang, t } = useLanguage();
+  const { lang, t, business, videos, hiddenVideos } = useLanguage();
   const v = t.videos;
+  const classVideos = Object.entries(videos).filter(([key,video]) => video.program && canShow(video) && !hiddenVideos.includes(key)).map(([,video]) => video);
 
-  if (CLASS_VIDEOS.length === 0) return null;
+  if (classVideos.length === 0) return null;
 
   return (
     <section id="videos" aria-labelledby="videos-title" className="section">
@@ -35,7 +35,7 @@ export function Videos() {
           role="list"
           className="grid list-none grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-8 lg:grid-cols-4"
         >
-          {CLASS_VIDEOS.map((video, i) => {
+          {classVideos.map((video, i) => {
             const program = t.programs.items.find((p) => p.key === video.program)?.title;
             return (
               <li key={video.id} data-reveal className="flex flex-col">
@@ -67,7 +67,7 @@ export function Videos() {
         </ul>
 
         <div data-reveal className="mt-12 flex flex-col items-center gap-4 text-center">
-          <ExternalLink href={YOUTUBE_URL} className="btn btn-ghost">
+            <ExternalLink href={business.youtube} className="btn btn-ghost">
             <YouTubeIcon />
             {v.more}
           </ExternalLink>

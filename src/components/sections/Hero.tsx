@@ -1,6 +1,5 @@
 import { CalendarDays, MapPin, Smile, Users } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { LINE_URL } from "@/content/business";
 import { LineIcon } from "../icons";
 import { ExternalLink } from "../ExternalLink";
 import { Flower, HeartLeaf, Sprig, Star } from "../Decor";
@@ -9,7 +8,7 @@ const FACT_ICONS = [Smile, CalendarDays, Users, MapPin];
 export const HERO_SIZES = "(min-width: 1244px) 545px, (min-width: 1024px) 44vw, 92vw";
 
 export function Hero() {
-  const { lang, t, images } = useLanguage();
+  const { lang, t, images, business } = useLanguage();
   const h = t.hero;
 
   return (
@@ -37,7 +36,7 @@ export function Hero() {
           <p className="max-w-[36em] text-[1.15rem] text-ink-soft">{h.lead}</p>
 
           <div className="my-8 flex flex-wrap gap-x-6 gap-y-3">
-            <ExternalLink href={LINE_URL} className="btn btn-primary btn-lg w-full xs:w-auto">
+            <ExternalLink href={business.lineUrl} className="btn btn-primary btn-lg w-full xs:w-auto">
               <LineIcon />
               {h.ctaPrimary}
             </ExternalLink>
@@ -50,9 +49,9 @@ export function Hero() {
             <div className="flex shrink-0 -space-x-3" aria-hidden="true">
               {["kru-cherry", "uncle-lee"].map((n) => (
                 <picture key={n}>
-                  <source type="image/webp" srcSet={`/images/${n}-avatar.webp`} />
+                  {!images[n] && <source type="image/webp" srcSet={`/images/${n}-avatar.webp`} />}
                   <img
-                    src={`/images/${n}-avatar.jpg`}
+                    src={images[n] ?? `/images/${n}-avatar.jpg`}
                     width={192}
                     height={192}
                     alt=""

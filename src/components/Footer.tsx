@@ -1,26 +1,18 @@
 import { Mail } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import {
-  EMAIL,
-  FACEBOOK_URL,
-  INSTAGRAM_URL,
-  LINE_URL,
-  TIKTOK_URL,
-  YOUTUBE_URL,
-} from "@/content/business";
 import { FacebookIcon, InstagramIcon, LineIcon, TikTokIcon, YouTubeIcon } from "./icons";
 
 export function Footer() {
-  const { t } = useLanguage();
+  const { t, business, images } = useLanguage();
   const f = t.footer;
   const links = t.nav.items.filter((i) => i.href !== "#faq");
   const social = [
-    { href: LINE_URL, label: "LINE", Icon: LineIcon, external: true },
-    { href: FACEBOOK_URL, label: "Facebook", Icon: FacebookIcon, external: true },
-    { href: YOUTUBE_URL, label: "YouTube", Icon: YouTubeIcon, external: true },
-    { href: INSTAGRAM_URL, label: "Instagram", Icon: InstagramIcon, external: true },
-    { href: TIKTOK_URL, label: "TikTok", Icon: TikTokIcon, external: true },
-    { href: `mailto:${EMAIL}`, label: f.email, Icon: Mail, external: false },
+    { href: business.lineUrl, label: "LINE", Icon: LineIcon, external: true },
+    { href: business.facebook, label: "Facebook", Icon: FacebookIcon, external: true },
+    { href: business.youtube, label: "YouTube", Icon: YouTubeIcon, external: true },
+    { href: business.instagram, label: "Instagram", Icon: InstagramIcon, external: true },
+    { href: business.tiktok, label: "TikTok", Icon: TikTokIcon, external: true },
+    { href: `mailto:${business.email}`, label: f.email, Icon: Mail, external: false },
   ];
 
   return (
@@ -29,7 +21,7 @@ export function Footer() {
         <div>
           <a href="#top" aria-label={t.brand.topLabel} className="mb-2 inline-block">
             <img
-              src="/images/logo-stacked.png"
+              src={images['logo-stacked'] ?? "/images/logo-stacked.png"}
               width={395}
               height={317}
               alt=""

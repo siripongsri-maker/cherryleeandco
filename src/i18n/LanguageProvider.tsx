@@ -9,6 +9,7 @@ import {
 } from "react";
 import { content, type Lang, type SiteContent } from "@/content/site";
 import { applyHomepage, type HomepageData } from "@/lib/homepage-content";
+import { applyBusinessCopy, resolveBusiness, resolveVideos } from "@/lib/website-settings";
 
 const STORAGE_KEY = "cherrylee-lang";
 const LANGS: readonly Lang[] = ["th", "en"];
@@ -18,6 +19,9 @@ type LanguageContextValue = {
   setLang: (lang: Lang) => void;
   t: SiteContent;
   images: Record<string, string>;
+  business: ReturnType<typeof resolveBusiness>;
+  videos: ReturnType<typeof resolveVideos>;
+  hiddenVideos: string[];
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -67,8 +71,11 @@ export function LanguageProvider({ children, initialLang, homepage }: LanguagePr
     }
   }, []);
 
-  const t = useMemo(() => applyHomepage(content[lang], lang, homepage?.texts ?? {}), [lang, homepage?.texts]);
+  const t = useMemo(() => applyHomepage(applyBusinessCopy(content[lang], lang, homepage?.settings ?? {}, Object.keys(homepage?.texts ?? {})), lang, homepage?.texts ?? {}), [lang, homepage?.texts, homepage?.settings]);
   const images = homepage?.imageUrls ?? {};
+  const business = useMemo(() => resolveBusiness(homepage?.settings), [homepage?.settings]);
+  const videos = useMemo(() => resolveVideos(homepage?.settings), [homepage?.settings]);
+  const hiddenVideos = homepage?.settings.hiddenVideos ?? [];
 
   // Keep <html lang>, the tab title and the meta description in the active language
   useEffect(() => {
@@ -77,7 +84,7 @@ export function LanguageProvider({ children, initialLang, homepage }: LanguagePr
     document.querySelector('meta[name="description"]')?.setAttribute("content", t.meta.description);
   }, [lang, t]);
 
-  const value = useMemo(() => ({ lang, setLang, t, images }), [lang, setLang, t, images]);
+  const value = useMemo(() => ({ lang, setLang, t, images, business, videos, hiddenVideos }), [lang, setLang, t, images, business, videos, hiddenVideos]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
