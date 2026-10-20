@@ -1,4 +1,6 @@
 # Website administration
+- [ ] Expand /admin website editing to all existing public content sections and contact destinations, with validated persistence and public readback.
+- [ ] Verify expanded editing coverage and safety tests; keep staff roles owner-controlled and child-media permission intact.
 - [x] Add teacher-only Thai announcement drafting from short notes, editable output and copy action.
 - [x] Verify announcement validation and staff-role tests, real Gateway Thai output with date/contact preservation, and signed-out redirect.
 - [ ] Verify announcement generation/edit/copy end-to-end as a teacher (blocked: project has no auth users; session mint confirmed unavailable).
