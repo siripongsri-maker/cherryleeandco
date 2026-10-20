@@ -29,6 +29,13 @@
       "when": 1792472967606,
       "tag": "0003_homepage_image_permission_record",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792473008378,
+      "tag": "0004_homepage_public_columns",
+      "breakpoints": true
     }
   ]
 }
