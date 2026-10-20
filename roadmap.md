@@ -1,6 +1,7 @@
 # Website administration
-- [ ] Add teacher-only Thai announcement drafting from short notes, editable output and copy action.
-- [ ] Verify announcement validation, authorization and generation flow.
+- [x] Add teacher-only Thai announcement drafting from short notes, editable output and copy action.
+- [x] Verify announcement validation and staff-role tests, real Gateway Thai output with date/contact preservation, and signed-out redirect.
+- [ ] Verify announcement generation/edit/copy end-to-end as a teacher (blocked: project has no auth users; session mint confirmed unavailable).
 - [x] Add Thai homepage text/image editor, database persistence, authorized private uploads and public readback.
 - [x] Add teacher-only AI Gateway class-description form, Thai/English drafts, editing and copy actions.
 - [x] Verify real Gateway generation, role-rule tests and signed-out redirect.
