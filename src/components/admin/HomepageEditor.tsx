@@ -51,7 +51,7 @@ export function HomepageEditor() {
     if (!parsed.success) { setError("กรุณากรอกข้อความที่แก้ไขให้ครบทั้งไทยและอังกฤษค่ะ"); return; }
     setBusy(true); setError(""); setNotice("");
     try {
-      const result = await save({ data: parsed.data });
+      const result = await save({ data: { ...parsed.data, imagePermissionConfirmed: confirmed } });
       if (!result.ok) { setError(result.error); return; }
       setForm(current => ({ ...current, version: result.version }));
       await queryClient.invalidateQueries({ queryKey: ["homepage-content"] });

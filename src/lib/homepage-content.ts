@@ -11,6 +11,7 @@ export const homepageSchema = z.object({
   version: z.number().int().min(0),
 }).strict();
 export type HomepageData = z.infer<typeof homepageSchema>;
+export const homepageSaveSchema = homepageSchema.extend({ imagePermissionConfirmed: z.boolean() });
 export const emptyHomepage: HomepageData = { texts: {}, images: {}, version: 0 };
 export function readPath(value: unknown, path: string): unknown {
   let current = value;
