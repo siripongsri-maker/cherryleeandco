@@ -1,0 +1,1 @@
+ALTER POLICY homepage_images_read ON storage.objects USING (bucket_id = 'homepage-images' AND (EXISTS (SELECT 1 FROM public.homepage_content h, jsonb_each_text(h.images) image WHERE image.value = name) OR (auth.uid() IS NOT NULL AND (public.has_role(auth.uid(), 'teacher') OR public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin')))));

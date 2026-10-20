@@ -15,6 +15,13 @@
       "when": 1792472805892,
       "tag": "0001_homepage_editor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792472840177,
+      "tag": "0002_restrict_homepage_image_reads",
+      "breakpoints": true
     }
   ]
 }
