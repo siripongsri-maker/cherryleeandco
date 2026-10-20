@@ -1,4 +1,5 @@
 # Website administration
+- [ ] Add Thai homepage text/image editor, database persistence, authorized uploads and public readback.
 - [x] Add teacher-only AI Gateway class-description form, Thai/English drafts, editing and copy actions.
 - [x] Verify real Gateway generation, role-rule tests and signed-out redirect.
 - [ ] Verify generation/edit/copy end-to-end as a teacher (blocked: no registered users or owner-approved teacher account).
