@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      homepage_content: {
+        Row: {
+          id: string
+          images: Json
+          texts: Json
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          id?: string
+          images?: Json
+          texts?: Json
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          id?: string
+          images?: Json
+          texts?: Json
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           display_name: string

@@ -1,0 +1,10 @@
+CREATE TABLE public.homepage_content (id text PRIMARY KEY DEFAULT 'homepage' CHECK (id = 'homepage'), texts jsonb NOT NULL DEFAULT '{}'::jsonb, images jsonb NOT NULL DEFAULT '{}'::jsonb, version integer NOT NULL DEFAULT 1, updated_at timestamptz NOT NULL DEFAULT now());
+GRANT SELECT ON public.homepage_content TO anon;
+GRANT SELECT, INSERT, UPDATE ON public.homepage_content TO authenticated;
+GRANT ALL ON public.homepage_content TO service_role;
+ALTER TABLE public.homepage_content ENABLE ROW LEVEL SECURITY;
+CREATE POLICY homepage_public_read ON public.homepage_content FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY homepage_teacher_insert ON public.homepage_content FOR INSERT TO authenticated WITH CHECK (public.has_role(auth.uid(), 'teacher') OR public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin'));
+CREATE POLICY homepage_teacher_update ON public.homepage_content FOR UPDATE TO authenticated USING (public.has_role(auth.uid(), 'teacher') OR public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin')) WITH CHECK (public.has_role(auth.uid(), 'teacher') OR public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin'));
+CREATE POLICY homepage_images_read ON storage.objects FOR SELECT TO anon, authenticated USING (bucket_id = 'homepage-images');
+CREATE POLICY homepage_images_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'homepage-images' AND (public.has_role(auth.uid(), 'teacher') OR public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin')));

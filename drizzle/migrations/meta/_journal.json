@@ -8,6 +8,13 @@
       "when": 1792472542496,
       "tag": "0000_teacher_ai_access",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792472805892,
+      "tag": "0001_homepage_editor",
+      "breakpoints": true
     }
   ]
 }
