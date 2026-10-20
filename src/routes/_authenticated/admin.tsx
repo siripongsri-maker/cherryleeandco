@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClassDescriptionEditor } from "@/components/admin/ClassDescriptionEditor";
@@ -22,8 +22,9 @@ function AdminPage() {
   const [tab, setTab] = useState("homepage");
   const { data: access } = useSuspenseQuery(accessQuery);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   return <div className="min-h-screen bg-background text-foreground">
-    <header className="border-b border-border bg-card"><div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4"><Link to="/"><img src="/images/logo-stacked.png" alt="CherryLee & Co." className="h-16 w-auto" /></Link><div className="flex items-center gap-3"><span>{access.name}</span><Button variant="outline" className="min-h-11" onClick={async () => { await supabase.auth.signOut(); await navigate({ to: "/auth" }); }}><LogOut />ออกจากระบบ</Button></div></div></header>
+    <header className="border-b border-border bg-card"><div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4"><Link to="/"><img src="/images/logo-stacked.png" alt="CherryLee & Co." className="h-16 w-auto" /></Link><div className="flex items-center gap-3"><span>{access.name}</span><Button variant="outline" className="min-h-11" onClick={async () => { await queryClient.cancelQueries(); queryClient.clear(); await supabase.auth.signOut(); await navigate({ to: "/auth", replace: true }); }}><LogOut />ออกจากระบบ</Button></div></div></header>
     <main className="mx-auto max-w-6xl px-5 py-10"><p className="mb-2 text-sm text-muted-foreground">พื้นที่คุณครู</p><h1 className="mb-7 font-display text-3xl">จัดการเว็บไซต์</h1>{access.allowed ? <><div className="mb-8 flex flex-wrap gap-3 border-b border-border pb-5"><Button variant={tab === "homepage" ? "default" : "outline"} className="min-h-11" onClick={() => setTab("homepage")}>แก้ไขหน้าแรก</Button><Button variant={tab === "ai" ? "default" : "outline"} className="min-h-11" onClick={() => setTab("ai")}>{classCopy.title}</Button><Button variant={tab === "announcement" ? "default" : "outline"} className="min-h-11" onClick={() => setTab("announcement")}>{announcementCopy.title}</Button></div><div hidden={tab !== "homepage"}><Suspense fallback={<p role="status">กำลังโหลดข้อมูลหน้าแรก…</p>}><HomepageEditor /></Suspense></div><div hidden={tab !== "ai"}><ClassDescriptionEditor /></div><div hidden={tab !== "announcement"}><AnnouncementEditor /></div></> : <div role="status" className="border-t border-border py-8"><h2 className="text-xl font-semibold">รอสิทธิ์คุณครู</h2><p className="mt-3">บัญชีนี้ยังไม่ได้รับสิทธิ์ กรุณาให้เจ้าของสตูดิโออนุมัติก่อนค่ะ</p></div>}</main>
   </div>;
 }
